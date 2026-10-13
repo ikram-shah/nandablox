@@ -53,11 +53,8 @@ end)
 
 -- the default camera scripts may grab the camera back; keep it on the overview
 RunService:BindToRenderStep("NandaTownCamera", Enum.RenderPriority.Camera.Value + 1, function()
-	if camera.CameraType ~= Enum.CameraType.Scriptable then
-		camera.CameraType = Enum.CameraType.Scriptable
-		camera.FieldOfView = Replay.CAMERA.fov
-		camera.CFrame = CFrame.lookAt(Replay.CAMERA.pos, Replay.CAMERA.target)
-	end
+	-- every frame, so the field of view follows the frame if the window resizes
+	Replay.overview(camera, if movie then Movie.frameRect().w else nil)
 end)
 
 UserInputService.InputBegan:Connect(function(input, processed)

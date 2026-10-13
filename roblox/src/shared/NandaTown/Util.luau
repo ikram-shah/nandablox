@@ -178,22 +178,42 @@ end
 -- Everything runs on one virtual clock that advances by dt × speed each frame
 -- unless paused, so the whole replay (scheduler, flights, bubbles) can be
 -- paused mid-flight — handy for screenshots — or sped up.
+--
+-- The play place drives the clock from outside instead: startClock(source)
+-- sets the clock to source() every frame (the shared server clock, so every
+-- player sees the same moment). While Util.catchingUp is set, the replay
+-- moves the clock itself, one past event per frame, so a late joiner
+-- fast-forwards through what already happened (see Replay.run).
 Util.speed = 1
 Util.paused = false
 Util.clock = 0
+Util.catchingUp = false
 local clockConn: RBXScriptConnection? = nil
+local clockSource: (() -> number)? = nil
 
-function Util.startClock()
+function Util.startClock(source: (() -> number)?)
 	if clockConn then
 		clockConn:Disconnect()
 	end
-	Util.clock = 0
+	clockSource = source
+	Util.catchingUp = false
 	Util.paused = false
+	Util.clock = if source then source() else 0
 	clockConn = RunService.Heartbeat:Connect(function(dt)
-		if not Util.paused then
+		if Util.paused or Util.catchingUp then
+			return
+		end
+		if clockSource then
+			Util.clock = clockSource()
+		else
 			Util.clock += dt * Util.speed
 		end
 	end)
+end
+
+-- Where the clock should be now: the external source if there is one.
+function Util.target(): number
+	return if clockSource then clockSource() else Util.clock
 end
 
 function Util.now(): number

@@ -9,7 +9,10 @@
 --
 -- Optional: targetSeconds, speed, lead (seconds of town-only screen time before
 -- the first event), hudRect and bannerY (pixels; Hud.luau), onEvent(e) (called
--- after each event is shown; Movie.luau uses it for chapter captions).
+-- after each event is shown; Movie.luau uses it for chapter captions),
+-- clock (a function returning the replay time to show now: the play place's
+-- shared server clock; events already in the past are fast-forwarded, one per
+-- frame, so a late joiner lands in the same state as everyone else).
 
 local Util = require(script.Parent.Util)
 local Town = require(script.Parent.Town)
@@ -17,8 +20,33 @@ local Hud = require(script.Parent.Hud)
 
 local Replay = {}
 
--- The one fixed overview camera.
-Replay.CAMERA = { pos = Vector3.new(0, 66, 88), target = Vector3.new(0, 2, -16), fov = 50 }
+-- The one fixed overview camera. Its field of view is held *horizontally*
+-- (hfov degrees across the width of the frame the HUD lives in), so a 16:9
+-- frame shows the same town on any screen: Studio's viewport, or a 1920x1080
+-- crop of a 1920x1200 client. Pose chosen so every building label, panel and
+-- agent plate sits fully inside a 1920x1080 frame and clear of the HUD panels
+-- (the first movie clipped the gate on the left edge); the projection check is
+-- in roblox/README.md ("Cinema").
+Replay.CAMERA = { pos = Vector3.new(-3, 68, 120), target = Vector3.new(-3, 8, -30), hfov = 64 }
+
+-- Vertical FieldOfView that gives CAMERA.hfov across `frameWidth` pixels of the
+-- current viewport (default: the whole viewport width).
+function Replay.fov(frameWidth: number?): number
+	local vp = workspace.CurrentCamera.ViewportSize
+	local w = frameWidth or vp.X
+	if w <= 0 or vp.Y <= 0 then
+		return 45
+	end
+	local half = math.rad(Replay.CAMERA.hfov / 2)
+	return math.clamp(math.deg(2 * math.atan(math.tan(half) * vp.Y / w)), 1, 120)
+end
+
+-- Put a camera on the overview (frameWidth: see Replay.fov).
+function Replay.overview(cam: Camera, frameWidth: number?)
+	cam.CameraType = Enum.CameraType.Scriptable
+	cam.FieldOfView = Replay.fov(frameWidth)
+	cam.CFrame = CFrame.lookAt(Replay.CAMERA.pos, Replay.CAMERA.target)
+end
 
 -- Minimum on-screen gap before an event, by kind (seconds at speed 1). Bookkeeping is
 -- quick; money, trust and verdicts get time to be read.
@@ -346,7 +374,10 @@ end
 
 function Replay.run(trace, opts: { [string]: any }?)
 	local o = opts or {}
-	Util.startClock()
+	if Replay.current then
+		Replay.current.cancelled = true -- before the clock restarts under it
+	end
+	Util.startClock(o.clock)
 	Util.speed = o.speed or 1
 	local parent = o.parent or workspace
 	local town = Town.build(trace, parent)
@@ -357,9 +388,7 @@ function Replay.run(trace, opts: { [string]: any }?)
 
 	if o.camera then
 		local cam = o.camera :: Camera
-		cam.CameraType = Enum.CameraType.Scriptable
-		cam.FieldOfView = o.fov or Replay.CAMERA.fov
-		cam.CFrame = CFrame.lookAt(o.cameraPos or Replay.CAMERA.pos, o.cameraTarget or Replay.CAMERA.target)
+		Replay.overview(cam, o.hudRect and o.hudRect.w)
 	end
 
 	local times, scale = Replay.schedule(trace, o.targetSeconds or 52)
@@ -905,20 +934,36 @@ function Replay.run(trace, opts: { [string]: any }?)
 	end
 
 	local lead = o.lead or 0
-	local state = { done = false, scale = scale, total = times[#times] + lead, town = town, hud = hud, times = times, lead = lead, lastSeq = 0 }
-	if Replay.current then
-		Replay.current.cancelled = true
-	end
+	local state = { done = false, scale = scale, total = times[#times] + lead, town = town, hud = hud, times = times, lead = lead, lastSeq = 0, caughtUp = 0 }
 	Replay.current = state
+	local RunService = game:GetService("RunService")
 	local runner = function()
 		for i, e in trace.events do
-			Util.waitUntil(times[i] + lead)
-			if state.cancelled then
-				return
+			local t = times[i] + lead
+			if o.clock and Util.target() > t + 0.05 then
+				-- already in the past on the shared clock: replay it now, with the
+				-- clock held at its own time so its animations start where they
+				-- should, then give them a frame before the next one
+				Util.catchingUp = true
+				Util.clock = t
+				handle(e)
+				state.lastSeq = e.seq
+				state.caughtUp += 1
+				RunService.Heartbeat:Wait()
+				if state.cancelled then
+					return
+				end
+			else
+				Util.catchingUp = false
+				Util.waitUntil(t)
+				if state.cancelled then
+					return
+				end
+				handle(e)
+				state.lastSeq = e.seq
 			end
-			handle(e)
-			state.lastSeq = e.seq
 		end
+		Util.catchingUp = false
 		state.done = true
 	end
 	if o.blocking then

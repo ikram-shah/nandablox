@@ -11,6 +11,11 @@ frame is black and the rest of the viewport magenta (Movie.luau). This script
   5. writes a 1920x1080 H.264 MP4 (yuv420p, +faststart, silent), a 720p copy
      under 16 MB for WhatsApp, and a poster PNG from the verdict hold.
 
+A frame that is already 1920x1080 (cinema mode in the Sober client, fullscreen
+at 1920x1200: the frame is the full width, below the Roblox menu button) is
+cropped exactly and not rescaled; any other size (Studio's viewport) is
+scaled to 1080p.
+
   cut_movie.py RAW.mkv OUTDIR [--name nanda-town-replay]
 """
 
@@ -77,6 +82,14 @@ def find_rect(full: np.ndarray) -> tuple[int, int, int, int]:
     bk = black(view)
     rows = np.nonzero(bk.mean(axis=1) > 0.5)[0]
     cols = np.nonzero(bk.mean(axis=0) > 0.5)[0]
+    ow, oh = cols.max() - cols.min() + 1, rows.max() - rows.min() + 1
+    if abs(ow - 1920) <= 4 and abs(oh - 1080) <= 4:
+        # a native 1080p frame (the Sober client fullscreen at 1920x1200, cinema
+        # mode): take exactly 1920x1080 of it, centred, so nothing is rescaled
+        fx0 = int(cols.min()) + (ow - 1920) // 2
+        fy0 = int(rows.min()) + (oh - 1080) // 2
+        fx0 = max(0, min(fx0, full.shape[1] - 1920 - int(x0)))
+        return int(x0 + fx0), int(y0 + fy0), 1920, 1080
     # 2 px inside the black, so no magenta fringe survives compression
     fy0, fy1, fx0, fx1 = rows.min() + 2, rows.max() - 2, cols.min() + 2, cols.max() - 2
     w = (fx1 - fx0 + 1) // 2 * 2
@@ -142,8 +155,11 @@ def main() -> None:
     wa = a.outdir / f"{a.name}-720p.mp4"
     poster = a.outdir / f"{a.name}-poster.png"
     trim = f"trim=start_frame={start}:end_frame={end + 1},setpts=PTS-STARTPTS,crop={w}:{h}:{x}:{y}"
+    native = (w, h) == (1920, 1080)
+    print("native 1920x1080 crop, no rescale" if native else f"rescaling {w}x{h} to 1920x1080")
+    scale = "" if native else "scale=1920:1080:flags=lanczos,"
     run("ffmpeg", "-v", "error", "-y", "-i", str(a.raw), "-vf",
-        f"{trim},scale=1920:1080:flags=lanczos,format=yuv420p", "-an", "-c:v", "libx264", "-preset", "slow",
+        f"{trim},{scale}format=yuv420p", "-an", "-c:v", "libx264", "-preset", "slow",
         "-crf", "18", "-r", str(FPS), "-movflags", "+faststart", str(mp4))
     for crf in (24, 27, 30):
         run("ffmpeg", "-v", "error", "-y", "-i", str(mp4), "-vf", "scale=1280:720:flags=lanczos,format=yuv420p",
