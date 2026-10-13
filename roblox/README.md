@@ -33,20 +33,40 @@ the trace format is described in `../research/nandatown.md` §4.
 
 ## Run it
 
+Everything in the place comes from this directory: the Rojo project files and
+the code under `src/`. The town is built from parts at runtime, so there are no
+uploaded assets. Studio is only a viewer of a place built from the repo; nothing
+is made or changed by hand in it. Built places (`build/`, `*.rbxlx`) are
+git-ignored artifacts.
+
+Rojo is pinned in `rokit.toml` (`rojo-rbx/rojo@7.7.0`, the version of the Rojo
+plugin installed in Studio). `tools/rojo.sh` runs that version through rokit and
+refuses to run any other version, and every script below goes through it.
+Nothing uses the `rojo` that happens to be first on `PATH`.
+
 ```sh
-tools/open_in_studio.sh          # rojo build, copy into the Wine prefix, open Studio in tmux 'studio-s0'
+tools/build.sh                   # build/default.rbxlx from default.project.json
+tools/open_in_studio.sh          # build, copy into the Wine prefix, open Studio in tmux 'studio-nanda'
 ```
 
 Then press **Play (F5)**. In the replay: **R** restarts, **Space** pauses,
-**1 / 2 / 4** sets the speed. To pick another scenario, set the `Trace`
-attribute on `StarterPlayerScripts/NandaReplay`, e.g. `supply_chain`.
+**1 / 2 / 4** sets the speed. To pick another scenario, change the `Trace`
+attribute in `default.project.json` (`$attributes` on `NandaReplay`), e.g.
+`supply_chain`, and rebuild or let `rojo serve` sync it.
 
-There is also a live-edit loop with no rebuild. Serve this directory with
-`python3 -m http.server 34901 --bind 127.0.0.1 --directory ~/prg/mit-nanda/roblox`,
-then paste `tools/load_into_studio.luau` into Studio's command bar (or send it
-through the MCP `execute_luau`). It pulls the current sources over localhost
-and replays in edit mode. This also settles one open question in
-`research/roblox.md`: **Studio can reach localhost.**
+**Dev loop: `rojo serve` plus the Rojo plugin.**
+
+```sh
+tools/serve.sh                   # rojo serve default.project.json on localhost:34872
+```
+
+In Studio: **Plugins → Rojo → Connect** (localhost, port 34872). Edits under
+`src/` and in the project file then sync into the open place. Studio runs under
+the Vinegar flatpak, which can't see `~/prg`, so `open_in_studio.sh` copies the
+built place into the Wine prefix (`C:\nanda\`). `rojo serve` needs no copy,
+because the flatpak shares the host network and Studio reaches `localhost`
+(checked 2026-10-12: Studio fetched `http://localhost:34872/api/rojo` and got
+this project's name back from Rojo 7.7.0).
 
 New traces: `tools/trace_to_luau.py <run-dir or events.jsonl> --luau
 src/shared/NandaTown/Traces/<name>.luau --json traces/<name>.json`.
@@ -60,7 +80,9 @@ src/shared/NandaTown/Traces/<name>.luau --json traces/<name>.json`.
 | `src/shared/NandaTown/Hud.luau` | title, legend, ledger, ticker, stage list |
 | `src/shared/NandaTown/Util.luau` | tweens, clock, pause and speed |
 | `src/client/NandaReplay.client.luau` | Play-mode runner with a fixed overview camera |
-| `tools/` | trace converter, Studio launcher, live loader |
+| `default.project.json` | the Rojo project: code, the `Trace` attribute, lighting, no characters |
+| `rokit.toml` | pins Rojo 7.7.0 |
+| `tools/` | pinned-Rojo wrapper, build, serve, Studio launcher, trace converter |
 | `traces/` | the 11 converted Lab runs as JSON |
 
 Never published, nothing uploaded, no Robux spent.

@@ -1,6 +1,6 @@
 -- Small helpers shared by the NANDA Town replay: parts, labels, bubbles, animation.
--- Everything here works both in Studio edit mode (driven by a plugin / execute_luau)
--- and in a playtest client, so nothing depends on Players or on a character.
+-- Nothing here depends on Players or on a character; the replay runs on the
+-- playtest client (src/client/NandaReplay.client.luau).
 
 local RunService = game:GetService("RunService")
 

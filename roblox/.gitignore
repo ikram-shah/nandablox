@@ -1,0 +1,7 @@
+# Built places are artifacts: regenerate with tools/build.sh (pinned Rojo).
+/build/
+/*.rbxlx
+/*.rbxl
+/*.rbxlx.lock
+/*.rbxl.lock
+sourcemap.json

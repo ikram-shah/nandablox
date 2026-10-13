@@ -10,7 +10,10 @@
     "StarterPlayer": {
       "StarterPlayerScripts": {
         "NandaReplay": {
-          "$path": "src/client/NandaReplay.client.luau"
+          "$path": "src/client/NandaReplay.client.luau",
+          "$attributes": {
+            "Trace": "marketplace"
+          }
         }
       }
     },

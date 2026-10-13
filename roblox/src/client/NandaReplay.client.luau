@@ -1,8 +1,9 @@
 -- Play-mode runner (StarterPlayerScripts): builds NANDA Town on this client and
 -- replays the trace from one fixed overview camera. No server, no network.
 --   R = restart, Space = pause/resume, 1/2/4 = playback speed.
--- Set the "Trace" attribute on this script to pick another module in
--- ReplicatedStorage.NandaTown.Traces (default: marketplace).
+-- The "Trace" attribute on this script picks the module in
+-- ReplicatedStorage.NandaTown.Traces (default: marketplace). It is set in the
+-- Rojo project file ($attributes), never by hand in Studio.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
