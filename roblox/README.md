@@ -153,9 +153,12 @@ The V / F / M buttons are a small row at the top centre, so they work on touch
 **The scenario board** holds the 11 converted Lab traces. Walk up to a panel
 and press E (or tap the prompt): the server switches every player to that
 trace and restarts the clock one second later, and a line at the top says who
-picked it. The panel for the current scenario is outlined in gold. The
-non-marketplace scenarios still use the marketplace layout (their own
-buildings are S1).
+picked it. The panel for the current scenario is outlined in gold. The panels
+are one row at eye level, because Roblox shows only the nearest prompt per key:
+with two rows, the lower panel always won. The non-marketplace scenarios still
+use the marketplace layout (their own buildings are S1).
+
+![the scenario board](screenshots/play-03-board.png)
 
 | scenario | cast | events | verdict |
 |---|---|---|---|
@@ -179,6 +182,22 @@ the screen comes back and you rejoin the shared run where it is. The frame is
 the largest 16:9 rectangle below the Roblox menu button. On a 1920x1200
 fullscreen client that is exactly 1920x1080 at y = 92, which
 `tools/record_sober.sh` records at native resolution.
+
+![cinema: the first chapter](screenshots/play-04-cinema-chapter.png)
+![cinema: the verdict hold](screenshots/play-05-cinema-verdict.png)
+
+Studio solo playtest, 2026-10-12. Frames: `play-01-walk` (walking among the
+agents), `play-02-overview` (V), `play-03-board`, `play-04-cinema-chapter`
+and `play-05-cinema-verdict` (M), `play-06-loop-countdown` (verdict, then
+"next run in 4 s"), `play-07-fly` (F, with the ▲ ▼ touch buttons). Checked
+in the same session: every one of the 11 panels switches the server's
+scenario and the replay runs; M twice cancels the take; after cinema,
+CoreGui, the topbar, the mouse, the board and the controls are all back, and
+the client catches up on the shared run (64 events fast-forwarded, then
+live), which is the late-joiner path. Not checked: two real players, and the
+on-screen buttons pressed with a mouse or a finger (the MCP drives the same
+`press()` through `NandaKey`). `play-02-overview` predates the move of the
+buttons to the top centre.
 
 Try it in Studio:
 
