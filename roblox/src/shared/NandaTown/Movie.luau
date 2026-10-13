@@ -1,7 +1,9 @@
 -- Movie mode: the same replay, dressed for a screen recording.
 --
 -- Switched on by the attribute Mode = "movie" on StarterPlayerScripts/NandaReplay,
--- which movie.project.json sets (never by hand in Studio). It adds:
+-- which movie.project.json sets (never by hand in Studio), or by cinema mode in
+-- the play place (M), which runs the same take for the local player and then
+-- puts everything back (Movie.run's opts.token, Movie.showChrome). It adds:
 --   * no CoreGui, no Roblox topbar, no mouse cursor (so neither the Roblox menu
 --     nor the account name can appear),
 --   * a black pre-roll, then a short title card with the scenario and seed,
@@ -68,6 +70,17 @@ function Movie.hideChrome()
 	end)
 end
 
+-- Undo hideChrome (cinema mode in the play place, after the take).
+function Movie.showChrome()
+	UserInputService.MouseIconEnabled = true
+	pcall(function()
+		StarterGui:SetCore("TopbarEnabled", true)
+	end)
+	pcall(function()
+		StarterGui:SetCoreGuiEnabled(Enum.CoreGuiType.All, true)
+	end)
+end
+
 ------------------------------------------------------------------------ the frame
 
 -- The movie's frame: the largest 16:9 rectangle in the viewport below the topbar
@@ -96,9 +109,13 @@ end
 ------------------------------------------------------------------------ gui bits
 
 -- A ScreenGui with a "Frame" child sized to Movie.frameRect(); returns both.
+-- Everything a take makes is in `made`, so a cancelled take can be cleaned up.
 local frames: { Frame } = {}
+local made: { Instance } = {}
+local conns: { RBXScriptConnection } = {}
 local function screen(parent: Instance, name: string, order: number): (ScreenGui, Frame)
 	local g = Instance.new("ScreenGui")
+	table.insert(made, g)
 	g.Name = name
 	g.ResetOnSpawn = false
 	g.IgnoreGuiInset = true
@@ -121,7 +138,7 @@ end
 -- viewport changes. `follow.hud` and `follow.relayout` are filled in as they exist.
 local follow: { hud: any?, relayout: (() -> ())? } = {}
 local function followViewport()
-	workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+	local conn = workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
 		local r = Movie.frameRect()
 		for _, f in frames do
 			if f.Parent then
@@ -136,6 +153,29 @@ local function followViewport()
 			follow.relayout()
 		end
 	end)
+	table.insert(conns, conn)
+end
+
+-- Destroy whatever the last take left on screen (its final frame is black).
+function Movie.cleanup()
+	for _, c in conns do
+		c:Disconnect()
+	end
+	for _, g in made do
+		g:Destroy()
+	end
+	table.clear(conns)
+	table.clear(made)
+	table.clear(frames)
+	follow.hud = nil
+	follow.relayout = nil
+end
+
+-- The take in progress, if it can be cancelled (cinema mode).
+local live: { cancelled: boolean }? = nil
+local CANCELLED = "NandaMovieCancelled"
+local function cancelled(): boolean
+	return live ~= nil and live.cancelled
 end
 
 -- The viewport starts small while the client boots; wait until it holds still.
@@ -166,7 +206,7 @@ end
 -- Linear fade of a set of properties, on the real clock (not the replay clock).
 local function fade(duration: number, step: (number) -> ())
 	local t0 = os.clock()
-	while true do
+	while not cancelled() do
 		local a = math.clamp((os.clock() - t0) / duration, 0, 1)
 		step(a)
 		if a >= 1 then
@@ -238,7 +278,9 @@ local function fadeTitle(g: ScreenGui, duration: number)
 			l.TextTransparency = a
 		end
 	end)
-	g:Destroy()
+	if not cancelled() then
+		g:Destroy()
+	end
 end
 
 ------------------------------------------------------------------------ chapters
@@ -520,21 +562,51 @@ end
 
 -- Runs the whole take on the client. `start(opts)` starts the replay (Replay.run
 -- with the caller's camera and gui parent merged in) and returns its state.
-function Movie.run(trace, guiParent: Instance, start: ({ [string]: any }) -> any)
+-- opts.token = { cancelled = false }: set cancelled to stop the take early
+-- (cinema mode's M); Movie.run then cleans up and returns "cancelled". It
+-- returns "done" after the closing fade, leaving the black frame up; the caller
+-- calls Movie.cleanup() and Movie.showChrome() when it wants the screen back.
+function Movie.run(trace, guiParent: Instance, start: ({ [string]: any }) -> any, opts: { [string]: any }?): string
+	local token = opts and opts.token or { cancelled = false }
+	live = token
+	Movie.cleanup()
+	local ok, err = pcall(Movie._take, trace, guiParent, start)
+	if live == token then
+		live = nil
+	end
+	if ok then
+		return "done"
+	end
+	if token.cancelled or (type(err) == "string" and string.find(err, CANCELLED, 1, true)) then
+		Movie.cleanup()
+		return "cancelled"
+	end
+	error(err, 0)
+end
+
+function Movie._take(trace, guiParent: Instance, start: ({ [string]: any }) -> any)
 	local t0 = os.clock()
-	local function at(t: number)
-		local dt = t - (os.clock() - t0)
-		if dt > 0 then
-			task.wait(dt)
+	local function check()
+		if cancelled() then
+			error(CANCELLED, 0)
 		end
+	end
+	local function at(t: number)
+		while os.clock() - t0 < t do
+			check()
+			task.wait(math.min(0.05, t - (os.clock() - t0)))
+		end
+		check()
 	end
 
 	Movie.hideChrome()
 	settleViewport()
+	check()
 	t0 = os.clock()
 	followViewport()
 	-- pre-roll: magenta viewport, black frame (the recorder's crop marks)
 	local mark = Instance.new("ScreenGui")
+	table.insert(made, mark)
 	mark.Name = "NandaMovieMark"
 	mark.IgnoreGuiInset = true
 	mark.ResetOnSpawn = false
@@ -564,6 +636,9 @@ function Movie.run(trace, guiParent: Instance, start: ({ [string]: any }) -> any
 				local wait = Movie.CAPTION_MIN - (os.clock() - caption.shownAt)
 				if wait > 0 then
 					task.wait(wait)
+				end
+				if cancelled() then
+					break
 				end
 				caption:show(table.remove(queue, 1))
 				task.wait(0.35)
@@ -595,20 +670,25 @@ function Movie.run(trace, guiParent: Instance, start: ({ [string]: any }) -> any
 	fade(Movie.TITLE_FADE_IN, function(a)
 		blackFill.BackgroundTransparency = a
 	end)
+	check()
 	black.Enabled = false
 	at(Movie.PREROLL + Movie.TITLE_FADE_IN + Movie.TITLE_HOLD)
 	fadeTitle(title, Movie.TITLE_FADE_OUT)
+	check()
 	stage("replay")
 
 	while not state.done and not state.cancelled do
+		check()
 		task.wait(0.05)
 	end
 	stage("hold")
-	task.wait(Movie.HOLD)
+	local held = os.clock() - t0
+	at(held + Movie.HOLD)
 	black.Enabled = true
 	fade(Movie.FADE_OUT, function(a)
 		blackFill.BackgroundTransparency = 1 - a
 	end)
+	check()
 	stage("done")
 	workspace:SetAttribute("NandaMovieSeconds", os.clock() - t0)
 end
