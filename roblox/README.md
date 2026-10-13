@@ -219,7 +219,7 @@ The code: `src/server/NandaServer.server.luau` (floor, spawn, board, clock),
 
 ## Publish
 
-The experience is private, and it is updated only from the repo:
+The experience is public since 2026-10-13: <https://www.roblox.com/games/74139499982225>. It is updated only from the repo:
 `tools/publish.sh` builds `play.project.json` with the pinned Rojo and uploads
 the result with Open Cloud.
 
@@ -258,15 +258,16 @@ line. Until `place.json` has IDs, the script says so and stops.
 (live editing) session, the endpoint answers `409 Conflict: Server is busy`.
 That is the state Studio was left in after "Publish to Roblox As…", and two
 attempts 90 s apart both got it on 2026-10-12. Close the place in Studio (or
-turn Team Create off in Studio's View → Team Create panel) before
+turn Team Create off: click the collaborator icon at Studio's top right to open Live Collaborators, then ⋯ → Disable Team Create, and confirm the reload) before
 `tools/publish.sh`. Otherwise, with the Rojo plugin connected (so the
 DataModel is the repo), File → Publish to Roblox in Studio does the same job.
 
 **Join:** open `https://www.roblox.com/games/<placeId>` and press Play, which
 hands the `roblox://` link to Sober if it is the registered handler. Or open
 Sober, find the experience under your creations or favourites, and join from
-there. A private experience can be played only by its owner and anyone given
-access in Creator Hub.
+there.
+
+**Who can play.** Released publicly on 2026-10-13 from Creator Hub (Manage audience → Release publicly; the age-restricted-content question answered No: no social hangout, user creation, violence, romance, alcohol, language or AI interaction). That gives the label *Content May Vary*, so it plays for **age-checked users 16+** (facial age estimation or ID on their Roblox account). It is excluded from the Recommended For You feed (Advanced settings), so it is found by link, by name search, or on the owner's profile. Under-16 reach would need the full questionnaire and 250 highly engaged players. Roblox has no unlisted mode; the alternatives are Playtest access for named users, or up to 10 friends as early testers.
 
 ## Record from the client
 
