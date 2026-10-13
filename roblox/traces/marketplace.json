@@ -1,6 +1,6 @@
 {
  "format": "nandatown-trace/roblox-v1",
- "source": "~/prg/mit-nanda/research/nandatown/sample-trace.jsonl",
+ "source": "roblox/traces/raw/marketplace.bundle.json",
  "run_id": "sim-e6802a896c38",
  "scenario": "marketplace",
  "seed": 42,

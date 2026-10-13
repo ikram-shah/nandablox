@@ -1,6 +1,6 @@
-# NANDA Town in Roblox: spike S0
+# NANDA Town in Roblox
 
-S0 replays **one real NANDA Town run** in Roblox Studio as a town square. Each
+The place replays **one real NANDA Town run** as a town square. Each
 protocol layer that acts during the run gets its own building:
 
 - the gate and guards (auth)
@@ -11,9 +11,8 @@ protocol layer that acts during the run gets its own building:
 - the review wall and stars (trust)
 - the courthouse (data_facts, the verdict)
 
-No network is involved: the trace ships inside the place. The design behind
-it is in `../research/roblox-nanda-town.md` (S0 in its "Spike ladder"), and
-the trace format is described in `../research/nandatown.md` §4.
+No network is involved: the trace ships inside the place. The trace format is
+described in [`../docs/trace-format.md`](../docs/trace-format.md).
 
 ![verdict](screenshots/06-verdict.png)
 

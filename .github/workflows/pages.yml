@@ -1,5 +1,4 @@
-# Publish site/ (and only site/) to GitHub Pages. The rest of the repository,
-# including its notes, is never part of the artifact.
+# Publish site/ (and only site/) to GitHub Pages.
 name: pages
 
 on:

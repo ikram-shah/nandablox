@@ -4,7 +4,7 @@
 Input can be any of:
   * an ``events.jsonl`` file (one TownEvent per line),
   * a run bundle directory (``events.jsonl`` plus optional ``run.json`` / ``result.json``),
-  * a merged JSON object with an ``events`` list (e.g. research/nandatown/sample-trace.json).
+  * a merged JSON object with an ``events`` list (e.g. traces/raw/marketplace.bundle.json).
 
 The output is one table:
 
