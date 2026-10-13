@@ -116,7 +116,7 @@ Wall-clock values appear only outside events (`manifest.created_at`,
 
 - The bundle already is the export: `events.jsonl` is newline-delimited
   JSON. To get one JSON object, merge the five records (this is what
-  `research/nandatown/sample-trace.json` is). `nandatown replay` prints a text
+  `roblox/traces/raw/marketplace.bundle.json` is). `nandatown replay` prints a text
   view; the visualizer HTML embeds `{title, meta, participants, events,
   result}` as JSON (`visualizer.py:223-230`), a third ready-made shape.
 - Bundled Lab scenarios: **28–71 events, 5–13 KB `events.jsonl`, 13–26 KB
@@ -125,9 +125,8 @@ Wall-clock values appear only outside events (`manifest.created_at`,
   per agent** for a 2-round marketplace, about 2 KB per agent in
   `events.jsonl` (5,000 voters → 60,007 events, 11 MB; 5,000-agent market →
   140,002 events, 28 MB).
-- Sample: `research/nandatown/sample-trace.jsonl` (verbatim) and
-  `sample-trace.json` (merged, untrimmed), both from the run in
-  `cli-visualize-marketplace.png`. It covers discovery, a 2-step haggle,
+- Sample: `roblox/traces/raw/marketplace.bundle.json` (merged, untrimmed),
+  the run in the movie. It covers discovery, a 2-step haggle,
   escrow, a duplicated delivery the buyer recognizes, two reputation updates,
   memory reuse in round 2, and a redacted `budget_cents` in the profile.
 
