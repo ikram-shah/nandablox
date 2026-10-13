@@ -103,9 +103,9 @@
   <!-- Movie: the local 1080p file, so it is always crisp and the chart below seeks it exactly.
        YouTube's embed picks its own quality from the player's size (vq=, setPlaybackQuality are
        ignored). To use YouTube anyway, swap the <video> for this; trace.js drives either:
-       <iframe id="movie" src="https://www.youtube-nocookie.com/embed/kLCVOTtJRRo?rel=0&amp;enablejsapi=1&amp;origin=https://klutometis.github.io" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe> -->
-  <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-poster.png" src="media/nanda-town-replay.mp4"></video>
-  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. Also on <a href="https://youtu.be/kLCVOTtJRRo">YouTube</a> · <a href="media/nanda-town-replay-720p.mp4">720p</a>.</figcaption>
+       <iframe id="movie" src="https://www.youtube-nocookie.com/embed/1WyNucUqWjg?rel=0&amp;enablejsapi=1&amp;origin=https://klutometis.github.io" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe> -->
+  <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-sober-poster.png" src="media/nanda-town-replay-sober.mp4"></video>
+  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. Also on <a href="https://youtu.be/1WyNucUqWjg">YouTube</a> · <a href="media/nanda-town-replay-sober-720p.mp4">720p</a>.</figcaption>
 </figure>
 
 <section class="wide" id="trace">
@@ -132,14 +132,14 @@
 
 <section class="col">
   <h2>How it’s made</h2>
-  <figure class="pipeline"><img src="pipeline.svg" alt="Pipeline: NANDA Town Lab run, events.jsonl, trace_to_luau.py, Luau trace module; then rojo build, Roblox Studio, ffmpeg, MP4." width="736" height="282"></figure>
-  <p>The place is built by <a href="https://rojo.space">Rojo</a> from a repository that holds everything: the code, the trace and the project files. Nothing is uploaded to Roblox. Every building, coin and courier is made of parts by code at runtime. Roblox Studio is used only to view the built place and to record it. A movie mode in the project hides Roblox’s own interface and adds the title and captions. ffmpeg records the screen and cuts the take at marks the movie draws into its first frames.</p>
+  <figure class="pipeline"><img src="pipeline.svg" alt="Pipeline: NANDA Town Lab run, events.jsonl, trace_to_luau.py, Luau trace module; then rojo build, Roblox, ffmpeg, MP4." width="713" height="172"></figure>
+  <p>The place is built by <a href="https://rojo.space">Rojo</a> from a repository that holds everything: the code, the trace and the project files. Nothing is uploaded to Roblox. Every building, coin and courier is made of parts by code at runtime. The built place is published to Roblox, where anyone with access can walk around the town while the run replays. Press M and a cinema mode hides Roblox’s own interface, takes the fixed overview camera and adds the title and captions. The movie is that mode, recorded from the Roblox client at native 1080p: ffmpeg grabs the screen and cuts the take at marks the movie draws into its first frames.</p>
   <p>To reproduce: run <code>nandatown run marketplace --seed 42</code> in NANDA Town, convert the bundle with <code>trace_to_luau.py</code>, then <code>rojo build</code> and press Play.</p>
   <p>What could come next:</p>
   <ul class="next">
-    <li>All eleven Lab scenarios, with a building lighting up whenever its layer acts.</li>
+    <li>A layout of its own for each of the eleven Lab scenarios (the place already plays all eleven, on the marketplace square).</li>
     <li>Thousands of synthetic agents, with distant districts shown as heat maps.</li>
-    <li>Live: Studio streams a run from a local NANDA Town server instead of replaying a file.</li>
+    <li>Live: the place streams a run from a NANDA Town server instead of replaying a file.</li>
     <li>Swap a layer (send the gate guards home with <code>auth=plain.v1</code>), rerun, and play the before and after side by side.</li>
   </ul>
 </section>

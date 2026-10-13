@@ -6,9 +6,10 @@
 (function () {
   "use strict";
 
-  // Movie time of replay clock 0: title card, then the replay (Movie.luau timeline
-  // minus the cut's lead-in; see roblox/tools/cut_movie.py).
-  const VIDEO_OFFSET = 5.2;
+  // Movie time of replay clock 0 in media/nanda-town-replay-sober.mp4, measured:
+  // the verdict banner (replay t = 52.0) first shows at 56.40 s, and the take's
+  // motion cross-correlates with the Studio take's (offset 5.2) at -0.78 s, scale 1.000.
+  const VIDEO_OFFSET = 4.4;
 
   // Util.LAYER_COLORS from the replay, a little quieter for paper.
   const LAYER = {
