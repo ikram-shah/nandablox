@@ -162,8 +162,39 @@
   }
 
   // ---- draw ----------------------------------------------------------------
+  // The movie is a local <video id="movie"> or a YouTube <iframe id="movie">. For
+  // YouTube, speak the embed's postMessage protocol (no API script to load) and
+  // expose the few <video> members used here: currentTime, paused, play().
+  function youtube(frame) {
+    const st = { t: 0, at: performance.now(), playing: false, heard: false };
+    const subs = [];
+    const send = (o) => frame.contentWindow &&
+      frame.contentWindow.postMessage(JSON.stringify({ id: "movie", channel: "widget", ...o }), "*");
+    window.addEventListener("message", (ev) => {
+      if (ev.source !== frame.contentWindow) return;
+      let m;
+      try { m = typeof ev.data === "string" ? JSON.parse(ev.data) : ev.data; } catch (_) { return; }
+      if (!m || !m.info) return;
+      st.heard = true;
+      if (typeof m.info.currentTime === "number") { st.t = m.info.currentTime; st.at = performance.now(); }
+      if (typeof m.info.playerState === "number") st.playing = m.info.playerState === 1;
+      subs.forEach((f) => f());
+    });
+    const hello = () => send({ event: "listening" });
+    frame.addEventListener("load", hello);
+    const knock = setInterval(() => (st.heard ? clearInterval(knock) : hello()), 500);
+    return {
+      get currentTime() { return st.playing ? st.t + (performance.now() - st.at) / 1000 : st.t; },
+      set currentTime(v) { st.t = v; st.at = performance.now(); send({ event: "command", func: "seekTo", args: [v, true] }); },
+      get paused() { return !st.playing; },
+      play() { send({ event: "command", func: "playVideo", args: [] }); },
+      addEventListener(k, f) { if (k === "timeupdate") subs.push(f); },
+    };
+  }
+
   const current = { sync: () => {} };
-  const movie = document.querySelector("video#movie");
+  const frame = document.querySelector("iframe#movie");
+  const movie = document.querySelector("video#movie") || (frame && youtube(frame));
   if (movie) {
     ["timeupdate", "seeked", "play", "pause"].forEach((k) => movie.addEventListener(k, () => current.sync()));
     (function loop() {
@@ -275,7 +306,7 @@
 
     // tooltip + click to seek
     const tip = d3.select("#trace-tip");
-    const video = document.querySelector("video#movie");
+    const video = movie;
     function show(ev, d) {
       const e = d.e;
       tip.style("display", "block").html(

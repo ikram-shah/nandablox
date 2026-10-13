@@ -91,11 +91,12 @@
 </header>
 
 <figure class="movie wide">
-  <!-- Movie. To use YouTube instead, replace the one <video> line below with:
-       <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe>
-       (the trace chart's click-to-seek and playhead then switch themselves off). -->
-  <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-poster.png" src="media/nanda-town-replay.mp4"></video>
-  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. Also <a href="https://youtu.be/kLCVOTtJRRo">on YouTube</a>; <a href="media/nanda-town-replay-720p.mp4">720p copy</a>.</figcaption>
+  <!-- Movie: YouTube (unlisted, klutometis channel). trace.js drives it over the embed's
+       postMessage API (enablejsapi=1), so click-to-seek and the playhead still work.
+       To serve the local copy instead, swap the iframe for:
+       <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-poster.png" src="media/nanda-town-replay.mp4"></video> -->
+  <iframe id="movie" src="https://www.youtube-nocookie.com/embed/kLCVOTtJRRo?rel=0&amp;enablejsapi=1&amp;origin=https://klutometis.github.io" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe>
+  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. <a href="media/nanda-town-replay.mp4">MP4</a> · <a href="media/nanda-town-replay-720p.mp4">720p</a>.</figcaption>
 </figure>
 
 <section class="col">
