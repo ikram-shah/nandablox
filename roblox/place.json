@@ -1,4 +1,5 @@
 {
+  "_comment": "The published play place (play.project.json). Fill in both IDs once the experience exists: Creator Hub > Creations > the experience > ... > Copy Universe ID, and the Place ID from its Places tab (or game.GameId / game.PlaceId in Studio after Publish to Roblox As...). tools/publish.sh reads them.",
   "universeId": null,
   "placeId": null
 }

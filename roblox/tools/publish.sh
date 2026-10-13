@@ -1,144 +1,129 @@
 #!/bin/bash
-# Publish the play place to its Roblox experience with Open Cloud.
+# Publish the play place (play.project.json) to its experience with Open Cloud.
 #
-#   tools/publish.sh             # build play.project.json -> build/play.rbxl, check the key, publish
-#   tools/publish.sh --check     # only introspect the key: is it live, and does it have
-#                                # universe-places:write for the universe in place.json?
-#   tools/publish.sh --dry-run   # build and check, but don't publish
+#   tools/publish.sh            # rojo build, then publish a new Published version
+#   tools/publish.sh --check    # only check the key: does it have universe-places:write here?
+#   tools/publish.sh --dry-run  # build and print what would be sent, send nothing
 #
-# The IDs come from roblox/place.json (committed): {"universeId": ..., "placeId": ...}.
-# They are null until the experience exists; see README.md, "Publish".
-# The key comes from $ROBLOX_PUBLISH_API_KEY, else $ROBLOX_OPEN_CLOUD_API_KEY. It
-# needs the universe-places API with the Write operation for this experience.
-# The key never goes on a command line (it would show in ps): curl reads it
-# from a private temp file.
+# The place is built by the pinned Rojo from the repo (hermetic: nothing made by
+# hand in Studio) into build/play.rbxl, then sent with
 #
-# The place is built from the repo by the pinned Rojo, as binary .rbxl
-# (Content-Type application/octet-stream; .rbxlx would be application/xml), and
-# POSTed to
-#   https://apis.roblox.com/universes/v1/{universeId}/places/{placeId}/versions?versionType=Published
-# which answers {"versionNumber": N}. Docs:
-#   https://create.roblox.com/docs/cloud/guides/usage-place-publishing
-#   https://create.roblox.com/docs/cloud/auth/api-keys (introspect)
+#   POST https://apis.roblox.com/universes/v1/{universeId}/places/{placeId}/versions?versionType=Published
+#   x-api-key: $ROBLOX_PUBLISH_API_KEY      Content-Type: application/octet-stream (.rbxl)
+#
+# (.rbxlx would be Content-Type: application/xml; the binary file is smaller.)
+# Docs: https://create.roblox.com/docs/cloud/guides/usage-place-publishing
+#
+# IDs come from roblox/place.json (committed). The key comes from the
+# environment: ROBLOX_PUBLISH_API_KEY, else ROBLOX_OPEN_CLOUD_API_KEY. It needs
+# the universe-places scope with Write on this experience (Creator Hub > Open
+# Cloud > API Keys); --check asks POST /api-keys/v1/introspect.
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
-mode=publish
+mode="publish"
 case "${1:-}" in
-  "") ;;
   --check) mode=check ;;
   --dry-run) mode=dry ;;
-  -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
+  "") ;;
+  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
   *) echo "usage: tools/publish.sh [--check | --dry-run]" >&2; exit 2 ;;
 esac
 
-ids_file="$here/place.json"
-[ -f "$ids_file" ] || { echo "missing $ids_file" >&2; exit 1; }
-read -r universe place < <(python3 -c '
-import json, sys
-d = json.load(open(sys.argv[1]))
-def get(k):
-    v = d.get(k)
-    return "" if v in (None, "") else str(int(v))
-print(get("universeId") or "-", get("placeId") or "-")' "$ids_file")
-[ "$universe" = - ] && universe=""
-[ "$place" = - ] && place=""
+place_json="${PLACE_JSON:-$here/place.json}"   # PLACE_JSON: for testing only
+universe="$(jq -r '.universeId // empty' "$place_json")"
+place="$(jq -r '.placeId // empty' "$place_json")"
+need_ids() {
+  if [ -z "$universe" ] || [ -z "$place" ]; then
+    cat >&2 <<EOF
+roblox/place.json has no universeId/placeId yet, so there is nowhere to publish.
+One-time setup (README "Publish"): create the experience (private), then put its
+Universe ID and start Place ID in roblox/place.json and commit it.
+EOF
+    exit 1
+  fi
+  case "$universe$place" in *[!0-9]*) echo "place.json: universeId and placeId must be numbers" >&2; exit 1 ;; esac
+}
 
 key="${ROBLOX_PUBLISH_API_KEY:-${ROBLOX_OPEN_CLOUD_API_KEY:-}}"
-key_var=ROBLOX_PUBLISH_API_KEY
-[ -n "${ROBLOX_PUBLISH_API_KEY:-}" ] || key_var=ROBLOX_OPEN_CLOUD_API_KEY
-if [ -z "$key" ]; then
-  echo "no API key: set ROBLOX_PUBLISH_API_KEY (or ROBLOX_OPEN_CLOUD_API_KEY) to a key with" >&2
-  echo "universe-places Write for this experience (Creator Hub -> Open Cloud -> API Keys)" >&2
-  exit 1
-fi
+keyvar="ROBLOX_PUBLISH_API_KEY"
+[ -n "${ROBLOX_PUBLISH_API_KEY:-}" ] || keyvar="ROBLOX_OPEN_CLOUD_API_KEY"
 
-tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
-umask 077
-printf 'x-api-key: %s\n' "$key" > "$tmp/header"   # printf is a builtin: no argv in ps
-# the introspect body, from the environment (not argv)
-python3 - "$tmp/introspect.json" <<'PY'
-import json, os, sys
-key = os.environ.get("ROBLOX_PUBLISH_API_KEY") or os.environ.get("ROBLOX_OPEN_CLOUD_API_KEY")
-json.dump({"apiKey": key}, open(sys.argv[1], "w"))
-PY
-
-# ---- check: introspect the key
-check() {
-  local out code
-  code="$(curl -sS -o "$tmp/introspect.out" -w '%{http_code}' -X POST \
-    https://apis.roblox.com/api-keys/v1/introspect \
-    -H 'Content-Type: application/json' --data-binary @"$tmp/introspect.json")"
-  python3 - "$tmp/introspect.out" "$code" "$universe" "$key_var" <<'PY'
-import json, sys
-path, code, universe, var = sys.argv[1:5]
-raw = open(path).read()
-try:
-    d = json.loads(raw)
-except ValueError:
-    d = None
-if code != "200" or not isinstance(d, dict):
-    print(f"introspect failed (HTTP {code}): {raw[:300]}")
-    sys.exit(1)
-print(f"key ({var}): {d.get('name')!r}, enabled={d.get('enabled')}, expired={d.get('expired')}, "
-      f"expires {d.get('expirationTimeUtc')}")
-for s in d.get("scopes", []):
-    res = {k: v for k, v in s.items() if k not in ("name", "operations")}
-    print(f"  scope {s.get('name')}: {','.join(s.get('operations', []))}  {json.dumps(res)}")
-problems = []
-if not d.get("enabled", False):
-    problems.append("the key is disabled")
-if d.get("expired", False):
-    problems.append("the key has expired (regenerate it in Creator Hub)")
-ok_scope = False
-for s in d.get("scopes", []):
-    if s.get("name") == "universe-places" and "write" in [o.lower() for o in s.get("operations", [])]:
-        ids = [str(u) for u in s.get("universeIds", []) or []]
-        if not universe or "*" in ids or universe in ids:
-            ok_scope = True
-if not ok_scope:
-    target = f"universe {universe}" if universe else "this experience"
-    problems.append(f"no universe-places:write for {target}")
-if not universe:
-    problems.append("place.json has no universeId yet, so the scope can't be matched to the experience")
-if problems:
-    print("NOT READY: " + "; ".join(problems))
-    sys.exit(1)
-print(f"ready: universe-places:write covers universe {universe}")
-PY
+# Introspect the key: prints a verdict, returns 0 only if it can publish here.
+check_key() {
+  if [ -z "$key" ]; then
+    echo "no API key: set ROBLOX_PUBLISH_API_KEY (or ROBLOX_OPEN_CLOUD_API_KEY)" >&2
+    return 1
+  fi
+  local resp code
+  resp="$(mktemp)"
+  code="$(NANDA_KEY="$key" jq -n '{apiKey: env.NANDA_KEY}' | curl -sS -o "$resp" -w '%{http_code}' \
+    -X POST https://apis.roblox.com/api-keys/v1/introspect \
+    -H 'Content-Type: application/json' --data-binary @-)"
+  if [ "$code" != 200 ]; then
+    echo "introspect failed (HTTP $code) for \$$keyvar: $(head -c 400 "$resp")" >&2
+    rm -f "$resp"
+    return 1
+  fi
+  # never print the key; the response carries only its name, owner and scopes
+  jq -r --arg u "$universe" --arg var "$keyvar" '
+    def ids: (.universeIds // .universeIdList // []) | map(tostring);
+    [.scopes[]? | select(.name == "universe-places")] as $sp
+    | ($sp | map(select((.operations // []) | index("write")))
+           | map(select((ids | index($u)) or (ids | index("*")))) | length > 0) as $ok
+    | "key:      \(.name // "?") (\($var)), authorized user \(.authorizedUserId // "?")",
+      "state:    \(if .expired == true then "EXPIRED" elif .enabled == false then "DISABLED" else "active" end)"
+        + (if .expirationTime then ", expires \(.expirationTime)" else "" end),
+      "scopes:   \([.scopes[]? | "\(.name):\((.operations // []) | join("+"))"] | join(", "))",
+      "publish:  universe-places:write on universe \($u): \(if $ok then "YES" else "NO" end)"
+  ' "$resp"
+  local ok
+  ok="$(jq -r --arg u "$universe" '
+    def ids: (.universeIds // .universeIdList // []) | map(tostring);
+    ([.scopes[]? | select(.name == "universe-places")
+      | select((.operations // []) | index("write"))
+      | select((ids | index($u)) or (ids | index("*")))] | length > 0)
+    and (.expired != true) and (.enabled != false)' "$resp")"
+  rm -f "$resp"
+  [ "$ok" = true ]
 }
 
 if [ "$mode" = check ]; then
-  check
-  exit $?
-fi
-
-if [ -z "$universe" ] || [ -z "$place" ]; then
-  echo "roblox/place.json has no universeId/placeId yet (both are null)." >&2
-  echo "Create the experience first (README.md, \"Publish\"), then put its IDs there:" >&2
-  echo '  {"universeId": 1234567890, "placeId": 9876543210}' >&2
-  exit 1
-fi
-
-check || { echo "key check failed; not publishing" >&2; exit 1; }
-
-mkdir -p "$here/build"
-"$here/tools/rojo.sh" build play.project.json -o build/play.rbxl >&2
-rbxl="$here/build/play.rbxl"
-echo "built $rbxl ($(stat -c%s "$rbxl") bytes, git $(git -C "$here" rev-parse --short HEAD)$(git -C "$here" diff --quiet HEAD -- . || echo '+dirty'))"
-
-if [ "$mode" = dry ]; then
-  echo "dry run: would POST it to universe $universe, place $place (versionType=Published)"
+  [ -n "$universe" ] || echo "note: place.json has no universeId yet; checking the key against no universe" >&2
+  if check_key; then
+    echo "ok: this key can publish universe $universe place $place"
+  else
+    echo "not ready: create a key with universe-places Write on this experience (README \"Publish\")" >&2
+    exit 1
+  fi
   exit 0
 fi
 
+need_ids
+mkdir -p "$here/build"
+"$here/tools/rojo.sh" build play.project.json -o build/play.rbxl >&2
+file="$here/build/play.rbxl"
 url="https://apis.roblox.com/universes/v1/$universe/places/$place/versions?versionType=Published"
-code="$(curl -sS -o "$tmp/publish.out" -w '%{http_code}' -X POST "$url" \
-  -H @"$tmp/header" -H 'Content-Type: application/octet-stream' --data-binary @"$rbxl")"
+echo "built $file ($(stat -c%s "$file") bytes)"
+
+if [ "$mode" = dry ]; then
+  echo "dry run: would POST $url (Content-Type: application/octet-stream, x-api-key from \$$keyvar)"
+  exit 0
+fi
+
+check_key || { echo "not publishing: the key can't publish here (tools/publish.sh --check)" >&2; exit 1; }
+
+# the key goes in a header file, not on curl's command line (ps would show it)
+hdr="$(mktemp)"; resp="$(mktemp)"
+trap 'rm -f "$hdr" "$resp"' EXIT
+chmod 600 "$hdr"
+printf 'x-api-key: %s\n' "$key" > "$hdr"
+code="$(curl -sS -o "$resp" -w '%{http_code}' -X POST "$url" \
+  -H @"$hdr" -H 'Content-Type: application/octet-stream' --data-binary @"$file")"
 if [ "$code" != 200 ]; then
-  echo "publish failed (HTTP $code): $(head -c 500 "$tmp/publish.out")" >&2
+  echo "publish failed (HTTP $code): $(head -c 600 "$resp")" >&2
   exit 1
 fi
-version="$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))["versionNumber"])' "$tmp/publish.out")"
-echo "published: universe $universe, place $place, version $version"
+version="$(jq -r '.versionNumber // empty' "$resp")"
+[ -n "$version" ] || { echo "publish returned 200 without a versionNumber" >&2; exit 1; }
+echo "published universe $universe place $place: version $version"
 echo "join: https://www.roblox.com/games/$place"
