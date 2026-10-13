@@ -91,6 +91,25 @@ exact crop. To work on it live, run `tools/serve.sh movie` and connect the
 plugin. A connected plugin syncs its own project's attributes, so serve the
 project you opened.
 
+**Recording.** Studio has no recorder, so `tools/record_movie.sh` grabs the
+X11 screen. It focuses Studio with i3 (which switches to Studio's workspace),
+checks that Studio is really the focused window and keeps a still of it, then
+records the whole screen at 30 fps and presses F5. `tools/cut_movie.py` finds
+the magenta pre-roll and the black 16:9 frame inside it, crops to that frame,
+cuts from the end of the pre-roll to the closing fade, and writes
+`site/media/nanda-town-replay.mp4` (1080p, H.264, yuv420p, faststart, silent),
+a `-720p.mp4` copy for WhatsApp and a `-poster.png`. With Studio open on
+`build/movie.rbxlx`, one take is one command:
+
+```sh
+tools/record_movie.sh            # PLAY=external to start Play yourself (prints READY)
+```
+
+The take needs the screen for about 85 s, and Studio only renders while its
+workspace is visible. Known limits of v1: the Studio viewport gives a 1562x876
+frame, upscaled to 1080p; Studio renders at about 22 fps, so some frames repeat;
+and the frame clips the gate on the left edge.
+
 New traces: `tools/trace_to_luau.py <run-dir or events.jsonl> --luau
 src/shared/NandaTown/Traces/<name>.luau --json traces/<name>.json`.
 
