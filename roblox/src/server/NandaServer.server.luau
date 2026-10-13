@@ -50,9 +50,12 @@ spawn.Parent = world
 
 -- One panel per converted Lab trace. Text comes from the trace only: its
 -- scenario name, cast, event count and the evaluator's verdict.
-local BOARD_CENTER = Vector3.new(-26, 0, 56)
+local BOARD_CENTER = Vector3.new(-30, 0, 50)
 local BOARD_FACING = Vector3.new(0.5, 0, 1).Unit -- toward the spawn
-local COLS, PW, PH, GAP = 6, 4.2, 3.4, 0.45
+-- One row, at eye level: Roblox shows only the nearest prompt per key, so with
+-- two rows the lower panel always won and the top row could not be picked.
+local COLS, PW, PH, GAP = 11, 3.6, 4.0, 0.35
+local PANEL_Y = 4.7
 local GOLD = Color3.fromRGB(250, 190, 60)
 local PANEL_BG = Color3.fromRGB(28, 28, 36)
 
@@ -66,21 +69,23 @@ local function at(dx: number, dy: number, dz: number): CFrame
 end
 Util.part({
 	Name = "Backboard",
-	Size = Vector3.new(width + 1, 9.2, 0.6),
-	CFrame = at(0, 6.9, 0.3),
+	Size = Vector3.new(width + 1, 7.6, 0.6),
+	CFrame = at(0, 6.0, 0.3),
 	Color = Color3.fromRGB(110, 75, 45),
 	Material = Enum.Material.Wood,
 	CanCollide = true,
 	Parent = boardModel,
 })
 for _, dx in { -width / 2, width / 2 } do
-	Util.part({ Name = "Post", Size = Vector3.new(1, 12.6, 1), CFrame = at(dx, 6.3, 0.3), Color = Color3.fromRGB(90, 60, 35), Material = Enum.Material.Wood, CanCollide = true, Parent = boardModel })
+	Util.part({ Name = "Post", Size = Vector3.new(1, 10.6, 1), CFrame = at(dx, 5.3, 0.3), Color = Color3.fromRGB(90, 60, 35), Material = Enum.Material.Wood, CanCollide = true, Parent = boardModel })
 end
-local header = Util.part({ Name = "Header", Size = Vector3.new(width + 1, 1.8, 0.4), CFrame = at(0, 12.1, 0.1), Color = Color3.fromRGB(25, 25, 32), Parent = boardModel })
+local header = Util.part({ Name = "Header", Size = Vector3.new(width + 1, 1.8, 0.4), CFrame = at(0, 8.6, 0.1), Color = Color3.fromRGB(25, 25, 32), Parent = boardModel })
 Util.sign(header, Enum.NormalId.Front, "SCENARIOS  ·  press E at one to replay it for everyone", {
 	bg = Color3.fromRGB(25, 25, 32),
 	color = GOLD,
 	pps = 30,
+	scaled = false, -- TextScaled overflowed the header at this aspect
+	textSize = 28,
 })
 
 local panels: { [string]: { part: BasePart, stroke: UIStroke, name: TextLabel } } = {}
@@ -123,7 +128,7 @@ local function makePanel(i: number, name: string, trace)
 	local inRow = math.min(COLS, #PlayClock.ORDER - row * COLS)
 	-- seen from the front, a part's +X points to the viewer's left
 	local x = -(col - (inRow - 1) / 2) * (PW + GAP)
-	local y = 9.0 - row * (PH + GAP)
+	local y = PANEL_Y - row * (PH + GAP)
 	local p = Util.part({
 		Name = "Panel " .. name,
 		Size = Vector3.new(PW, PH, 0.3),
@@ -160,6 +165,10 @@ local function makePanel(i: number, name: string, trace)
 		Font = Util.FONT_HEAVY,
 		TextColor3 = Color3.new(1, 1, 1),
 	})
+	-- cap the size, or TextScaled breaks "marketplace" mid-word to fill the panel
+	local cap = Instance.new("UITextSizeConstraint")
+	cap.MaxTextSize = 30
+	cap.Parent = title
 	Util.label(bg, {
 		Name = "Cast",
 		Text = castOf(trace),
@@ -184,7 +193,7 @@ local function makePanel(i: number, name: string, trace)
 	prompt.ActionText = "Replay for everyone"
 	prompt.ObjectText = (string.gsub(name, "_", " "))
 	prompt.HoldDuration = 0.25
-	prompt.MaxActivationDistance = 9
+	prompt.MaxActivationDistance = 7
 	prompt.RequiresLineOfSight = false
 	prompt.KeyboardKeyCode = Enum.KeyCode.E
 	prompt.Parent = p

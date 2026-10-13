@@ -196,16 +196,16 @@ Util.corner(status, 13)
 local hint = Instance.new("TextLabel")
 hint.Name = "Hint"
 hint.LayoutOrder = 9
-hint.Size = UDim2.fromOffset(92, 46)
-hint.BackgroundTransparency = 1
+hint.Size = UDim2.fromOffset(84, 46)
+hint.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+hint.BackgroundTransparency = 0.2
 hint.Font = Util.FONT
 hint.TextSize = 12
 hint.TextWrapped = true
-hint.TextXAlignment = Enum.TextXAlignment.Left
-hint.TextColor3 = Color3.fromRGB(240, 240, 240)
-hint.TextStrokeTransparency = 0.3
-hint.Text = "scenarios:\nthe board by\nthe spawn (E)"
+hint.TextColor3 = Color3.fromRGB(235, 235, 235)
+hint.Text = "scenarios:\nboard by the\nspawn, E"
 hint.Parent = strip
+Util.corner(hint, 8)
 
 local function refreshButtons()
 	local active = { V = mode == "overview", F = mode == "fly", M = cinema ~= nil }
