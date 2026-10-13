@@ -68,6 +68,29 @@ because the flatpak shares the host network and Studio reaches `localhost`
 (checked 2026-10-12: Studio fetched `http://localhost:34872/api/rojo` and got
 this project's name back from Rojo 7.7.0).
 
+## Movie
+
+`movie.project.json` is the same place with `Mode = "movie"` on `NandaReplay`.
+Movie mode lives in `src/shared/NandaTown/Movie.luau` and is never toggled by
+hand. It adds:
+
+- no CoreGui and no mouse cursor. The topbar is turned off, but the new
+  topbar's Roblox menu button can't be hidden, so the movie draws into the
+  largest 16:9 frame below it. The account name (player list) and the menu
+  never appear in the movie.
+- a black pre-roll, then a 4-second title card ("NANDA Town · one real run,
+  replayed in Roblox", with scenario, seed, event count and run id);
+- chapter captions keyed to the trace's own events, with the numbers read from
+  it: the town opens, then 1 quotes, 2 haggling, 3 order & escrow, 4 a
+  duplicated message, handled, 5 payment & reputation (round two), 6 verdict;
+- the verdict held for 4 s, then a fade to black.
+
+The HUD is unchanged, only confined to the frame. During the pre-roll the frame
+is black and the rest of the viewport magenta, so the recorder can find the
+exact crop. To work on it live, run `tools/serve.sh movie` and connect the
+plugin. A connected plugin syncs its own project's attributes, so serve the
+project you opened.
+
 New traces: `tools/trace_to_luau.py <run-dir or events.jsonl> --luau
 src/shared/NandaTown/Traces/<name>.luau --json traces/<name>.json`.
 
@@ -79,6 +102,8 @@ src/shared/NandaTown/Traces/<name>.luau --json traces/<name>.json`.
 | `src/shared/NandaTown/Replay.luau` | turns the event stream into animations: couriers, coins, bubbles, stars, faults, verdict |
 | `src/shared/NandaTown/Hud.luau` | title, legend, ledger, ticker, stage list |
 | `src/shared/NandaTown/Util.luau` | tweens, clock, pause and speed |
+| `src/shared/NandaTown/Movie.luau` | movie mode: frame, title card, chapter captions, verdict hold |
+| `movie.project.json` | the movie place (`Mode = "movie"`) |
 | `src/client/NandaReplay.client.luau` | Play-mode runner with a fixed overview camera |
 | `default.project.json` | the Rojo project: code, the `Trace` attribute, lighting, no characters |
 | `rokit.toml` | pins Rojo 7.7.0 |

@@ -19,7 +19,11 @@ local function panel(parent: Instance, props: { [string]: any }): Frame
 	return f
 end
 
-function Hud.new(trace, parent: Instance)
+-- opts.rect = {x, y, w, h} (pixels) confines the whole overlay to part of the
+-- screen (movie mode: the 16:9 area the recorder crops to; see Hud:setRect);
+-- opts.bannerY moves the verdict banner down (under movie mode's chapter caption).
+function Hud.new(trace, parent: Instance, opts: { [string]: any }?)
+	local bannerY = (opts and opts.bannerY) or 84
 	local old = parent:FindFirstChild("NandaTownHud")
 	if old then
 		old:Destroy()
@@ -31,9 +35,14 @@ function Hud.new(trace, parent: Instance)
 	g.DisplayOrder = 10
 	g.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 	g.Parent = parent
+	local root = Instance.new("Frame")
+	root.Name = "Safe"
+	root.BackgroundTransparency = 1
+	root.Size = UDim2.fromScale(1, 1)
+	root.Parent = g
 
 	-- title, top-left
-	local title = panel(g, { Name = "Title", Position = UDim2.fromOffset(14, 12), Size = UDim2.fromOffset(470, 62) })
+	local title = panel(root, { Name = "Title", Position = UDim2.fromOffset(14, 12), Size = UDim2.fromOffset(470, 62) })
 	Util.label(title, {
 		Text = "NANDA Town  ·  replay of one real run",
 		Size = UDim2.new(1, -20, 0, 32),
@@ -74,7 +83,7 @@ function Hud.new(trace, parent: Instance)
 		.. "\n✉ envelope = message on the road"
 		.. "\n● gold coins = money (escrow → vault → payee)"
 		.. "\n★ over a head = reputation score"
-	local legend = panel(g, { Name = "Legend", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 12), Size = UDim2.fromOffset(330, 100) })
+	local legend = panel(root, { Name = "Legend", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 12), Size = UDim2.fromOffset(330, 100) })
 	Util.label(legend, {
 		Text = legendText,
 		Size = UDim2.new(1, -20, 1, -12),
@@ -86,7 +95,7 @@ function Hud.new(trace, parent: Instance)
 	})
 
 	-- recent events, bottom-left above the ticker
-	local recent = panel(g, {
+	local recent = panel(root, {
 		Name = "Recent",
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 14, 1, -96),
@@ -108,7 +117,7 @@ function Hud.new(trace, parent: Instance)
 	end
 
 	-- ticker, bottom
-	local ticker = panel(g, {
+	local ticker = panel(root, {
 		Name = "Ticker",
 		AnchorPoint = Vector2.new(0.5, 1),
 		Position = UDim2.new(0.5, 0, 1, -18),
@@ -156,10 +165,11 @@ function Hud.new(trace, parent: Instance)
 	bar.Size = UDim2.new(0, 0, 0, 6)
 	bar.BackgroundColor3 = Color3.fromRGB(250, 190, 60)
 	bar.BorderSizePixel = 0
-	bar.Parent = g
+	bar.Parent = root
 
 	local self = setmetatable({
 		gui = g,
+		root = root,
 		clock = clock,
 		evno = evno,
 		chip = chip,
@@ -167,10 +177,19 @@ function Hud.new(trace, parent: Instance)
 		main = main,
 		bar = bar,
 		recentLines = recentLines,
+		bannerY = bannerY,
 		history = {},
 		total = #trace.events,
 	}, Hud)
+	if opts and opts.rect then
+		self:setRect(opts.rect)
+	end
 	return self
+end
+
+function Hud:setRect(r: { x: number, y: number, w: number, h: number })
+	self.root.Position = UDim2.fromOffset(r.x, r.y)
+	self.root.Size = UDim2.fromOffset(r.w, r.h)
 end
 
 function Hud:show(e, text: string)
@@ -190,10 +209,10 @@ function Hud:show(e, text: string)
 end
 
 function Hud:banner(text: string, color: Color3)
-	local f = panel(self.gui, {
+	local f = panel(self.root, {
 		Name = "Banner",
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, 0, 0, 84),
+		Position = UDim2.new(0.5, 0, 0, self.bannerY),
 		Size = UDim2.fromOffset(560, 56),
 		BackgroundColor3 = color,
 		BackgroundTransparency = 0.05,
@@ -205,7 +224,7 @@ end
 -- The evaluator's stages (result.json), shown when the run finishes.
 function Hud:stages(stages)
 	local h = 30 + #stages * 22
-	local f = panel(self.gui, {
+	local f = panel(self.root, {
 		Name = "Stages",
 		AnchorPoint = Vector2.new(1, 1),
 		Position = UDim2.new(1, -14, 1, -96),

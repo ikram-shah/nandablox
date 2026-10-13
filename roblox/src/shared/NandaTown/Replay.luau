@@ -6,6 +6,10 @@
 --   local Replay = require(ReplicatedStorage.NandaTown.Replay)
 --   Replay.run(require(ReplicatedStorage.NandaTown.Traces.marketplace), {
 --       parent = workspace, guiParent = playerGui, camera = workspace.CurrentCamera })
+--
+-- Optional: targetSeconds, speed, lead (seconds of town-only screen time before
+-- the first event), hudRect and bannerY (pixels; Hud.luau), onEvent(e) (called
+-- after each event is shown; Movie.luau uses it for chapter captions).
 
 local Util = require(script.Parent.Util)
 local Town = require(script.Parent.Town)
@@ -346,7 +350,7 @@ function Replay.run(trace, opts: { [string]: any }?)
 	Util.speed = o.speed or 1
 	local parent = o.parent or workspace
 	local town = Town.build(trace, parent)
-	local hud = Hud.new(trace, o.guiParent or game:GetService("StarterGui"))
+	local hud = Hud.new(trace, o.guiParent or game:GetService("StarterGui"), { rect = o.hudRect, bannerY = o.bannerY })
 	local fx = Instance.new("Folder")
 	fx.Name = "Effects"
 	fx.Parent = town.root
@@ -892,16 +896,23 @@ function Replay.run(trace, opts: { [string]: any }?)
 			warn("[NandaTown] handler", e.kind, e.id, err)
 		end
 		hud:show(e, Replay.describe(e, trace))
+		if o.onEvent then
+			local okCb, errCb = pcall(o.onEvent, e)
+			if not okCb then
+				warn("[NandaTown] onEvent", e.kind, e.id, errCb)
+			end
+		end
 	end
 
-	local state = { done = false, scale = scale, total = times[#times], town = town, hud = hud, times = times, lastSeq = 0 }
+	local lead = o.lead or 0
+	local state = { done = false, scale = scale, total = times[#times] + lead, town = town, hud = hud, times = times, lead = lead, lastSeq = 0 }
 	if Replay.current then
 		Replay.current.cancelled = true
 	end
 	Replay.current = state
 	local runner = function()
 		for i, e in trace.events do
-			Util.waitUntil(times[i])
+			Util.waitUntil(times[i] + lead)
 			if state.cancelled then
 				return
 			end

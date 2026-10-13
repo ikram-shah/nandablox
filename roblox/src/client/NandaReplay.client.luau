@@ -3,7 +3,12 @@
 --   R = restart, Space = pause/resume, 1/2/4 = playback speed.
 -- The "Trace" attribute on this script picks the module in
 -- ReplicatedStorage.NandaTown.Traces (default: marketplace). It is set in the
--- Rojo project file ($attributes), never by hand in Studio.
+-- Rojo project file ($attributes), never by hand in Studio. Mode = "movie"
+-- (set by movie.project.json) runs the take for the screen recording instead:
+-- no CoreGui or topbar, title card, chapter captions, verdict hold (Movie.luau).
+-- Note: a connected Rojo plugin syncs its served project's attributes over the
+-- place's, so serve the project you opened (tools/serve.sh movie).
+-- Movie mode ignores the keys.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -13,7 +18,12 @@ local UserInputService = game:GetService("UserInputService")
 local NT = ReplicatedStorage:WaitForChild("NandaTown")
 local Replay = require(NT:WaitForChild("Replay"))
 local Util = require(NT:WaitForChild("Util"))
+local Movie = require(NT:WaitForChild("Movie"))
 local traceName = script:GetAttribute("Trace") or "marketplace"
+local movie = script:GetAttribute("Mode") == "movie"
+if movie then
+	Movie.hideChrome() -- as early as possible
+end
 local trace = require(NT:WaitForChild("Traces"):WaitForChild(traceName))
 
 local player = Players.LocalPlayer
@@ -21,8 +31,13 @@ local playerGui = player:WaitForChild("PlayerGui")
 local camera = workspace.CurrentCamera
 
 local state
-local function start()
-	state = Replay.run(trace, { parent = workspace, guiParent = playerGui, camera = camera })
+local function start(extra: { [string]: any }?)
+	local opts: { [string]: any } = { parent = workspace, guiParent = playerGui, camera = camera }
+	for k, v in extra or {} do
+		opts[k] = v
+	end
+	state = Replay.run(trace, opts)
+	return state
 end
 
 -- External control without sharing a Lua VM (plugins, the MCP, the command bar):
@@ -46,7 +61,7 @@ RunService:BindToRenderStep("NandaTownCamera", Enum.RenderPriority.Camera.Value 
 end)
 
 UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then
+	if processed or movie then
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.R then
@@ -62,5 +77,9 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	end
 end)
 
-task.wait(1)
-start()
+if movie then
+	Movie.run(trace, playerGui, start)
+else
+	task.wait(1)
+	start()
+end
