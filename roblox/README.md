@@ -254,6 +254,14 @@ with `x-api-key` and the binary place (`Content-Type: application/octet-stream`;
 an `.rbxlx` would be `application/xml`). The key never appears on a command
 line. Until `place.json` has IDs, the script says so and stops.
 
+**Team Create blocks it.** While Studio has the place open in a Team Create
+(live editing) session, the endpoint answers `409 Conflict: Server is busy`.
+That is the state Studio was left in after "Publish to Roblox As…", and two
+attempts 90 s apart both got it on 2026-10-12. Close the place in Studio (or
+turn Team Create off in Studio's View → Team Create panel) before
+`tools/publish.sh`. Otherwise, with the Rojo plugin connected (so the
+DataModel is the repo), File → Publish to Roblox in Studio does the same job.
+
 **Join:** open `https://www.roblox.com/games/<placeId>` and press Play, which
 hands the `roblox://` link to Sober if it is the registered handler. Or open
 Sober, find the experience under your creations or favourites, and join from

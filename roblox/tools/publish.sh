@@ -121,6 +121,15 @@ code="$(curl -sS -o "$resp" -w '%{http_code}' -X POST "$url" \
   -H @"$hdr" -H 'Content-Type: application/octet-stream' --data-binary @"$file")"
 if [ "$code" != 200 ]; then
   echo "publish failed (HTTP $code): $(head -c 600 "$resp")" >&2
+  if [ "$code" = 409 ]; then
+    cat >&2 <<'EOF'
+409 "Server is busy": on 2026-10-12 Open Cloud answered this (twice, 90 s apart)
+while Studio had the place open in a Team Create (live editing) session, which
+it was in after Publish to Roblox As... Close the place in Studio, or turn
+Team Create off, and run this again; or publish once from Studio
+(File > Publish to Roblox) while Rojo has it synced.
+EOF
+  fi
   exit 1
 fi
 version="$(jq -r '.versionNumber // empty' "$resp")"
