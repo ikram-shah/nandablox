@@ -1,0 +1,28 @@
+{
+  "name": "NandaTownS0",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "NandaTown": {
+        "$path": "src/shared/NandaTown"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "NandaReplay": {
+          "$path": "src/client/NandaReplay.client.luau"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 14.5
+      }
+    }
+  }
+}

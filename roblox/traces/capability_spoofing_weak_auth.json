@@ -1,0 +1,547 @@
+{
+ "format": "nandatown-trace/roblox-v1",
+ "source": "~/tmp/nandatown.mv0N/runs/sim-1f1143769f7a",
+ "run_id": "sim-1f1143769f7a",
+ "scenario": "capability_spoofing_weak_auth",
+ "seed": 42,
+ "logical_time": 1.6,
+ "layers": {
+  "transport": "memory.v1",
+  "communication": "envelope.v1",
+  "identity": "keys.v1",
+  "registry": "index.v1",
+  "auth": "plain.v1",
+  "trust": "reputation.v1",
+  "payments": "ledger.v1",
+  "coordination": "contractnet.v1",
+  "negotiation": "haggle.v1",
+  "memory": "kv.v1",
+  "privacy": "redact.v1",
+  "data_facts": "evidence.v1"
+ },
+ "participants": [
+  {
+   "name": "seller-honest",
+   "role": "seller",
+   "balance_cents": 0,
+   "agent_id": "aid-1"
+  },
+  {
+   "name": "spoofer",
+   "role": "spoofer",
+   "balance_cents": 0,
+   "agent_id": "aid-2"
+  },
+  {
+   "name": "buyer-1",
+   "role": "buyer",
+   "balance_cents": 10000,
+   "agent_id": "aid-4"
+  },
+  {
+   "name": "shadow",
+   "role": "agent",
+   "balance_cents": null,
+   "agent_id": "aid-3"
+  }
+ ],
+ "events": [
+  {
+   "seq": 1,
+   "id": "ev-1",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "seller-honest",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 2,
+   "id": "ev-2",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "spoofer",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 3,
+   "id": "ev-3",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "buyer-1",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 10000
+   }
+  },
+  {
+   "seq": 4,
+   "id": "ev-4",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "run_created",
+   "subject": "sim-1f1143769f7a",
+   "layer": "town",
+   "detail": {
+    "scenario": "capability_spoofing_weak_auth",
+    "seed": 42
+   }
+  },
+  {
+   "seq": 5,
+   "id": "ev-5",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "seller-honest",
+   "layer": "town",
+   "detail": {
+    "role": "seller"
+   }
+  },
+  {
+   "seq": 6,
+   "id": "ev-6",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "seller-honest",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-1"
+   }
+  },
+  {
+   "seq": 7,
+   "id": "ev-7",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "seller-honest",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "sell.widget"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 8,
+   "id": "ev-8",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "spoofer",
+   "layer": "town",
+   "detail": {
+    "role": "spoofer"
+   }
+  },
+  {
+   "seq": 9,
+   "id": "ev-9",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "spoofer",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-2"
+   }
+  },
+  {
+   "seq": 10,
+   "id": "ev-10",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "shadow",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-3"
+   }
+  },
+  {
+   "seq": 11,
+   "id": "ev-11",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "spoofer",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "sell.widget"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 12,
+   "id": "ev-12",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "buyer-1",
+   "layer": "town",
+   "detail": {
+    "role": "buyer"
+   }
+  },
+  {
+   "seq": 13,
+   "id": "ev-13",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "buyer-1",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-4"
+   }
+  },
+  {
+   "seq": 14,
+   "id": "ev-14",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "buyer-1",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "buy"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 15,
+   "id": "ev-15",
+   "at": 0.5,
+   "observer": "buyer-1",
+   "kind": "message_sent",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "seller-honest",
+    "kind": "quote_request",
+    "conversation": "c-1",
+    "body": {
+     "sku": "widget"
+    }
+   },
+   "msg_kind": "quote_request"
+  },
+  {
+   "seq": 16,
+   "id": "ev-16",
+   "at": 0.5,
+   "observer": "buyer-1",
+   "kind": "message_sent",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "spoofer",
+    "kind": "quote_request",
+    "conversation": "c-2",
+    "body": {
+     "sku": "widget"
+    }
+   },
+   "msg_kind": "quote_request"
+  },
+  {
+   "seq": 17,
+   "id": "ev-17",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "seller-honest",
+    "kind": "quote_request"
+   },
+   "from": "buyer-1",
+   "msg_kind": "quote_request"
+  },
+  {
+   "seq": 18,
+   "id": "ev-18",
+   "at": 0.6,
+   "observer": "seller-honest",
+   "kind": "message_sent",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "buyer-1",
+    "kind": "quote_response",
+    "conversation": "c-1",
+    "body": {
+     "sku": "widget",
+     "unit_cents": 1995
+    }
+   },
+   "msg_kind": "quote_response"
+  },
+  {
+   "seq": 19,
+   "id": "ev-19",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "spoofer",
+    "kind": "quote_request"
+   },
+   "from": "buyer-1",
+   "msg_kind": "quote_request"
+  },
+  {
+   "seq": 20,
+   "id": "ev-20",
+   "at": 0.6,
+   "observer": "spoofer",
+   "kind": "message_sent",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "buyer-1",
+    "kind": "quote_response",
+    "conversation": "c-2",
+    "body": {
+     "sku": "widget",
+     "unit_cents": 1
+    }
+   },
+   "msg_kind": "quote_response"
+  },
+  {
+   "seq": 21,
+   "id": "ev-21",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "buyer-1",
+    "kind": "quote_response"
+   },
+   "from": "seller-honest",
+   "msg_kind": "quote_response"
+  },
+  {
+   "seq": 22,
+   "id": "ev-22",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "buyer-1",
+    "kind": "quote_response"
+   },
+   "from": "spoofer",
+   "msg_kind": "quote_response"
+  },
+  {
+   "seq": 23,
+   "id": "ev-23",
+   "at": 1.5,
+   "observer": "buyer-1",
+   "kind": "negotiation_started",
+   "subject": "n-1",
+   "layer": "negotiation",
+   "detail": {
+    "seller": "spoofer",
+    "subject": "widget"
+   }
+  },
+  {
+   "seq": 24,
+   "id": "ev-24",
+   "at": 1.5,
+   "observer": "buyer-1",
+   "kind": "offer_made",
+   "subject": "n-1",
+   "layer": "negotiation",
+   "detail": {
+    "cents": 0
+   }
+  },
+  {
+   "seq": 25,
+   "id": "ev-25",
+   "at": 1.5,
+   "observer": "buyer-1",
+   "kind": "message_sent",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "spoofer",
+    "kind": "nego_offer",
+    "conversation": "c-3",
+    "body": {
+     "nid": "n-1",
+     "cents": 0
+    }
+   },
+   "msg_kind": "nego_offer"
+  },
+  {
+   "seq": 26,
+   "id": "ev-26",
+   "at": 1.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "spoofer",
+    "kind": "nego_offer"
+   },
+   "from": "buyer-1",
+   "msg_kind": "nego_offer"
+  },
+  {
+   "seq": 27,
+   "id": "ev-27",
+   "at": 1.6,
+   "observer": "spoofer",
+   "kind": "message_unhandled",
+   "subject": "m-5",
+   "layer": "communication",
+   "detail": {
+    "kind": "nego_offer"
+   }
+  },
+  {
+   "seq": 28,
+   "id": "ev-28",
+   "at": 1.6,
+   "observer": "town",
+   "kind": "run_finished",
+   "subject": "sim-1f1143769f7a",
+   "layer": "data_facts",
+   "detail": {
+    "logical_time": 1.6
+   }
+  }
+ ],
+ "messages": {
+  "m-1": {
+   "deliveries": [
+    17
+   ],
+   "faults": [],
+   "from": "buyer-1",
+   "to": "seller-honest",
+   "kind": "quote_request",
+   "conversation": "c-1",
+   "sent_seq": 15
+  },
+  "m-2": {
+   "deliveries": [
+    19
+   ],
+   "faults": [],
+   "from": "buyer-1",
+   "to": "spoofer",
+   "kind": "quote_request",
+   "conversation": "c-2",
+   "sent_seq": 16
+  },
+  "m-3": {
+   "deliveries": [
+    21
+   ],
+   "faults": [],
+   "from": "seller-honest",
+   "to": "buyer-1",
+   "kind": "quote_response",
+   "conversation": "c-1",
+   "sent_seq": 18
+  },
+  "m-4": {
+   "deliveries": [
+    22
+   ],
+   "faults": [],
+   "from": "spoofer",
+   "to": "buyer-1",
+   "kind": "quote_response",
+   "conversation": "c-2",
+   "sent_seq": 20
+  },
+  "m-5": {
+   "deliveries": [
+    26
+   ],
+   "faults": [],
+   "from": "buyer-1",
+   "to": "spoofer",
+   "kind": "nego_offer",
+   "conversation": "c-3",
+   "sent_seq": 25
+  }
+ },
+ "layers_touched": [
+  "payments",
+  "town",
+  "identity",
+  "registry",
+  "transport",
+  "negotiation",
+  "communication",
+  "data_facts"
+ ],
+ "result": {
+  "verdict": "failed",
+  "stages": [
+   {
+    "name": "spoof_detected",
+    "status": "not_enough_evidence",
+    "note": "the forged card must be recorded as unverified"
+   },
+   {
+    "name": "honest_verified",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "containment",
+    "status": "failed",
+    "note": "the spoofer must receive no traffic and no money"
+   },
+   {
+    "name": "honest_trade_completed",
+    "status": "not_enough_evidence",
+    "note": "the buyer must still complete the trade with the honest seller"
+   },
+   {
+    "name": "ledger_conserved",
+    "status": "passed",
+    "note": "10000 cents conserved across every movement"
+   },
+   {
+    "name": "privacy",
+    "status": "not_tested",
+    "note": "no redaction declared by this scenario"
+   }
+  ]
+ }
+}

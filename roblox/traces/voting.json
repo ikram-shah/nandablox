@@ -1,0 +1,1103 @@
+{
+ "format": "nandatown-trace/roblox-v1",
+ "source": "~/tmp/nandatown.mv0N/runs/sim-005d88d2379b",
+ "run_id": "sim-005d88d2379b",
+ "scenario": "voting",
+ "seed": 42,
+ "logical_time": 3.6,
+ "layers": {
+  "transport": "memory.v1",
+  "communication": "envelope.v1",
+  "identity": "keys.v1",
+  "registry": "index.v1",
+  "auth": "hmac.v1",
+  "trust": "reputation.v1",
+  "payments": "ledger.v1",
+  "coordination": "contractnet.v1",
+  "negotiation": "haggle.v1",
+  "memory": "kv.v1",
+  "privacy": "redact.v1",
+  "data_facts": "evidence.v1"
+ },
+ "participants": [
+  {
+   "name": "ballot-box",
+   "role": "ballot_box",
+   "balance_cents": 0,
+   "agent_id": "aid-1"
+  },
+  {
+   "name": "voter-1",
+   "role": "voter",
+   "balance_cents": 0,
+   "agent_id": "aid-2"
+  },
+  {
+   "name": "voter-2",
+   "role": "voter",
+   "balance_cents": 0,
+   "agent_id": "aid-3"
+  },
+  {
+   "name": "voter-3",
+   "role": "voter",
+   "balance_cents": 0,
+   "agent_id": "aid-4"
+  },
+  {
+   "name": "voter-double",
+   "role": "voter",
+   "balance_cents": 0,
+   "agent_id": "aid-5"
+  }
+ ],
+ "events": [
+  {
+   "seq": 1,
+   "id": "ev-1",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "ballot-box",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 2,
+   "id": "ev-2",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "voter-1",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 3,
+   "id": "ev-3",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "voter-2",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 4,
+   "id": "ev-4",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "voter-3",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 5,
+   "id": "ev-5",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "voter-double",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 6,
+   "id": "ev-6",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "run_created",
+   "subject": "sim-005d88d2379b",
+   "layer": "town",
+   "detail": {
+    "scenario": "voting",
+    "seed": 42
+   }
+  },
+  {
+   "seq": 7,
+   "id": "ev-7",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "ballot-box",
+   "layer": "town",
+   "detail": {
+    "role": "ballot_box"
+   }
+  },
+  {
+   "seq": 8,
+   "id": "ev-8",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "ballot-box",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-1"
+   }
+  },
+  {
+   "seq": 9,
+   "id": "ev-9",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "ballot-box",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "vote.tally"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 10,
+   "id": "ev-10",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "voter-1",
+   "layer": "town",
+   "detail": {
+    "role": "voter"
+   }
+  },
+  {
+   "seq": 11,
+   "id": "ev-11",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "voter-1",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-2"
+   }
+  },
+  {
+   "seq": 12,
+   "id": "ev-12",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "voter-1",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "vote.cast"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 13,
+   "id": "ev-13",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "voter-2",
+   "layer": "town",
+   "detail": {
+    "role": "voter"
+   }
+  },
+  {
+   "seq": 14,
+   "id": "ev-14",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "voter-2",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-3"
+   }
+  },
+  {
+   "seq": 15,
+   "id": "ev-15",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "voter-2",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "vote.cast"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 16,
+   "id": "ev-16",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "voter-3",
+   "layer": "town",
+   "detail": {
+    "role": "voter"
+   }
+  },
+  {
+   "seq": 17,
+   "id": "ev-17",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "voter-3",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-4"
+   }
+  },
+  {
+   "seq": 18,
+   "id": "ev-18",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "voter-3",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "vote.cast"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 19,
+   "id": "ev-19",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "voter-double",
+   "layer": "town",
+   "detail": {
+    "role": "voter"
+   }
+  },
+  {
+   "seq": 20,
+   "id": "ev-20",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "voter-double",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-5"
+   }
+  },
+  {
+   "seq": 21,
+   "id": "ev-21",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "voter-double",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "vote.cast"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 22,
+   "id": "ev-22",
+   "at": 0.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-1",
+    "kind": "vote_open",
+    "conversation": "c-1",
+    "body": {
+     "choices": [
+      "apricot",
+      "plum"
+     ]
+    }
+   },
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 23,
+   "id": "ev-23",
+   "at": 0.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-2",
+    "kind": "vote_open",
+    "conversation": "c-2",
+    "body": {
+     "choices": [
+      "apricot",
+      "plum"
+     ]
+    }
+   },
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 24,
+   "id": "ev-24",
+   "at": 0.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-3",
+    "kind": "vote_open",
+    "conversation": "c-3",
+    "body": {
+     "choices": [
+      "apricot",
+      "plum"
+     ]
+    }
+   },
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 25,
+   "id": "ev-25",
+   "at": 0.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-double",
+    "kind": "vote_open",
+    "conversation": "c-4",
+    "body": {
+     "choices": [
+      "apricot",
+      "plum"
+     ]
+    }
+   },
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 26,
+   "id": "ev-26",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-1",
+    "kind": "vote_open"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 27,
+   "id": "ev-27",
+   "at": 0.6,
+   "observer": "voter-1",
+   "kind": "message_sent",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot",
+    "conversation": "c-1",
+    "body": {
+     "choice": "apricot"
+    }
+   },
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 28,
+   "id": "ev-28",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-2",
+    "kind": "vote_open"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 29,
+   "id": "ev-29",
+   "at": 0.6,
+   "observer": "voter-2",
+   "kind": "message_sent",
+   "subject": "m-6",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot",
+    "conversation": "c-2",
+    "body": {
+     "choice": "plum"
+    }
+   },
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 30,
+   "id": "ev-30",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-3",
+    "kind": "vote_open"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 31,
+   "id": "ev-31",
+   "at": 0.6,
+   "observer": "voter-3",
+   "kind": "message_sent",
+   "subject": "m-7",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot",
+    "conversation": "c-3",
+    "body": {
+     "choice": "apricot"
+    }
+   },
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 32,
+   "id": "ev-32",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-double",
+    "kind": "vote_open"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_open"
+  },
+  {
+   "seq": 33,
+   "id": "ev-33",
+   "at": 0.6,
+   "observer": "voter-double",
+   "kind": "message_sent",
+   "subject": "m-8",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot",
+    "conversation": "c-4",
+    "body": {
+     "choice": "plum"
+    }
+   },
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 34,
+   "id": "ev-34",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot"
+   },
+   "from": "voter-1",
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 35,
+   "id": "ev-35",
+   "at": 0.7,
+   "observer": "ballot-box",
+   "kind": "ballot_cast",
+   "subject": "voter-1",
+   "layer": "coordination",
+   "detail": {
+    "choice": "apricot"
+   }
+  },
+  {
+   "seq": 36,
+   "id": "ev-36",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-6",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot"
+   },
+   "from": "voter-2",
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 37,
+   "id": "ev-37",
+   "at": 0.7,
+   "observer": "ballot-box",
+   "kind": "ballot_cast",
+   "subject": "voter-2",
+   "layer": "coordination",
+   "detail": {
+    "choice": "plum"
+   }
+  },
+  {
+   "seq": 38,
+   "id": "ev-38",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-7",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot"
+   },
+   "from": "voter-3",
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 39,
+   "id": "ev-39",
+   "at": 0.7,
+   "observer": "ballot-box",
+   "kind": "ballot_cast",
+   "subject": "voter-3",
+   "layer": "coordination",
+   "detail": {
+    "choice": "apricot"
+   }
+  },
+  {
+   "seq": 40,
+   "id": "ev-40",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-8",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot"
+   },
+   "from": "voter-double",
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 41,
+   "id": "ev-41",
+   "at": 0.7,
+   "observer": "ballot-box",
+   "kind": "ballot_cast",
+   "subject": "voter-double",
+   "layer": "coordination",
+   "detail": {
+    "choice": "plum"
+   }
+  },
+  {
+   "seq": 42,
+   "id": "ev-42",
+   "at": 0.8,
+   "observer": "voter-double",
+   "kind": "message_sent",
+   "subject": "m-9",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot",
+    "conversation": "c-4",
+    "body": {
+     "choice": "plum"
+    }
+   },
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 43,
+   "id": "ev-43",
+   "at": 0.9,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-9",
+   "layer": "transport",
+   "detail": {
+    "to": "ballot-box",
+    "kind": "ballot"
+   },
+   "from": "voter-double",
+   "msg_kind": "ballot"
+  },
+  {
+   "seq": 44,
+   "id": "ev-44",
+   "at": 0.9,
+   "observer": "ballot-box",
+   "kind": "ballot_rejected",
+   "subject": "voter-double",
+   "layer": "coordination",
+   "detail": {
+    "reason": "already voted"
+   }
+  },
+  {
+   "seq": 45,
+   "id": "ev-45",
+   "at": 3.5,
+   "observer": "ballot-box",
+   "kind": "vote_result",
+   "subject": "vote",
+   "layer": "coordination",
+   "detail": {
+    "counts": {
+     "apricot": 2,
+     "plum": 2
+    },
+    "total": 4
+   }
+  },
+  {
+   "seq": 46,
+   "id": "ev-46",
+   "at": 3.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-10",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-1",
+    "kind": "vote_result",
+    "conversation": "c-5",
+    "body": {
+     "counts": {
+      "apricot": 2,
+      "plum": 2
+     }
+    }
+   },
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 47,
+   "id": "ev-47",
+   "at": 3.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-11",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-2",
+    "kind": "vote_result",
+    "conversation": "c-6",
+    "body": {
+     "counts": {
+      "apricot": 2,
+      "plum": 2
+     }
+    }
+   },
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 48,
+   "id": "ev-48",
+   "at": 3.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-12",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-3",
+    "kind": "vote_result",
+    "conversation": "c-7",
+    "body": {
+     "counts": {
+      "apricot": 2,
+      "plum": 2
+     }
+    }
+   },
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 49,
+   "id": "ev-49",
+   "at": 3.5,
+   "observer": "ballot-box",
+   "kind": "message_sent",
+   "subject": "m-13",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-double",
+    "kind": "vote_result",
+    "conversation": "c-8",
+    "body": {
+     "counts": {
+      "apricot": 2,
+      "plum": 2
+     }
+    }
+   },
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 50,
+   "id": "ev-50",
+   "at": 3.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-10",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-1",
+    "kind": "vote_result"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 51,
+   "id": "ev-51",
+   "at": 3.6,
+   "observer": "voter-1",
+   "kind": "memory_written",
+   "subject": "voter-1",
+   "layer": "memory",
+   "detail": {
+    "key": "vote_result"
+   }
+  },
+  {
+   "seq": 52,
+   "id": "ev-52",
+   "at": 3.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-11",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-2",
+    "kind": "vote_result"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 53,
+   "id": "ev-53",
+   "at": 3.6,
+   "observer": "voter-2",
+   "kind": "memory_written",
+   "subject": "voter-2",
+   "layer": "memory",
+   "detail": {
+    "key": "vote_result"
+   }
+  },
+  {
+   "seq": 54,
+   "id": "ev-54",
+   "at": 3.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-12",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-3",
+    "kind": "vote_result"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 55,
+   "id": "ev-55",
+   "at": 3.6,
+   "observer": "voter-3",
+   "kind": "memory_written",
+   "subject": "voter-3",
+   "layer": "memory",
+   "detail": {
+    "key": "vote_result"
+   }
+  },
+  {
+   "seq": 56,
+   "id": "ev-56",
+   "at": 3.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-13",
+   "layer": "transport",
+   "detail": {
+    "to": "voter-double",
+    "kind": "vote_result"
+   },
+   "from": "ballot-box",
+   "msg_kind": "vote_result"
+  },
+  {
+   "seq": 57,
+   "id": "ev-57",
+   "at": 3.6,
+   "observer": "voter-double",
+   "kind": "memory_written",
+   "subject": "voter-double",
+   "layer": "memory",
+   "detail": {
+    "key": "vote_result"
+   }
+  },
+  {
+   "seq": 58,
+   "id": "ev-58",
+   "at": 3.6,
+   "observer": "town",
+   "kind": "run_finished",
+   "subject": "sim-005d88d2379b",
+   "layer": "data_facts",
+   "detail": {
+    "logical_time": 3.6
+   }
+  }
+ ],
+ "messages": {
+  "m-1": {
+   "deliveries": [
+    26
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-1",
+   "kind": "vote_open",
+   "conversation": "c-1",
+   "sent_seq": 22
+  },
+  "m-2": {
+   "deliveries": [
+    28
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-2",
+   "kind": "vote_open",
+   "conversation": "c-2",
+   "sent_seq": 23
+  },
+  "m-3": {
+   "deliveries": [
+    30
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-3",
+   "kind": "vote_open",
+   "conversation": "c-3",
+   "sent_seq": 24
+  },
+  "m-4": {
+   "deliveries": [
+    32
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-double",
+   "kind": "vote_open",
+   "conversation": "c-4",
+   "sent_seq": 25
+  },
+  "m-5": {
+   "deliveries": [
+    34
+   ],
+   "faults": [],
+   "from": "voter-1",
+   "to": "ballot-box",
+   "kind": "ballot",
+   "conversation": "c-1",
+   "sent_seq": 27
+  },
+  "m-6": {
+   "deliveries": [
+    36
+   ],
+   "faults": [],
+   "from": "voter-2",
+   "to": "ballot-box",
+   "kind": "ballot",
+   "conversation": "c-2",
+   "sent_seq": 29
+  },
+  "m-7": {
+   "deliveries": [
+    38
+   ],
+   "faults": [],
+   "from": "voter-3",
+   "to": "ballot-box",
+   "kind": "ballot",
+   "conversation": "c-3",
+   "sent_seq": 31
+  },
+  "m-8": {
+   "deliveries": [
+    40
+   ],
+   "faults": [],
+   "from": "voter-double",
+   "to": "ballot-box",
+   "kind": "ballot",
+   "conversation": "c-4",
+   "sent_seq": 33
+  },
+  "m-9": {
+   "deliveries": [
+    43
+   ],
+   "faults": [],
+   "from": "voter-double",
+   "to": "ballot-box",
+   "kind": "ballot",
+   "conversation": "c-4",
+   "sent_seq": 42
+  },
+  "m-10": {
+   "deliveries": [
+    50
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-1",
+   "kind": "vote_result",
+   "conversation": "c-5",
+   "sent_seq": 46
+  },
+  "m-11": {
+   "deliveries": [
+    52
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-2",
+   "kind": "vote_result",
+   "conversation": "c-6",
+   "sent_seq": 47
+  },
+  "m-12": {
+   "deliveries": [
+    54
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-3",
+   "kind": "vote_result",
+   "conversation": "c-7",
+   "sent_seq": 48
+  },
+  "m-13": {
+   "deliveries": [
+    56
+   ],
+   "faults": [],
+   "from": "ballot-box",
+   "to": "voter-double",
+   "kind": "vote_result",
+   "conversation": "c-8",
+   "sent_seq": 49
+  }
+ },
+ "layers_touched": [
+  "payments",
+  "town",
+  "identity",
+  "registry",
+  "transport",
+  "coordination",
+  "memory",
+  "data_facts"
+ ],
+ "result": {
+  "verdict": "passed",
+  "stages": [
+   {
+    "name": "ballots",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "one_agent_one_vote",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "tally",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "result_broadcast",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "ledger_conserved",
+    "status": "passed",
+    "note": "complete run recorded no money moved"
+   },
+   {
+    "name": "privacy",
+    "status": "not_tested",
+    "note": "no redaction declared by this scenario"
+   }
+  ]
+ }
+}

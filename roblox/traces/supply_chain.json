@@ -1,0 +1,1254 @@
+{
+ "format": "nandatown-trace/roblox-v1",
+ "source": "~/tmp/nandatown.mv0N/runs/sim-a40dd50344b1",
+ "run_id": "sim-a40dd50344b1",
+ "scenario": "supply_chain",
+ "seed": 42,
+ "logical_time": 3.4,
+ "layers": {
+  "transport": "memory.v1",
+  "communication": "envelope.v1",
+  "identity": "keys.v1",
+  "registry": "index.v1",
+  "auth": "hmac.v1",
+  "trust": "reputation.v1",
+  "payments": "ledger.v1",
+  "coordination": "contractnet.v1",
+  "negotiation": "haggle.v1",
+  "memory": "kv.v1",
+  "privacy": "redact.v1",
+  "data_facts": "evidence.v1"
+ },
+ "participants": [
+  {
+   "name": "customer",
+   "role": "customer",
+   "balance_cents": 12000,
+   "agent_id": "aid-1"
+  },
+  {
+   "name": "maker",
+   "role": "manufacturer",
+   "balance_cents": 2000,
+   "agent_id": "aid-2"
+  },
+  {
+   "name": "axle-1",
+   "role": "supplier",
+   "balance_cents": 0,
+   "agent_id": "aid-3"
+  },
+  {
+   "name": "axle-2",
+   "role": "supplier",
+   "balance_cents": 0,
+   "agent_id": "aid-4"
+  },
+  {
+   "name": "wheel-1",
+   "role": "supplier",
+   "balance_cents": 0,
+   "agent_id": "aid-5"
+  },
+  {
+   "name": "wheel-2",
+   "role": "supplier",
+   "balance_cents": 0,
+   "agent_id": "aid-6"
+  }
+ ],
+ "events": [
+  {
+   "seq": 1,
+   "id": "ev-1",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "customer",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 12000
+   }
+  },
+  {
+   "seq": 2,
+   "id": "ev-2",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "maker",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 2000
+   }
+  },
+  {
+   "seq": 3,
+   "id": "ev-3",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "axle-1",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 4,
+   "id": "ev-4",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "axle-2",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 5,
+   "id": "ev-5",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "wheel-1",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 6,
+   "id": "ev-6",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "account_opened",
+   "subject": "wheel-2",
+   "layer": "payments",
+   "detail": {
+    "balance_cents": 0
+   }
+  },
+  {
+   "seq": 7,
+   "id": "ev-7",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "run_created",
+   "subject": "sim-a40dd50344b1",
+   "layer": "town",
+   "detail": {
+    "scenario": "supply_chain",
+    "seed": 42
+   }
+  },
+  {
+   "seq": 8,
+   "id": "ev-8",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "customer",
+   "layer": "town",
+   "detail": {
+    "role": "customer"
+   }
+  },
+  {
+   "seq": 9,
+   "id": "ev-9",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "customer",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-1"
+   }
+  },
+  {
+   "seq": 10,
+   "id": "ev-10",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "customer",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "buy"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 11,
+   "id": "ev-11",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "maker",
+   "layer": "town",
+   "detail": {
+    "role": "manufacturer"
+   }
+  },
+  {
+   "seq": 12,
+   "id": "ev-12",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "maker",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-2"
+   }
+  },
+  {
+   "seq": 13,
+   "id": "ev-13",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "maker",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "mfg.cart"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 14,
+   "id": "ev-14",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "axle-1",
+   "layer": "town",
+   "detail": {
+    "role": "supplier"
+   }
+  },
+  {
+   "seq": 15,
+   "id": "ev-15",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "axle-1",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-3"
+   }
+  },
+  {
+   "seq": 16,
+   "id": "ev-16",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "axle-1",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "supply.axle"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 17,
+   "id": "ev-17",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "axle-2",
+   "layer": "town",
+   "detail": {
+    "role": "supplier"
+   }
+  },
+  {
+   "seq": 18,
+   "id": "ev-18",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "axle-2",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-4"
+   }
+  },
+  {
+   "seq": 19,
+   "id": "ev-19",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "axle-2",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "supply.axle"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 20,
+   "id": "ev-20",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "wheel-1",
+   "layer": "town",
+   "detail": {
+    "role": "supplier"
+   }
+  },
+  {
+   "seq": 21,
+   "id": "ev-21",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "wheel-1",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-5"
+   }
+  },
+  {
+   "seq": 22,
+   "id": "ev-22",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "wheel-1",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "supply.wheel"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 23,
+   "id": "ev-23",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "participant_joined",
+   "subject": "wheel-2",
+   "layer": "town",
+   "detail": {
+    "role": "supplier"
+   }
+  },
+  {
+   "seq": 24,
+   "id": "ev-24",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "identity_created",
+   "subject": "wheel-2",
+   "layer": "identity",
+   "detail": {
+    "agent_id": "aid-6"
+   }
+  },
+  {
+   "seq": 25,
+   "id": "ev-25",
+   "at": 0.0,
+   "observer": "town",
+   "kind": "card_registered",
+   "subject": "wheel-2",
+   "layer": "registry",
+   "detail": {
+    "capabilities": [
+     "supply.wheel"
+    ],
+    "verified": true
+   }
+  },
+  {
+   "seq": 26,
+   "id": "ev-26",
+   "at": 0.5,
+   "observer": "town",
+   "kind": "escrow_held",
+   "subject": "po-cart",
+   "layer": "payments",
+   "detail": {
+    "from": "customer",
+    "cents": 10000
+   }
+  },
+  {
+   "seq": 27,
+   "id": "ev-27",
+   "at": 0.5,
+   "observer": "customer",
+   "kind": "message_sent",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "order",
+    "conversation": "c-1",
+    "body": {
+     "order_id": "po-cart",
+     "product": "cart",
+     "price_cents": 10000
+    }
+   },
+   "msg_kind": "order"
+  },
+  {
+   "seq": 28,
+   "id": "ev-28",
+   "at": 0.6,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-1",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "order"
+   },
+   "from": "customer",
+   "msg_kind": "order"
+  },
+  {
+   "seq": 29,
+   "id": "ev-29",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "task_announced",
+   "subject": "supply-axle",
+   "layer": "coordination",
+   "detail": {
+    "spec": {
+     "component": "axle"
+    },
+    "rule": "lowest"
+   }
+  },
+  {
+   "seq": 30,
+   "id": "ev-30",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-1",
+    "kind": "supply_request",
+    "conversation": "c-2",
+    "body": {
+     "task_id": "supply-axle",
+     "component": "axle"
+    }
+   },
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 31,
+   "id": "ev-31",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-2",
+    "kind": "supply_request",
+    "conversation": "c-3",
+    "body": {
+     "task_id": "supply-axle",
+     "component": "axle"
+    }
+   },
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 32,
+   "id": "ev-32",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "task_announced",
+   "subject": "supply-wheel",
+   "layer": "coordination",
+   "detail": {
+    "spec": {
+     "component": "wheel"
+    },
+    "rule": "lowest"
+   }
+  },
+  {
+   "seq": 33,
+   "id": "ev-33",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-1",
+    "kind": "supply_request",
+    "conversation": "c-4",
+    "body": {
+     "task_id": "supply-wheel",
+     "component": "wheel"
+    }
+   },
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 34,
+   "id": "ev-34",
+   "at": 0.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-2",
+    "kind": "supply_request",
+    "conversation": "c-5",
+    "body": {
+     "task_id": "supply-wheel",
+     "component": "wheel"
+    }
+   },
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 35,
+   "id": "ev-35",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-2",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-1",
+    "kind": "supply_request"
+   },
+   "from": "maker",
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 36,
+   "id": "ev-36",
+   "at": 0.7,
+   "observer": "axle-1",
+   "kind": "bid_placed",
+   "subject": "supply-axle",
+   "layer": "coordination",
+   "detail": {
+    "cents": 500
+   }
+  },
+  {
+   "seq": 37,
+   "id": "ev-37",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-3",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-2",
+    "kind": "supply_request"
+   },
+   "from": "maker",
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 38,
+   "id": "ev-38",
+   "at": 0.7,
+   "observer": "axle-2",
+   "kind": "bid_placed",
+   "subject": "supply-axle",
+   "layer": "coordination",
+   "detail": {
+    "cents": 450
+   }
+  },
+  {
+   "seq": 39,
+   "id": "ev-39",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-4",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-1",
+    "kind": "supply_request"
+   },
+   "from": "maker",
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 40,
+   "id": "ev-40",
+   "at": 0.7,
+   "observer": "wheel-1",
+   "kind": "bid_placed",
+   "subject": "supply-wheel",
+   "layer": "coordination",
+   "detail": {
+    "cents": 300
+   }
+  },
+  {
+   "seq": 41,
+   "id": "ev-41",
+   "at": 0.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-5",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-2",
+    "kind": "supply_request"
+   },
+   "from": "maker",
+   "msg_kind": "supply_request"
+  },
+  {
+   "seq": 42,
+   "id": "ev-42",
+   "at": 0.7,
+   "observer": "wheel-2",
+   "kind": "bid_placed",
+   "subject": "supply-wheel",
+   "layer": "coordination",
+   "detail": {
+    "cents": 350
+   }
+  },
+  {
+   "seq": 43,
+   "id": "ev-43",
+   "at": 1.6,
+   "observer": "maker",
+   "kind": "task_awarded",
+   "subject": "supply-axle",
+   "layer": "coordination",
+   "detail": {
+    "winner": "axle-2",
+    "cents": 450,
+    "rule": "lowest",
+    "bids": {
+     "axle-1": 500,
+     "axle-2": 450
+    }
+   }
+  },
+  {
+   "seq": 44,
+   "id": "ev-44",
+   "at": 1.6,
+   "observer": "town",
+   "kind": "escrow_held",
+   "subject": "supply-axle",
+   "layer": "payments",
+   "detail": {
+    "from": "maker",
+    "cents": 450
+   }
+  },
+  {
+   "seq": 45,
+   "id": "ev-45",
+   "at": 1.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-6",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-2",
+    "kind": "part_order",
+    "conversation": "c-6",
+    "body": {
+     "task_id": "supply-axle",
+     "cents": 450
+    }
+   },
+   "msg_kind": "part_order"
+  },
+  {
+   "seq": 46,
+   "id": "ev-46",
+   "at": 1.6,
+   "observer": "maker",
+   "kind": "task_awarded",
+   "subject": "supply-wheel",
+   "layer": "coordination",
+   "detail": {
+    "winner": "wheel-1",
+    "cents": 300,
+    "rule": "lowest",
+    "bids": {
+     "wheel-1": 300,
+     "wheel-2": 350
+    }
+   }
+  },
+  {
+   "seq": 47,
+   "id": "ev-47",
+   "at": 1.6,
+   "observer": "town",
+   "kind": "escrow_held",
+   "subject": "supply-wheel",
+   "layer": "payments",
+   "detail": {
+    "from": "maker",
+    "cents": 300
+   }
+  },
+  {
+   "seq": 48,
+   "id": "ev-48",
+   "at": 1.6,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-7",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-1",
+    "kind": "part_order",
+    "conversation": "c-7",
+    "body": {
+     "task_id": "supply-wheel",
+     "cents": 300
+    }
+   },
+   "msg_kind": "part_order"
+  },
+  {
+   "seq": 49,
+   "id": "ev-49",
+   "at": 1.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-6",
+   "layer": "transport",
+   "detail": {
+    "to": "axle-2",
+    "kind": "part_order"
+   },
+   "from": "maker",
+   "msg_kind": "part_order"
+  },
+  {
+   "seq": 50,
+   "id": "ev-50",
+   "at": 1.7,
+   "observer": "axle-2",
+   "kind": "message_sent",
+   "subject": "m-8",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "part_delivery",
+    "conversation": "c-6",
+    "body": {
+     "task_id": "supply-axle",
+     "component": "axle"
+    }
+   },
+   "msg_kind": "part_delivery"
+  },
+  {
+   "seq": 51,
+   "id": "ev-51",
+   "at": 1.7,
+   "observer": "town",
+   "kind": "message_delayed",
+   "subject": "m-8",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "part_delivery",
+    "fault": "delay",
+    "delay": 1.0
+   },
+   "from": "axle-2",
+   "msg_kind": "part_delivery"
+  },
+  {
+   "seq": 52,
+   "id": "ev-52",
+   "at": 1.7,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-7",
+   "layer": "transport",
+   "detail": {
+    "to": "wheel-1",
+    "kind": "part_order"
+   },
+   "from": "maker",
+   "msg_kind": "part_order"
+  },
+  {
+   "seq": 53,
+   "id": "ev-53",
+   "at": 1.7,
+   "observer": "wheel-1",
+   "kind": "message_sent",
+   "subject": "m-9",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "part_delivery",
+    "conversation": "c-7",
+    "body": {
+     "task_id": "supply-wheel",
+     "component": "wheel"
+    }
+   },
+   "msg_kind": "part_delivery"
+  },
+  {
+   "seq": 54,
+   "id": "ev-54",
+   "at": 1.8,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-9",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "part_delivery"
+   },
+   "from": "wheel-1",
+   "msg_kind": "part_delivery"
+  },
+  {
+   "seq": 55,
+   "id": "ev-55",
+   "at": 1.8,
+   "observer": "town",
+   "kind": "escrow_released",
+   "subject": "supply-wheel",
+   "layer": "payments",
+   "detail": {
+    "to": "wheel-1",
+    "cents": 300
+   }
+  },
+  {
+   "seq": 56,
+   "id": "ev-56",
+   "at": 1.8,
+   "observer": "town",
+   "kind": "payment_settled",
+   "subject": "supply-wheel",
+   "layer": "payments",
+   "detail": {
+    "from": "maker",
+    "to": "wheel-1",
+    "cents": 300,
+    "via": "escrow"
+   }
+  },
+  {
+   "seq": 57,
+   "id": "ev-57",
+   "at": 1.8,
+   "observer": "maker",
+   "kind": "receipt_attested",
+   "subject": "wheel-1",
+   "layer": "trust",
+   "detail": {
+    "record_id": "fact-1",
+    "claim": "trade.outcome",
+    "value": "good"
+   }
+  },
+  {
+   "seq": 58,
+   "id": "ev-58",
+   "at": 1.8,
+   "observer": "maker",
+   "kind": "reputation_updated",
+   "subject": "wheel-1",
+   "layer": "trust",
+   "detail": {
+    "outcome": "good",
+    "delta": 1,
+    "score": 1,
+    "receipt": "fact-1"
+   }
+  },
+  {
+   "seq": 59,
+   "id": "ev-59",
+   "at": 2.8,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-8",
+   "layer": "transport",
+   "detail": {
+    "to": "maker",
+    "kind": "part_delivery"
+   },
+   "from": "axle-2",
+   "msg_kind": "part_delivery"
+  },
+  {
+   "seq": 60,
+   "id": "ev-60",
+   "at": 2.8,
+   "observer": "town",
+   "kind": "escrow_released",
+   "subject": "supply-axle",
+   "layer": "payments",
+   "detail": {
+    "to": "axle-2",
+    "cents": 450
+   }
+  },
+  {
+   "seq": 61,
+   "id": "ev-61",
+   "at": 2.8,
+   "observer": "town",
+   "kind": "payment_settled",
+   "subject": "supply-axle",
+   "layer": "payments",
+   "detail": {
+    "from": "maker",
+    "to": "axle-2",
+    "cents": 450,
+    "via": "escrow"
+   }
+  },
+  {
+   "seq": 62,
+   "id": "ev-62",
+   "at": 2.8,
+   "observer": "maker",
+   "kind": "receipt_attested",
+   "subject": "axle-2",
+   "layer": "trust",
+   "detail": {
+    "record_id": "fact-2",
+    "claim": "trade.outcome",
+    "value": "good"
+   }
+  },
+  {
+   "seq": 63,
+   "id": "ev-63",
+   "at": 2.8,
+   "observer": "maker",
+   "kind": "reputation_updated",
+   "subject": "axle-2",
+   "layer": "trust",
+   "detail": {
+    "outcome": "good",
+    "delta": 1,
+    "score": 1,
+    "receipt": "fact-2"
+   }
+  },
+  {
+   "seq": 64,
+   "id": "ev-64",
+   "at": 3.3,
+   "observer": "maker",
+   "kind": "product_assembled",
+   "subject": "po-cart",
+   "layer": "agent",
+   "detail": {
+    "parts": [
+     "supply-axle",
+     "supply-wheel"
+    ]
+   }
+  },
+  {
+   "seq": 65,
+   "id": "ev-65",
+   "at": 3.3,
+   "observer": "maker",
+   "kind": "message_sent",
+   "subject": "m-10",
+   "layer": "transport",
+   "detail": {
+    "to": "customer",
+    "kind": "product_delivery",
+    "conversation": "c-8",
+    "body": {
+     "order_id": "po-cart",
+     "product": "cart"
+    }
+   },
+   "msg_kind": "product_delivery"
+  },
+  {
+   "seq": 66,
+   "id": "ev-66",
+   "at": 3.4,
+   "observer": "town",
+   "kind": "message_delivered",
+   "subject": "m-10",
+   "layer": "transport",
+   "detail": {
+    "to": "customer",
+    "kind": "product_delivery"
+   },
+   "from": "maker",
+   "msg_kind": "product_delivery"
+  },
+  {
+   "seq": 67,
+   "id": "ev-67",
+   "at": 3.4,
+   "observer": "town",
+   "kind": "escrow_released",
+   "subject": "po-cart",
+   "layer": "payments",
+   "detail": {
+    "to": "maker",
+    "cents": 10000
+   }
+  },
+  {
+   "seq": 68,
+   "id": "ev-68",
+   "at": 3.4,
+   "observer": "town",
+   "kind": "payment_settled",
+   "subject": "po-cart",
+   "layer": "payments",
+   "detail": {
+    "from": "customer",
+    "to": "maker",
+    "cents": 10000,
+    "via": "escrow"
+   }
+  },
+  {
+   "seq": 69,
+   "id": "ev-69",
+   "at": 3.4,
+   "observer": "customer",
+   "kind": "receipt_attested",
+   "subject": "maker",
+   "layer": "trust",
+   "detail": {
+    "record_id": "fact-3",
+    "claim": "trade.outcome",
+    "value": "good"
+   }
+  },
+  {
+   "seq": 70,
+   "id": "ev-70",
+   "at": 3.4,
+   "observer": "customer",
+   "kind": "reputation_updated",
+   "subject": "maker",
+   "layer": "trust",
+   "detail": {
+    "outcome": "good",
+    "delta": 1,
+    "score": 1,
+    "receipt": "fact-3"
+   }
+  },
+  {
+   "seq": 71,
+   "id": "ev-71",
+   "at": 3.4,
+   "observer": "town",
+   "kind": "run_finished",
+   "subject": "sim-a40dd50344b1",
+   "layer": "data_facts",
+   "detail": {
+    "logical_time": 3.4
+   }
+  }
+ ],
+ "messages": {
+  "m-1": {
+   "deliveries": [
+    28
+   ],
+   "faults": [],
+   "from": "customer",
+   "to": "maker",
+   "kind": "order",
+   "conversation": "c-1",
+   "sent_seq": 27
+  },
+  "m-2": {
+   "deliveries": [
+    35
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "axle-1",
+   "kind": "supply_request",
+   "conversation": "c-2",
+   "sent_seq": 30
+  },
+  "m-3": {
+   "deliveries": [
+    37
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "axle-2",
+   "kind": "supply_request",
+   "conversation": "c-3",
+   "sent_seq": 31
+  },
+  "m-4": {
+   "deliveries": [
+    39
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "wheel-1",
+   "kind": "supply_request",
+   "conversation": "c-4",
+   "sent_seq": 33
+  },
+  "m-5": {
+   "deliveries": [
+    41
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "wheel-2",
+   "kind": "supply_request",
+   "conversation": "c-5",
+   "sent_seq": 34
+  },
+  "m-6": {
+   "deliveries": [
+    49
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "axle-2",
+   "kind": "part_order",
+   "conversation": "c-6",
+   "sent_seq": 45
+  },
+  "m-7": {
+   "deliveries": [
+    52
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "wheel-1",
+   "kind": "part_order",
+   "conversation": "c-7",
+   "sent_seq": 48
+  },
+  "m-8": {
+   "deliveries": [
+    59
+   ],
+   "faults": [
+    {
+     "seq": 51,
+     "kind": "message_delayed",
+     "fault": "delay"
+    }
+   ],
+   "from": "axle-2",
+   "to": "maker",
+   "kind": "part_delivery",
+   "conversation": "c-6",
+   "sent_seq": 50
+  },
+  "m-9": {
+   "deliveries": [
+    54
+   ],
+   "faults": [],
+   "from": "wheel-1",
+   "to": "maker",
+   "kind": "part_delivery",
+   "conversation": "c-7",
+   "sent_seq": 53
+  },
+  "m-10": {
+   "deliveries": [
+    66
+   ],
+   "faults": [],
+   "from": "maker",
+   "to": "customer",
+   "kind": "product_delivery",
+   "conversation": "c-8",
+   "sent_seq": 65
+  }
+ },
+ "layers_touched": [
+  "payments",
+  "town",
+  "identity",
+  "registry",
+  "transport",
+  "coordination",
+  "trust",
+  "agent",
+  "data_facts"
+ ],
+ "result": {
+  "verdict": "passed",
+  "stages": [
+   {
+    "name": "procurement",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "milestones",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "assembly_order",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "customer_settled",
+    "status": "passed",
+    "note": ""
+   },
+   {
+    "name": "ledger_conserved",
+    "status": "passed",
+    "note": "14000 cents conserved across every movement"
+   },
+   {
+    "name": "privacy",
+    "status": "not_tested",
+    "note": "no redaction declared by this scenario"
+   }
+  ]
+ }
+}
