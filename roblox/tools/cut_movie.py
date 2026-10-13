@@ -31,6 +31,10 @@ import numpy as np
 
 SW, SH = 480, 300  # analysis size (the screen is 1920x1200)
 FPS = 30
+# x11grab drops frames when the machine is busy, so the raw file is variable-rate.
+# Every pass (scan, full-res grab, trim) goes through the same fps filter first,
+# so a frame index means the same instant in all three.
+CFR = f"fps={FPS}"
 
 
 def probe(path: Path) -> dict:
@@ -44,7 +48,7 @@ def probe(path: Path) -> dict:
 def frames_small(path: Path):
     """Yield every frame at SWxSH as uint8 HxWx3."""
     p = subprocess.Popen(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-vf", f"scale={SW}:{SH}:flags=area",
+        ["ffmpeg", "-v", "error", "-i", str(path), "-vf", f"{CFR},scale={SW}:{SH}:flags=area",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], stdout=subprocess.PIPE)
     n = SW * SH * 3
     while True:
@@ -57,7 +61,7 @@ def frames_small(path: Path):
 
 def frame_full(path: Path, index: int) -> np.ndarray:
     out = subprocess.run(
-        ["ffmpeg", "-v", "error", "-i", str(path), "-vf", f"select=eq(n\\,{index})", "-frames:v", "1",
+        ["ffmpeg", "-v", "error", "-i", str(path), "-vf", f"{CFR},select=eq(n\\,{index})", "-frames:v", "1",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], check=True, capture_output=True).stdout
     return np.frombuffer(out, np.uint8).reshape(1200, 1920, 3)
 
@@ -154,7 +158,7 @@ def main() -> None:
     mp4 = a.outdir / f"{a.name}.mp4"
     wa = a.outdir / f"{a.name}-720p.mp4"
     poster = a.outdir / f"{a.name}-poster.png"
-    trim = f"trim=start_frame={start}:end_frame={end + 1},setpts=PTS-STARTPTS,crop={w}:{h}:{x}:{y}"
+    trim = f"{CFR},trim=start_frame={start}:end_frame={end + 1},setpts=PTS-STARTPTS,crop={w}:{h}:{x}:{y}"
     native = (w, h) == (1920, 1080)
     print("native 1920x1080 crop, no rescale" if native else f"rescaling {w}x{h} to 1920x1080")
     scale = "" if native else "scale=1920:1080:flags=lanczos,"
