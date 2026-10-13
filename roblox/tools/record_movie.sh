@@ -2,7 +2,7 @@
 # Record the movie place in Studio and cut the finished media into site/media/.
 #
 #   tools/open_in_studio.sh movie      # once: Studio on build/movie.rbxlx (from Rojo)
-#   tools/record_movie.sh              # one take: ~80 s with Studio fullscreen
+#   tools/record_movie.sh              # one take: ~80 s with Studio on screen
 #
 # Studio has no recorder, and Roblox's own capture is a 30 s player feature, so
 # this grabs the X11 screen with ffmpeg. It switches to Studio's i3 workspace and
