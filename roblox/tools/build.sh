@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build a place from a Rojo project with the pinned Rojo. The output is a build
 # artifact (git-ignored): regenerate it, never edit it.
-#   tools/build.sh [project]      # default | movie  ->  build/<project>.rbxlx
+#   tools/build.sh [project]      # default | movie | play  ->  build/<project>.rbxlx
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 project="${1:-default}"

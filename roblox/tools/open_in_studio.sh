@@ -3,7 +3,7 @@
 # flatpak). The flatpak can't see ~/prg, so the built place is copied into the
 # Wine prefix as C:\nanda\NandaTown-<project>.rbxlx. Studio runs in a detached
 # tmux session (default: studio-nanda).
-#   tools/open_in_studio.sh [project] [tmux-session]    # project: default | movie
+#   tools/open_in_studio.sh [project] [tmux-session]    # project: default | movie | play
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 project="${1:-default}"
