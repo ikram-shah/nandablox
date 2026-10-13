@@ -1,0 +1,37 @@
+{
+  "name": "NandaTownPlay",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "NandaTown": {
+        "$path": "src/shared/NandaTown"
+      }
+    },
+    "ServerScriptService": {
+      "NandaServer": {
+        "$path": "src/server/NandaServer.server.luau"
+      }
+    },
+    "StarterPlayer": {
+      "$properties": {
+        "CameraMaxZoomDistance": 300
+      },
+      "StarterPlayerScripts": {
+        "NandaPlay": {
+          "$path": "src/client/NandaPlay.client.luau"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false,
+        "RespawnTime": 3
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 14.5
+      }
+    }
+  }
+}
