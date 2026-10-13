@@ -77,7 +77,8 @@ def find_rect(full: np.ndarray) -> tuple[int, int, int, int]:
     bk = black(view)
     rows = np.nonzero(bk.mean(axis=1) > 0.5)[0]
     cols = np.nonzero(bk.mean(axis=0) > 0.5)[0]
-    fy0, fy1, fx0, fx1 = rows.min(), rows.max(), cols.min(), cols.max()
+    # 2 px inside the black, so no magenta fringe survives compression
+    fy0, fy1, fx0, fx1 = rows.min() + 2, rows.max() - 2, cols.min() + 2, cols.max() - 2
     w = (fx1 - fx0 + 1) // 2 * 2
     h = (fy1 - fy0 + 1) // 2 * 2
     return int(x0 + fx0), int(y0 + fy0), int(w), int(h)
@@ -96,12 +97,14 @@ def main() -> None:
     a.outdir.mkdir(parents=True, exist_ok=True)
 
     # 1. scan: magenta share of the screen, and the frames themselves (small)
-    mag, small = [], []
+    mag, blk, small = [], [], []
     for f in frames_small(a.raw):
         mag.append(magenta(f).mean())
+        blk.append(black(f).mean())
         small.append(f)
-    mag = np.array(mag)
-    pre = np.nonzero(mag > 0.02)[0]
+    mag, blk = np.array(mag), np.array(blk)
+    # pre-roll: some magenta, and most of the rest one big black frame
+    pre = np.nonzero((mag > 0.02) & (blk > 0.3) & (mag + blk > 0.5))[0]
     if len(pre) == 0:
         raise SystemExit("no magenta pre-roll found: did the movie place play?")
     # the pre-roll is one contiguous run; take the last run if there are several

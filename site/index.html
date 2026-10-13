@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>NANDA Town, replayed in Roblox</title>
+<meta name="description" content="One real run of NANDA Town, an open-source simulator for networks of AI agents, replayed as a town square in Roblox.">
+<style>
+  :root {
+    --ink: #1f1d1a;
+    --muted: #6f6a61;
+    --rule: #e6e1d6;
+    --paper: #fbfaf6;
+    --accent: #fabe3c;        /* the replay's gold: progress bar, coins */
+    --accent-ink: #9a6b00;
+    --serif: "Iowan Old Style", Charter, "Bitstream Charter", "Sitka Text", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); }
+  body { margin: 0; font: 19px/1.6 var(--serif); -webkit-font-smoothing: antialiased; }
+  main { padding: 0 22px 64px; }
+  .col { max-width: 680px; margin: 0 auto; }
+  .wide { max-width: 1040px; margin: 0 auto; }
+  header { padding: 64px 0 26px; }
+  h1 { font-weight: 600; font-size: 34px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 6px; }
+  .dek { color: var(--muted); margin: 0; font-size: 19px; }
+  h2 { font-weight: 600; font-size: 21px; margin: 64px 0 6px; }
+  p { margin: 0 0 1em; }
+  a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+  a:hover { color: var(--accent-ink); }
+  code { font: 0.84em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f1eee6; padding: 1px 4px; border-radius: 3px; }
+  figure { margin: 0; }
+  .movie video, .movie iframe { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; background: #111; border-radius: 4px; border: 0; }
+  figcaption, .note { font: 14px/1.5 var(--sans); color: var(--muted); margin-top: 10px; }
+  .hint { font: 15px/1.5 var(--sans); color: var(--muted); }
+
+  #trace-chart { position: relative; margin-top: 14px; font: 12px var(--sans); }
+  #trace-chart svg { display: block; overflow: visible; }
+  .lanes line { stroke: var(--rule); }
+  .lanes text { fill: var(--ink); font-size: 12.5px; }
+  .axis line { stroke: #b9b2a5; }
+  .axis text { fill: var(--muted); font-size: 11px; }
+  .axis .unit { font-style: italic; }
+  .bands line { stroke: #d9d3c6; stroke-dasharray: 2 3; }
+  .bands text { fill: var(--muted); font-size: 11px; letter-spacing: 0.02em; }
+  .arrow { fill: none; stroke-width: 1.6; }
+  .arrow.fault { stroke-dasharray: 4 3; }
+  .hit-line { fill: none; stroke: transparent; stroke-width: 10; cursor: pointer; }
+  .hit { fill: transparent; cursor: pointer; }
+  .dot { cursor: pointer; }
+  .lbl { font-size: 10.5px; fill: var(--muted); }
+  .lbl.fault { fill: #d9480f; }
+  .lbl.verdict { fill: var(--ink); font-size: 12px; font-weight: 600; }
+  .mark { transition: opacity 0.25s; }
+  .mark.later { opacity: 0.18; }
+  .playhead { stroke: var(--accent); stroke-width: 2.5; }
+  #trace-tip { position: absolute; display: none; pointer-events: none; max-width: 250px; background: #fff; border: 1px solid var(--rule);
+    border-radius: 4px; padding: 7px 9px; box-shadow: 0 2px 10px rgba(0,0,0,0.07); font: 13px/1.4 var(--sans); z-index: 2; }
+  #trace-tip .k { display: block; color: var(--muted); font-size: 11.5px; }
+  #trace-tip .d { display: block; margin: 2px 0; }
+
+  table { border-collapse: collapse; width: 100%; font: 13.5px/1.45 var(--sans); margin-top: 26px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--rule); padding: 0 10px 6px 0; }
+  td { padding: 5px 10px 5px 0; border-bottom: 1px solid #f0ece3; vertical-align: top; }
+  td.n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+  td.kinds { color: var(--muted); }
+  td:first-child { white-space: nowrap; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
+
+  .pipeline { margin: 18px 0 8px; }
+  .pipeline img { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
+  ul.next { padding-left: 1.1em; margin: 0 0 1em; }
+  ul.next li { margin-bottom: 2px; }
+  footer { border-top: 1px solid var(--rule); margin-top: 56px; padding-top: 18px; font: 14px/1.55 var(--sans); color: var(--muted); }
+  @media (max-width: 640px) {
+    body { font-size: 17.5px; }
+    header { padding-top: 36px; }
+    h1 { font-size: 27px; }
+    #trace-chart { overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+<main>
+
+<header class="col">
+  <h1>NANDA Town, replayed in Roblox</h1>
+  <p class="dek">One real run of an agent-network simulator, played back as a town square.</p>
+</header>
+
+<figure class="movie wide">
+  <!-- Movie. To use YouTube instead, replace the one <video> line below with:
+       <iframe src="https://www.youtube-nocookie.com/embed/VIDEO_ID" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe>
+       (the trace chart's click-to-seek and playhead then switch themselves off). -->
+  <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-poster.png" src="media/nanda-town-replay.mp4"></video>
+  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. <a href="media/nanda-town-replay-720p.mp4">720p copy</a>.</figcaption>
+</figure>
+
+<section class="col">
+  <h2>What this is</h2>
+  <p><a href="https://github.com/projnanda/nandatown/tree/09317903cd7e33ec2a79b88af447b5403c6d2054">NANDA Town</a> is an open-source simulator from MIT Media Lab’s Project NANDA, a “test track” for networks of AI agents. In its Lab mode, a seeded population of scripted agents goes about its business through twelve swappable protocol layers: transport, communication, identity, registry, auth, trust, payments, coordination, negotiation, memory, privacy and data facts. Faults are injected on purpose. Every step is written to a log of events, and at the end an evaluator checks the log against the scenario’s rules and gives a verdict.</p>
+  <p>This is a small hack on top of it. I took one real Lab run, the marketplace scenario with seed 42 and 65 events, and replayed it in Roblox. Nothing is simulated in Roblox. The event log becomes a Luau module, and Roblox plays it back, stretching 4.3 logical seconds to about a minute. A buyer asks two sellers for quotes, haggles with the cheaper one, and pays into escrow. The network delivers the crate twice, which is the injected fault. The buyer rates the seller and comes back for a second round, and all eight checks pass.</p>
+  <p>Why buildings? Most pictures of agent networks are graphs, with nodes and moving dots. A graph leaves out the town’s state: who holds the money, who is trusted, which rule was checked. So each protocol layer that acts here gets a place. Messages travel on roads, haggling happens at market stalls, money waits in a bank vault, receipts go up on a review wall, and the verdict is read at the courthouse.</p>
+</section>
+
+<section class="wide" id="trace">
+  <div class="col" style="margin-left:auto;margin-right:auto">
+    <h2>The run, event by event</h2>
+    <p class="hint">One lane per agent, plus the notice board, the bank and the courthouse. Each arrow is a message or a transfer, coloured by protocol layer, on the replay’s clock. Hover over an event to see what happened, or click it to jump the movie there.</p>
+  </div>
+  <div id="trace-chart"><div id="trace-tip"></div></div>
+  <div class="col" style="margin-left:auto;margin-right:auto">
+    <table id="layer-table">
+      <thead><tr><th>layer</th><th>in the replay</th><th class="n">events</th><th>kinds in this run</th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <p class="note">Privacy and coordination are not drawn: this scenario doesn’t use coordination, and privacy only redacts the buyer’s budget from the exported record.</p>
+  </div>
+</section>
+
+<section class="col">
+  <h2>How it’s made</h2>
+  <figure class="pipeline"><img src="pipeline.svg" alt="Pipeline: NANDA Town Lab run, events.jsonl, trace_to_luau.py, Luau trace module; then rojo build, Roblox Studio, ffmpeg, MP4." width="736" height="282"></figure>
+  <p>The place is built by <a href="https://rojo.space">Rojo</a> from a repository that holds everything: the code, the trace and the project files. Nothing is uploaded to Roblox. Every building, coin and courier is made of parts by code at runtime. Roblox Studio is used only to view the built place and to record it. A movie mode in the project hides Roblox’s own interface and adds the title and captions. ffmpeg records the screen and cuts the take at marks the movie draws into its first frames.</p>
+  <p>To reproduce: run <code>nandatown run marketplace --seed 42</code> in NANDA Town, convert the bundle with <code>trace_to_luau.py</code>, then <code>rojo build</code> and press Play.</p>
+  <p>What could come next:</p>
+  <ul class="next">
+    <li>All eleven Lab scenarios, with a building lighting up whenever its layer acts.</li>
+    <li>Thousands of synthetic agents, with distant districts shown as heat maps.</li>
+    <li>Live: Studio streams a run from a local NANDA Town server instead of replaying a file.</li>
+    <li>Swap a layer (send the gate guards home with <code>auth=plain.v1</code>), rerun, and play the before and after side by side.</li>
+  </ul>
+</section>
+
+<footer class="col">
+  <p>A personal experiment by Peter Danenberg, built on <a href="https://github.com/projnanda/nandatown">NANDA Town</a> (Project NANDA, MIT Media Lab), Apache License 2.0, at commit <a href="https://github.com/projnanda/nandatown/commit/09317903cd7e33ec2a79b88af447b5403c6d2054"><code>0931790</code></a>. The scenario, agents, events and verdict are NANDA Town’s. The replay is mine. Roblox is a trademark of Roblox Corporation. This page is not affiliated with or endorsed by Project NANDA, MIT or Roblox. Chart by <a href="https://d3js.org">d3</a> (ISC), diagram by <a href="https://mermaid.js.org">Mermaid</a>.</p>
+</footer>
+
+</main>
+<script src="vendor/d3.v7.9.0.min.js"></script>
+<script src="trace.js"></script>
+</body>
+</html>

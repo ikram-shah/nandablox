@@ -1,0 +1,12 @@
+%% Source for pipeline.svg. Re-render (mermaid-cli 11, headless Chrome):
+%%   mmdc -i pipeline.mmd -o pipeline.svg -c pipeline.config.json -b transparent
+flowchart TB
+  subgraph sim ["NANDA Town side"]
+    direction LR
+    A["NANDA Town Lab"] --> B["events.jsonl"] --> C["trace_to_luau.py"] --> D["Luau trace module"]
+  end
+  subgraph rbx ["Roblox side"]
+    direction LR
+    E["rojo build"] --> F["Roblox Studio"] --> G["ffmpeg"] --> H["MP4"]
+  end
+  sim --> rbx
