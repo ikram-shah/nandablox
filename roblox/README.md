@@ -216,6 +216,197 @@ The code: `src/server/NandaServer.server.luau` (floor, spawn, board, clock),
 `src/client/NandaPlay.client.luau` (views, controls, cinema),
 `src/shared/NandaTown/PlayClock.luau` (the shared timing).
 
+## Red vs. Blue (live)
+
+A spike (branch `redblue`, 2026-10-21) of a game mode for the play place:
+**two human teams play at the seams that NANDA Town's layers already
+define.** The layers are the town's automatic defences, and a council of
+the players present decides which ones run.
+
+**Reached from** the arch on the right of the spawn ("RED vs. BLUE · LIVE ·
+E"). It switches everyone; the same arch, or any panel on the scenario
+board, goes back to the replay. Until someone walks through it the place is
+exactly the replay described above.
+
+**Not NANDA Town's code.** The live town is `TownSim`, a small Luau
+re-implementation of NANDA Town's marketplace written for this spike. It
+speaks NANDA Town's event envelope and event kinds
+([`../docs/trace-format.md`](../docs/trace-format.md)) and models three
+layers in a simplified way. It does not run NANDA Town and is not evaluated by
+it. The way to put the real NANDA Town behind it is described under "Next step".
+
+### How a round plays
+
+A round is 3 minutes of a running market (2 sellers, 3 buyers, a deal every
+~10–20 s), then 12 s of results. Step on the **red** or **blue** pad by the
+spawn to pick a side; a bot plays any side without a human.
+
+- **Red** has 4 attacks per round, made at a building with a prompt (E):
+  - **Forge an invoice at the Gate:** an invoice signed as a real seller,
+    asking a buyer to pay $30 to a payee alias. Under `auth hmac.v1` the guards
+    stop it at once (`signature_invalid`). Under `plain.v1` the guards are
+    gone: the courier crosses the road, the invoice sits on the buyer's desk,
+    and 12 s after it set off the buyer pays red.
+  - **Spoof a card at the Notice Board:** a card claiming a real seller's
+    name, 20% cheaper. Under `registry index.owned.v1` the board refuses it
+    (`card_publish_refused`). Under `index.v1` it is pinned (UNVERIFIED with
+    `hmac.v1`, verified-looking with `plain.v1`); the next bargain hunter, and
+    the claimed seller's loyal buyer, deal with red's stall instead, and the
+    escrow is paid to red.
+  - An attack that pays out is an **escape: +10 red**.
+- **Blue** holds the **watchtower** (east of the spawn; the prompt at its foot
+  lifts you up) and has the V overview and F fly views. Click near a courier
+  or a card to **flag** it (the nearest one within 44 px of the click; mouse
+  hover outlines it). A live threat flagged before it pays out is a
+  **catch: +1**; anything honest is a **false alarm: −1**, and the honest
+  courier is held 4 s (an honest card is skipped by buyers for 4 s).
+- **Every attack has a fair, visible tell:**
+
+| attack | tells anyone can see |
+|---|---|
+| forged invoice | its courier sets off from the **gate**, not the seller's stall; the payee (`seller-a.billing`, `se11er-b`, …) is not on the notice board; it lingers on the buyer's desk (an honest invoice is paid at once) |
+| spoofed card | **two cards with one name** on the board (and in its list); under `hmac.v1` the guards flag the signature and the card is stamped UNVERIFIED; the deal's couriers go to and come from the **red-team stall**, not the seller's |
+| either | the ticker prints what the town recorded, e.g. `seller-a → buyer-2: invoice (3000¢ → pay sellr-b)` |
+
+- **The council** (panel on the right, usable from anywhere; the chamber west
+  of the spawn shows the laws) votes on two swaps, `auth hmac.v1 ↔ plain.v1`
+  and `registry index.v1 ↔ index.owned.v1`. A strict majority of the players
+  present carries a swap at once, in the middle of a round: the guards walk
+  off or back, the board gets or loses a padlock (and adopting
+  `index.owned.v1` takes impostor cards down). Laws persist across rounds. It
+  starts at NANDA Town's defaults, `hmac.v1` and `index.v1`: forging is
+  blocked, card spoofing works, so the obvious first vote is
+  `index.owned.v1`.
+- **The trade-off.** Stronger layers cost throughput: a signature check adds
+  1.1 s per courier hop and an ownership check 4 s per registry lookup. Deals
+  settled per 3-minute round (mean of 5 seeds, `tools/test.sh`):
+  `plain.v1 + index.v1` 18.2, `hmac.v1 + index.v1` (default) 15.0,
+  `hmac.v1 + index.owned.v1` 12.8. The **town economy** (deals settled) is a
+  shared number on the scoreboard.
+- **Who wins.** Red takes a round only by getting something through *and*
+  outscoring blue; a round where nothing escaped is blue's ("the town held"),
+  even if blue's false alarms left it below zero.
+
+All numbers are constants in `src/shared/NandaTown/RedBlue/Config.luau`. The
+bots: `RED_BOT` / `BLUE_BOT` = `"auto"` (on whenever that team has no
+humans), `"on"` or `"off"`. RedBot attacks every 28–40 s from 14 s in,
+preferring an attack the current layers let through; its attacks never spend
+a human's tokens (the first human on red gets the unspent ones). BlueBot
+notices a live threat after 3.5 s with probability 0.06 per second and
+false-alarms 0.006 per second. Over 10 seeded solo rounds (both bots) red wins
+6/10 at the defaults, 9/10 with both layers weak, 0/10 with both strong.
+
+All player-visible text is generated by the game: no typed text, no LLM call.
+
+### What it looks like (Studio solo playtest, 2026-10-21)
+
+| frame | what |
+|---|---|
+| `screenshots/redblue-01-forge-blocked-by-guards.png` | red forges under `hmac.v1`: the invoice falls at the gate, "1 forged signature stopped", `signature_invalid` on the ticker |
+| `redblue-02-council-swap-guards-leave.png`, `-03-plain-no-guards.png` | one vote carries `auth → plain.v1`; the gate reads "NO GUARDS", the council panel the new law |
+| `redblue-04-forge-live-from-gate.png` | a forged invoice on the road under `plain.v1`, the alias payee in the ticker |
+| `redblue-05-forge-caught-by-bluebot.png` | BlueBot flags it on buyer-2's desk after 8.3 s: CAUGHT +1 |
+| `redblue-06-forge-invoice-on-buyers-desk.png`, `-07-forge-escapes.png`, `-10-forge-escapes-red-plus-10.png` | an unflagged forgery pays red $30 after 12 s: coins to the red-team stall, ESCAPED +10 |
+| `redblue-08-spoof-refused-owned-registry.png` | after a vote for `index.owned.v1`: the padlock on the board, the spoofed card refused |
+| `redblue-09-blue-catches-forge-by-click.png` | playing blue against RedBot: a click on the forged invoice (the real click path, `RBClickAt`) catches it |
+| `redblue-12-results-scoreboard.png` | results between rounds: winner, scores, escapes / catches / blocked / false alarms, deals settled under which laws |
+| `redblue-13-watchtower-view.png` | blue on the watchtower deck |
+
+Frames 01–13 predate the last round of layout fixes (commit `878ccbb`: red
+stall and off-duty guards moved into the overview frame, banners under the
+scoreboard, the portal out of the overview, the tower sign out of the
+watchers' sightline); see the session notes for which were re-taken.
+
+### FlowBench telemetry
+
+Watcher behaviour is logged on the server as structured records, kept in
+memory (`Telemetry.luau`, last 5,000) and printed one JSON object per line
+with the prefix `FLOWBENCH `: `round_started`, `threat_appeared` (attack, by,
+layers, outcome if a layer stopped it), `threat_resolved` (outcome, seconds
+alive, each blue watcher's camera mode), `flag` (player, team, target,
+result, **latency** from the threat appearing, camera mode), `click`,
+`camera` (walk / overview / fly / tower), `vote`, `layer_swapped`,
+`round_summary`. For example:
+
+```
+FLOWBENCH {"kind":"flag","player":"BlueBot","target":"card-3","result":"catch","latency":37.9,"camera":"bot","team":"blue","threat":"threat-1","attack":"spoof","t":51.98,"n":6}
+```
+
+No DataStore yet: collect them from the server log.
+
+### Code and tests
+
+| path | what |
+|---|---|
+| `src/shared/NandaTown/RedBlue/TownSim.luau` | the live marketplace: deal cycle, auth / registry / transport, attacks, catches, holds, snapshots for late joiners |
+| `src/shared/NandaTown/RedBlue/Policy.luau` | agent decisions behind a 6-function interface (`chooseCard`, `offer`, `accept`, `payInvoice`, `quote`, `counter`); scripted only |
+| `src/shared/NandaTown/RedBlue/Game.luau` | rounds, teams, tokens, flags, scoring, council, bots, telemetry; the only thing the server talks to |
+| `src/shared/NandaTown/RedBlue/{Council,Bots,Telemetry,Config,Rng}.luau` | majority voting; RedBot / BlueBot; FlowBench records; every constant; a seeded RNG |
+| `src/server/RedBlueServer.luau` | Teams, pads, watchtower, chamber, attack prompts, RemoteEvents (`NandaRedBlue.Events/Hello/Flag/Vote/Camera/Notice`), `RB_*` attributes, telemetry lines |
+| `src/shared/NandaTown/RedBlueView.luau` | the client: the live town via `Replay.stage`, cards, guards, padlock, flagging, the game HUD |
+| `src/shared/NandaTown/Replay.luau` | `Replay.stage(trace, opts)` builds the town and handlers; `Replay.run` plays a trace through it, `RedBlueView` a live stream (`opts.live`, with the events' `travel` / `origin` / `dest` / `copy` hints) |
+
+The core (`RedBlue/*`) uses no Roblox services, so it runs headless under
+[Lune](https://lune-org.github.io/docs), pinned in `rokit.toml`:
+
+```sh
+tools/test.sh            # every tests/test_*.luau: TownSim, attacks x layers, scoring, council, rounds, bots, syntax of all src/
+tools/test.sh council    # one file
+```
+
+Events carry the private threat id as `_threat` on the server only;
+`Game.public` strips every `_` key before anything is sent to a client (a
+test checks it).
+
+Automation (MCP `execute_luau`): on the server, `NandaServerCmd = "live"` /
+`"replay"`; on the client, `RBClickAt = Vector2(x, y)` (a click at that
+viewport point), `RBVote = "auth" | "registry"`, and red's prompts fire with
+`prompt:InputHoldBegin()`. The client reports `RBTeam`, `RBHover`,
+`RBLastNotice`, `RBFlaggables`. Note that a ProximityPrompt only shows (and
+so only triggers) while it is on screen: from the V overview, the
+watchtower's prompt is off-frame, so press W first.
+
+### Next step: a real NANDA Town behind it (designed, not built)
+
+1. **Event source.** Replace `TownSim` with a NANDA Town server in Track mode
+   (its coordinator is plain HTTP: runs, participants, messages, inboxes and
+   an event log). `RedBlueServer` polls the event log every second with
+   `HttpService` (60 requests/min of the 500/min a Roblox game server may
+   make), maps Track's event kinds onto the replay's vocabulary in a small
+   adapter (the same role `travel` / `origin` / `dest` play now), and
+   forwards them to clients exactly as today. A tunnel or a hosted
+   coordinator is needed: a live Roblox server cannot reach `localhost`.
+2. **Human actions back.** Red's attacks become messages POSTed by an
+   attacker participant (forge = a message claiming another sender; spoof = a
+   card publish), blue's flags a POST that the town records, council swaps a
+   change of layer plugin. Two gaps to close upstream: Track does not run
+   the Lab's layer plugins today, so either layers come to Track or each
+   round is a short Lab run (`--layer auth=plain.v1`) streamed at game pace;
+   and the attack/flag endpoints do not exist yet.
+3. **LLM-driven agents.** Two ways, both fit the budget. (a) Keep the town in
+   Roblox and make a `Policy` remote: each decision is one HTTPS call to a
+   harness endpoint with the `view` as JSON; about six decisions per deal and
+   ~15 deals a round is ~30 calls/min, well inside 500/min. Decisions must
+   become asynchronous (an LLM takes seconds), with the scripted policy as
+   the timeout fallback. (b) Better: let the harness drive the agents
+   directly against the NANDA Town server (Track already lets an agent join
+   from outside over HTTP), so LLM traffic never touches Roblox, and Roblox
+   stays a viewer plus a human-action injector at ~1 request/s.
+
+### Known gaps
+
+- `TownSim` is a sketch of the marketplace, not NANDA Town: no evaluator, no
+  memory or privacy layers, no Track semantics (leases, acks, crashes).
+- The **Duplicate at the Roads** attack is not built; honest duplicate and
+  drop faults are, as noise blue must not flag.
+- Flags are client-picked ids sent to the server; the server validates them
+  against live state but does not check line of sight from the tower.
+- The council has no proposal step or quorum timer; a solo player carries
+  every vote alone. Votes are buttons, not a chamber ritual.
+- Economy is shown but not scored for either team.
+- Tested in a Studio solo playtest only, not with two real players; touch
+  input (tap to flag) is wired but untested.
+
 ## Publish
 
 The experience is public since 2026-10-13: <https://www.roblox.com/games/74139499982225>. It is updated only from the repo:
@@ -306,8 +497,10 @@ it without rescaling.
 | `place.json` | the published experience's universe and place IDs (`tools/publish.sh`) |
 | `src/client/NandaReplay.client.luau` | Play-mode runner with a fixed overview camera |
 | `default.project.json` | the Rojo project: code, the `Trace` attribute, lighting, no characters |
-| `rokit.toml` | pins Rojo 7.7.0 |
-| `tools/` | pinned-Rojo wrapper, build, serve, Studio launcher, trace converter, movie recorders, publish |
+| `rokit.toml` | pins Rojo 7.7.0 and Lune 0.11.0 (the headless tests) |
+| `tools/` | pinned-Rojo wrapper, build, serve, Studio launcher, trace converter, movie recorders, publish, `test.sh` |
+| `tests/` | Lune tests of the Red vs. Blue core (see "Red vs. Blue (live)") |
+| `src/shared/NandaTown/RedBlue/`, `RedBlueView.luau`, `src/server/RedBlueServer.luau` | Red vs. Blue (live) |
 | `traces/` | the 11 converted Lab runs as JSON |
 
 No Robux spent. The play place is published only by `tools/publish.sh` (see "Publish").

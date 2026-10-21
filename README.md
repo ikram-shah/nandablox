@@ -18,6 +18,13 @@ Each protocol layer is a building, and every motion on screen is one logged even
 | `site/` | the GitHub Pages site. `.github/workflows/pages.yml` deploys this directory and nothing else. |
 | `docs/trace-format.md` | NANDA Town's event format, as the replay reads it |
 
+The play place also has a spike of a game mode, **Red vs. Blue (live)**: a small
+Luau re-implementation of NANDA Town's marketplace runs on the server (not NANDA
+Town's own code), red attacks it at the seams the layers define (forged
+invoices, spoofed cards), blue flags what looks wrong from a watchtower, and a
+council of the players votes which layer implementations run. See
+[`roblox/README.md`](roblox/README.md#red-vs-blue-live).
+
 Everything is in the repo: the place is built by Rojo from `roblox/`, every part is
 made by code, and no assets are uploaded. Studio is only a viewer.
 
