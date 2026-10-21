@@ -409,6 +409,7 @@ function TownSim:buyerView(b: string)
 		layers = self.layers,
 		listed = self:listedNames(),
 		knownOrders = self.buyers[b] and self.buyers[b].knownOrders or {},
+		favorite = self.cfg.BUYER_FAVORITE and self.cfg.BUYER_FAVORITE[b] or nil,
 	}
 end
 

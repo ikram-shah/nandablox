@@ -11,7 +11,8 @@
 --   seller.counter(view, offerCents)     -> cents      the counter-offer
 --
 -- view = { name, now, balance, reputation = {name -> score}, layers,
---          openOrders = {order_id -> {seller, cents}} }
+--          listed = {name -> true}, knownOrders = {order_id -> true},
+--          favorite = seller name or nil }  (sellers: listPrice instead)
 -- A card is { id, name, capabilities, publisher, verified, price }.
 --
 -- The scripted policies below are the spike's only implementation. They are
@@ -22,9 +23,23 @@ local Policy = {}
 
 Policy.ScriptedBuyer = {}
 
--- The cheapest listing wins; ties go to the better reputation, then the newer
--- card (a newer listing for a name replaces the older one, as in index.v1).
+-- A buyer with a favourite seller buys from the newest listing under that
+-- name (a newer listing for a name replaces the older one, as in index.v1:
+-- this is what a spoofed card exploits). Otherwise, or if the favourite is
+-- not listed, the cheapest listing wins; ties go to the better reputation,
+-- then the newer card.
 function Policy.ScriptedBuyer.chooseCard(view, cards)
+	if view.favorite then
+		local fav = nil
+		for _, c in cards do
+			if c.name == view.favorite and (not fav or c.seq > fav.seq) then
+				fav = c
+			end
+		end
+		if fav then
+			return fav
+		end
+	end
 	local best = nil
 	for _, c in cards do
 		if not best then

@@ -34,6 +34,10 @@ Config.ATTACKER = "red-team" -- red's account; payouts land here
 Config.BUYER_BALANCE = 30000 -- cents per buyer per round
 Config.LIST_PRICE = { ["seller-a"] = 1995, ["seller-b"] = 2095 } -- cents per widget
 Config.QUANTITY = 2
+-- Loyal buyers buy from the newest card under their favourite's name; the
+-- others hunt the cheapest listing (Policy.luau). Both are what a spoofed
+-- card preys on.
+Config.BUYER_FAVORITE = { ["buyer-1"] = "seller-a", ["buyer-2"] = "seller-b" }
 
 -- Transport: one hop is one courier trip on the road.
 Config.HOP_SECONDS = 1.6

@@ -73,6 +73,7 @@ function Game:resetScores()
 	self.score = { red = 0, blue = 0 }
 	self.tally = { escapes = 0, catches = 0, false_alarms = 0, blocked = 0, fizzled = 0 }
 	self.tokens = self.cfg.TOKENS_PER_ROUND
+	self.humanAttacks = 0
 end
 
 ------------------------------------------------------------------------ events
@@ -143,7 +144,13 @@ end
 function Game:setTeam(id: any, team: string?)
 	local p = self.players[id]
 	if p and (team == nil or Game.TEAMS[team]) then
+		local firstRed = team == "red" and p.team ~= "red" and self:humans().red == 0
 		p.team = team
+		if firstRed then
+			-- RedBot's attacks were its own: the first human on red gets the
+			-- tokens humans have not spent this round
+			self.tokens = self.cfg.TOKENS_PER_ROUND - self.humanAttacks
+		end
 	end
 end
 
@@ -361,6 +368,9 @@ function Game:attack(id: any, kind: string, claimed: string?): (boolean, string,
 		claimed = nil
 	end
 	self.tokens -= 1
+	if id ~= Bots.RED_ID then
+		self.humanAttacks += 1
+	end
 	self.lastAttack = self.t
 	self.sim:advance(self:rt()) -- bring the town up to now first
 	self:pull()

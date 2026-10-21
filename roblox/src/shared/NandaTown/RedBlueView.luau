@@ -33,8 +33,8 @@ local View = {}
 View.__index = View
 
 View.PICK_PX = 44
-View.RED_STALL = Vector3.new(-60, 0.2, 32) -- red's impostor stall, just inside the gate
-View.GUARD_POST_OFFSET = Vector3.new(-12, 0, 16) -- where the guards go off duty
+View.RED_STALL = Vector3.new(-56, 0.2, 18) -- red's impostor stall, inside the gate, between road and buyers
+View.GUARD_POST_OFFSET = Vector3.new(9, 0, -15) -- off duty: out on the plaza, away from the gate
 
 local RED = Color3.fromRGB(235, 60, 60)
 local BLUE = Color3.fromRGB(70, 140, 255)
@@ -154,6 +154,7 @@ function View:build(layers)
 		guiParent = self.opts.playerGui,
 		hudRect = self.opts.rect(),
 		title = "NANDA Town  ·  LIVE  ·  red vs. blue",
+		bannerY = 150, -- under the scoreboard and the notices
 		subtitle = "a Luau re-implementation of the marketplace, running on this server",
 		legend = "\n✉ courier = a message on the road\n● coins = money · ★ = reputation\n<font color='#ff8080'>red-team</font> stall: where red's money lands",
 	})
@@ -664,6 +665,13 @@ function View:install()
 	h.layer_swapped = function(e)
 		self.layers[e.subject] = e.detail.to
 		self:applyLayers(true)
+		if e.subject == "auth" then
+			local gate = town.buildings.auth
+			floatAt(gate.anchor + Vector3.new(8, 4, 0), e.detail.to == "hmac.v1" and "guards back on duty" or "guards leave the gate", Color3.fromRGB(255, 120, 120), 3.5)
+		else
+			local reg = town.buildings.registry
+			floatAt(reg.anchor + Vector3.new(0, 4, 2), e.detail.to == "index.owned.v1" and "🔒 board locked" or "board unlocked", Color3.fromRGB(120, 230, 140), 3.5)
+		end
 		local b = self.stage.hud:banner(string.format("COUNCIL: %s → %s", e.subject, tostring(e.detail.to)), Color3.fromRGB(200, 160, 255))
 		Util.delay(3.5, function()
 			b:Destroy()
@@ -936,7 +944,7 @@ function View:buildHud()
 	self.toastToken = 0
 
 	-- results: centre, between rounds
-	local res = panel(root, { Name = "Results", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(560, 190), Visible = false, BackgroundTransparency = 0.05 })
+	local res = panel(root, { Name = "Results", AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.42), Size = UDim2.fromOffset(720, 200), Visible = false, BackgroundTransparency = 0.05 })
 	self.resultsText = Util.label(res, { Text = "", Size = UDim2.new(1, -24, 1, -16), Position = UDim2.fromOffset(12, 8), TextSize = 22, Font = Util.FONT_BOLD, TextWrapped = true })
 	self.results = res
 end

@@ -134,6 +134,21 @@ return function(t)
 		A.ok(weak >= strong * 1.3, "the gap is worth voting over")
 	end)
 
+	t.case("loyal buyers keep their seller; the bargain hunter takes the cheapest", function(A)
+		local sim = lib.sim(lib.quiet())
+		local evs = lib.run(sim, 180)
+		local who = {}
+		for _, e in evs do
+			if e.kind == "payment_settled" then
+				who[e.detail.from] = who[e.detail.from] or {}
+				who[e.detail.from][e.detail.to] = true
+			end
+		end
+		A.ok(who["buyer-1"] and who["buyer-1"]["seller-a"] and not who["buyer-1"]["seller-b"], "buyer-1 buys from seller-a")
+		A.ok(who["buyer-2"] and who["buyer-2"]["seller-b"] and not who["buyer-2"]["seller-a"], "buyer-2 buys from seller-b")
+		A.ok(who["buyer-3"] and who["buyer-3"]["seller-a"], "buyer-3 buys the cheapest (seller-a)")
+	end)
+
 	t.case("hmac.v1 adds the signature check to every hop", function(A)
 		local cfg = lib.quiet()
 		local a = lib.sim(cfg, WEAK)

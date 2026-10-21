@@ -105,7 +105,7 @@ local function buildTower(folder: Instance): BasePart
 	end
 	local deck = Util.part({ Name = "Deck", Size = Vector3.new(16, 1, 16), CFrame = CFrame.new(base + Vector3.new(0, h + 0.5, 0)), Color = Color3.fromRGB(150, 110, 70), Material = Enum.Material.WoodPlanks, CanCollide = true, Parent = m })
 	for _, side in { { 0, -8, 16, 0.6 }, { 0, 8, 16, 0.6 }, { -8, 0, 0.6, 16 }, { 8, 0, 0.6, 16 } } do
-		Util.part({ Name = "Rail", Size = Vector3.new(side[3], 3, side[4]), CFrame = CFrame.new(base + Vector3.new(side[1], h + 2.5, side[2])), Color = wood, Material = Enum.Material.Wood, CanCollide = true, Transparency = 0.2, Parent = m })
+		Util.part({ Name = "Rail", Size = Vector3.new(side[3], 1.2, side[4]), CFrame = CFrame.new(base + Vector3.new(side[1], h + 2.6, side[2])), Color = wood, Material = Enum.Material.Wood, CanCollide = true, Parent = m })
 	end
 	Util.part({ Name = "Roof", Size = Vector3.new(17, 0.8, 17), CFrame = CFrame.new(base + Vector3.new(0, h + 11, 0)), Color = Color3.fromRGB(40, 70, 150), CanCollide = true, Parent = m })
 	for _, dx in { -7.5, 7.5 } do
@@ -121,8 +121,9 @@ local function buildTower(folder: Instance): BasePart
 	truss.CFrame = CFrame.new(base + Vector3.new(0, h / 2, -6.2))
 	truss.Color = Color3.fromRGB(90, 90, 100)
 	truss.Parent = m
-	local board = Util.part({ Name = "TowerSign", Size = Vector3.new(14, 2.4, 0.4), CFrame = CFrame.new(base + Vector3.new(0, h + 8.2, -8.4)), Color = Color3.fromRGB(25, 25, 32), Parent = m })
-	sign(board, Enum.NormalId.Front, "WATCHTOWER · blue", Color3.fromRGB(140, 180, 255), nil, 24)
+	-- the sign faces the spawn (south), out of the watchers' line of sight
+	local board = Util.part({ Name = "TowerSign", Size = Vector3.new(14, 2.4, 0.4), CFrame = CFrame.new(base + Vector3.new(0, h + 12.8, 8.4)), Color = Color3.fromRGB(25, 25, 32), Parent = m })
+	sign(board, Enum.NormalId.Back, "WATCHTOWER · blue", Color3.fromRGB(140, 180, 255), nil, 24)
 	local foot = Util.part({ Name = "TowerFoot", Size = Vector3.new(3, 3, 3), CFrame = CFrame.new(base + Vector3.new(0, 1.5, -9)), Transparency = 1, Parent = m })
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "Climb"

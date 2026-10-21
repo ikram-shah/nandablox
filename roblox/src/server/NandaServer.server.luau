@@ -223,7 +223,8 @@ local lastPick = -math.huge
 -- board. E starts it for everyone; in live mode the same arch leads back to
 -- the replay. The default experience (the replay) never changes until
 -- someone walks through it.
-local PORTAL = Vector3.new(30, 0, 46)
+-- far enough south (z) to stay out of the replay's overview frame
+local PORTAL = Vector3.new(26, 0, 68)
 local portalModel = Instance.new("Model")
 portalModel.Name = "RedBluePortal"
 portalModel.Parent = world
