@@ -1,0 +1,561 @@
+-- Red vs. Blue: the rules around a running TownSim. Rounds, teams, red's
+-- attack tokens, blue's flags, scoring, the council and the bots. Pure: the
+-- server passes in time (seconds since the game started) and player ids, and
+-- forwards the events this returns to every client. Lune runs it headless.
+--
+--   local g = Game.new({ config = Config, seed = 1 })
+--   g:join(id, "Peter"); g:setTeam(id, "blue")
+--   g:start(0)
+--   local events = g:tick(t)          -- every ~0.1 s
+--   g:attack(id, "forge" | "spoof", claimedSeller?)
+--   g:flag(id, targetId, { camera = "tower" })
+--   g:vote(id, "auth" | "registry")   -- toggles this player's yes vote
+--
+-- Game events (rendered like town events; layer "game"):
+--   round_started   subject round-N   {round, seconds, layers, tokens}
+--   round_finished  subject round-N   {red, blue, deals, escapes, catches, false_alarms, blocked, winner}
+--   threat_caught   subject threat-N  {attack, by, target, points, after}
+--   threat_escaped  subject threat-N  {attack, cents, points, after}
+--   false_alarm     subject target id {by, points, stall}
+--   layer_swapped   subject layer     {from, to, yes, present}
+
+local function sibling(name: string): any
+	if typeof(script) == "Instance" then
+		return require((script :: any).Parent[name])
+	end
+	return (require :: any)("./" .. name)
+end
+local TownSim = sibling("TownSim")
+local Council = sibling("Council")
+local Telemetry = sibling("Telemetry")
+local Bots = sibling("Bots")
+
+local Game = {}
+Game.__index = Game
+
+Game.TEAMS = { red = true, blue = true }
+Game.FLAG_COOLDOWN = 0.5
+
+-- opts = { config, seed?, layers?, sink? (telemetry record callback), policies? }
+function Game.new(opts)
+	local cfg = opts.config
+	local layers = {}
+	for k, v in opts.layers or cfg.DEFAULT_LAYERS do
+		layers[k] = v
+	end
+	local self = setmetatable({
+		cfg = cfg,
+		seed = opts.seed or 1,
+		policies = opts.policies,
+		layers = layers,
+		counter = { n = 0 },
+		out = {},
+		phase = "idle",
+		round = 0,
+		t = 0,
+		roundStart = 0,
+		phaseEnds = 0,
+		players = {}, -- id -> { name, team, camera, lastFlag }
+		council = Council.new({ auth = true, registry = true }),
+		telemetry = Telemetry.new(opts.sink),
+		redBot = Bots.RedBot.new(cfg, (opts.seed or 1) * 31 + 7),
+		blueBot = Bots.BlueBot.new(cfg, (opts.seed or 1) * 37 + 11),
+		owners = {}, -- threat id -> attacker id
+		wins = { red = 0, blue = 0 },
+		lastTick = 0,
+		lastAttack = -math.huge,
+	}, Game)
+	self:resetScores()
+	return self
+end
+
+function Game:resetScores()
+	self.score = { red = 0, blue = 0 }
+	self.tally = { escapes = 0, catches = 0, false_alarms = 0, blocked = 0, fizzled = 0 }
+	self.tokens = self.cfg.TOKENS_PER_ROUND
+end
+
+------------------------------------------------------------------------ events
+
+function Game:rt(): number
+	return self.t - self.roundStart
+end
+
+function Game:pull()
+	if self.sim then
+		for _, e in self.sim:drain() do
+			table.insert(self.out, e)
+		end
+	end
+end
+
+function Game:emit(observer: string, kind: string, subject: string, detail: { [string]: any }?)
+	self:pull()
+	self.counter.n += 1
+	local n = self.counter.n
+	local e = {
+		seq = n,
+		id = "ev-" .. n,
+		event_id = "ev-" .. n,
+		at = math.floor(math.max(0, self:rt()) * 100 + 0.5) / 100,
+		observer = observer,
+		kind = kind,
+		subject = subject,
+		layer = "game",
+		detail = detail or {},
+	}
+	table.insert(self.out, e)
+	return e
+end
+
+function Game:drain(): { any }
+	self:pull()
+	local o = self.out
+	self.out = {}
+	return o
+end
+
+-- An event as clients may see it: private keys (leading "_") removed.
+function Game.public(e)
+	local c = {}
+	for k, v in e do
+		if type(k) ~= "string" or string.sub(k, 1, 1) ~= "_" then
+			c[k] = v
+		end
+	end
+	return c
+end
+
+------------------------------------------------------------------------ players
+
+function Game:join(id: any, name: string?)
+	if not self.players[id] then
+		self.players[id] = { name = name or tostring(id), team = nil, camera = "walk", lastFlag = -math.huge }
+	end
+end
+
+function Game:leave(id: any)
+	self.players[id] = nil
+	self.council:remove(id)
+	self:checkCouncil()
+end
+
+function Game:setTeam(id: any, team: string?)
+	local p = self.players[id]
+	if p and (team == nil or Game.TEAMS[team]) then
+		p.team = team
+	end
+end
+
+function Game:teamOf(id: any): string?
+	if id == Bots.RED_ID then
+		return "red"
+	elseif id == Bots.BLUE_ID then
+		return "blue"
+	end
+	local p = self.players[id]
+	return p and p.team or nil
+end
+
+function Game:nameOf(id: any): string
+	if id == Bots.RED_ID then
+		return "RedBot"
+	elseif id == Bots.BLUE_ID then
+		return "BlueBot"
+	end
+	local p = self.players[id]
+	return p and p.name or tostring(id)
+end
+
+function Game:humans(): { red: number, blue: number, present: number }
+	local h = { red = 0, blue = 0, present = 0 }
+	for _, p in self.players do
+		h.present += 1
+		if p.team == "red" then
+			h.red += 1
+		elseif p.team == "blue" then
+			h.blue += 1
+		end
+	end
+	return h
+end
+
+function Game:botOn(which: string): boolean
+	local mode = which == "red" and self.cfg.RED_BOT or self.cfg.BLUE_BOT
+	if mode == "on" then
+		return true
+	elseif mode == "off" then
+		return false
+	end
+	return self:humans()[which] == 0
+end
+
+function Game:setCamera(id: any, mode: string)
+	local p = self.players[id]
+	if p and p.camera ~= mode then
+		p.camera = mode
+		self.telemetry:record(self.t, "camera", { player = self:nameOf(id), team = p.team, mode = mode })
+	end
+end
+
+function Game:watchers(): { [string]: string }
+	local w = {}
+	for _, p in self.players do
+		if p.team == "blue" then
+			w[p.name] = p.camera
+		end
+	end
+	return w
+end
+
+------------------------------------------------------------------------ rounds
+
+function Game:start(t: number)
+	self.t = t
+	self.lastTick = t
+	self:startRound()
+end
+
+function Game:startRound()
+	self.round += 1
+	self.phase = "play"
+	self.roundStart = self.t
+	self.phaseEnds = self.t + self.cfg.ROUND_SECONDS
+	self.lastAttack = -math.huge
+	if self.cfg.RESET_LAYERS_EACH_ROUND then
+		for k, v in self.cfg.DEFAULT_LAYERS do
+			self.layers[k] = v
+		end
+	end
+	self:resetScores()
+	self.redBot:reset()
+	self.blueBot:reset()
+	self.sim = nil
+	self:emit("town", "round_started", "round-" .. self.round, {
+		round = self.round,
+		seconds = self.cfg.ROUND_SECONDS,
+		layers = { auth = self.layers.auth, registry = self.layers.registry, transport = self.layers.transport },
+		tokens = self.tokens,
+	})
+	self.sim = TownSim.new({ config = self.cfg, layers = self.layers, seed = self.seed * 1000 + self.round, counter = self.counter, policies = self.policies })
+	self.sim:start()
+	self.telemetry:record(self.t, "round_started", { round = self.round, layers = { auth = self.layers.auth, registry = self.layers.registry } })
+	self:pull()
+end
+
+-- Red takes the round only by getting something through and outscoring blue:
+-- a round where every attack was stopped is blue's (the town held), even if
+-- blue's false alarms left it below zero.
+function Game:winner(): string
+	return (self.tally.escapes > 0 and self.score.red > self.score.blue) and "red" or "blue"
+end
+
+function Game:finishRound()
+	self:settle()
+	local w = self:winner()
+	self.wins[w] += 1
+	local deals = self.sim and self.sim.stats.dealsSettled or 0
+	self.lastDeals = deals
+	self:emit("town", "round_finished", "round-" .. self.round, {
+		round = self.round,
+		red = self.score.red,
+		blue = self.score.blue,
+		deals = deals,
+		escapes = self.tally.escapes,
+		catches = self.tally.catches,
+		false_alarms = self.tally.false_alarms,
+		blocked = self.tally.blocked,
+		winner = w,
+		layers = { auth = self.layers.auth, registry = self.layers.registry },
+	})
+	self.telemetry:record(self.t, "round_summary", {
+		round = self.round,
+		red = self.score.red,
+		blue = self.score.blue,
+		deals = deals,
+		escapes = self.tally.escapes,
+		catches = self.tally.catches,
+		false_alarms = self.tally.false_alarms,
+		blocked = self.tally.blocked,
+		winner = w,
+		layers = { auth = self.layers.auth, registry = self.layers.registry },
+	})
+	self.phase = "results"
+	self.phaseEnds = self.t + self.cfg.INTERMISSION_SECONDS
+	self.sim = nil
+end
+
+-- Score the threats the town resolved (escapes, blocks); catches are scored
+-- in flag(), where the catcher is known.
+function Game:settle()
+	if not self.sim then
+		return
+	end
+	for _, th in self.sim:drainResolved() do
+		local after = math.floor((th.resolvedAt - th.createdAt) * 10 + 0.5) / 10
+		if th.state == "escaped" then
+			self.score.red += self.cfg.ESCAPE_POINTS
+			self.tally.escapes += 1
+			self:emit(self.cfg.ATTACKER, "threat_escaped", th.id, { attack = th.kind, cents = th.cents, points = self.cfg.ESCAPE_POINTS, after = after, claimed = th.claimed })
+		elseif th.state == "blocked" then
+			self.tally.blocked += 1
+		elseif th.state == "fizzled" then
+			self.tally.fizzled += 1
+		end
+		self.telemetry:record(self.t, "threat_resolved", {
+			threat = th.id,
+			attack = th.kind,
+			outcome = th.state,
+			after = after,
+			watchers = self:watchers(),
+		})
+	end
+end
+
+function Game:tick(t: number): { any }
+	local dt = math.max(0, t - self.lastTick)
+	self.lastTick = t
+	self.t = t
+	if self.phase == "play" then
+		local rt = self:rt()
+		if self:botOn("red") then
+			self.redBot:tick(self, rt)
+		end
+		if self:botOn("blue") then
+			self.blueBot:tick(self, rt, dt)
+		end
+		if self.sim then
+			self.sim:advance(math.min(rt, self.cfg.ROUND_SECONDS))
+		end
+		self:settle()
+		if t >= self.phaseEnds then
+			self:finishRound()
+		end
+	elseif self.phase == "results" and t >= self.phaseEnds then
+		self:startRound()
+	end
+	return self:drain()
+end
+
+------------------------------------------------------------------------ red
+
+-- Returns ok, reason ("ok" | "not_playing" | "not_red" | "no_tokens" |
+-- "cooldown" | "bad_attack"), and the threat.
+function Game:attack(id: any, kind: string, claimed: string?): (boolean, string, any)
+	if self.phase ~= "play" or not self.sim then
+		return false, "not_playing", nil
+	end
+	if self:teamOf(id) ~= "red" then
+		return false, "not_red", nil
+	end
+	if kind ~= "forge" and kind ~= "spoof" then
+		return false, "bad_attack", nil
+	end
+	if self.tokens <= 0 then
+		return false, "no_tokens", nil
+	end
+	if self.t - self.lastAttack < self.cfg.ATTACK_COOLDOWN then
+		return false, "cooldown", nil
+	end
+	if claimed and not table.find(self.cfg.SELLERS, claimed) then
+		claimed = nil
+	end
+	self.tokens -= 1
+	self.lastAttack = self.t
+	self.sim:advance(self:rt()) -- bring the town up to now first
+	self:pull()
+	local th = kind == "forge" and self.sim:forge(claimed) or self.sim:spoof(claimed)
+	self.owners[th.id] = id
+	self.telemetry:record(self.t, "threat_appeared", {
+		threat = th.id,
+		attack = kind,
+		by = self:nameOf(id),
+		claimed = th.claimed,
+		layers = { auth = self.layers.auth, registry = self.layers.registry },
+		outcome = th.state, -- "blocked" when a layer stopped it at once
+	})
+	self:settle()
+	self:pull()
+	return true, "ok", th
+end
+
+------------------------------------------------------------------------ blue
+
+-- Returns "catch" | "false_alarm" | "stale" | "miss" | "not_blue" |
+-- "not_playing" | "cooldown".
+function Game:flag(id: any, target: string?, ctx: { [string]: any }?): string
+	local camera = ctx and ctx.camera or (self.players[id] and self.players[id].camera) or "?"
+	local team = self:teamOf(id)
+	local function click(result: string, extra: { [string]: any }?)
+		local r = { player = self:nameOf(id), team = team, target = target, result = result, camera = camera }
+		for k, v in extra or {} do
+			r[k] = v
+		end
+		self.telemetry:record(self.t, "flag", r)
+		return result
+	end
+	if self.phase ~= "play" or not self.sim then
+		return "not_playing"
+	end
+	if team ~= "blue" then
+		return "not_blue"
+	end
+	local p = self.players[id]
+	if p then
+		if self.t - p.lastFlag < Game.FLAG_COOLDOWN then
+			return "cooldown"
+		end
+		p.lastFlag = self.t
+	end
+	if not target or target == "" then
+		return click("miss")
+	end
+	self.sim:advance(self:rt())
+	self:pull()
+	local kind, obj, th = self.sim:target(target)
+	if not kind then
+		return click("miss")
+	end
+	if th then
+		local latency = math.floor((self.sim.now - th.createdAt) * 10 + 0.5) / 10
+		self.sim:catch(th.id)
+		self.sim:drainResolved() -- a catch is scored here, not in settle()
+		self.score.blue += self.cfg.CATCH_POINTS
+		self.tally.catches += 1
+		self:emit("watchtower", "threat_caught", th.id, {
+			attack = th.kind,
+			by = self:nameOf(id),
+			target = target,
+			points = self.cfg.CATCH_POINTS,
+			after = latency,
+			claimed = th.claimed,
+		})
+		self.telemetry:record(self.t, "threat_resolved", { threat = th.id, attack = th.kind, outcome = "caught", after = latency, watchers = self:watchers() })
+		return click("catch", { threat = th.id, latency = latency, attack = th.kind })
+	end
+	-- not a live threat: honest, or a threat that already ended
+	local honest = (obj.threat == nil)
+	if not honest then
+		return click("stale")
+	end
+	if kind == "message" and obj.state ~= "road" then
+		return click("stale")
+	end
+	self.sim:hold(target)
+	self.score.blue += self.cfg.FALSE_ALARM_POINTS
+	self.tally.false_alarms += 1
+	self:emit("watchtower", "false_alarm", target, { by = self:nameOf(id), points = self.cfg.FALSE_ALARM_POINTS, stall = self.cfg.FALSE_ALARM_STALL, what = kind })
+	return click("false_alarm")
+end
+
+-- a watchtower click that hit nothing flaggable (telemetry only)
+function Game:click(id: any, ctx: { [string]: any }?)
+	local p = self.players[id]
+	self.telemetry:record(self.t, "click", { player = self:nameOf(id), team = p and p.team, target = nil, camera = ctx and ctx.camera or (p and p.camera) })
+end
+
+------------------------------------------------------------------------ council
+
+function Game:needed(): number
+	return Council.needed(self:humans().present)
+end
+
+-- Toggle this player's yes vote on swapping `layer`; carry it on a majority.
+-- Returns the vote now (true / false), or nil for an unknown proposal / player.
+function Game:vote(id: any, layer: string): boolean?
+	if not self.players[id] or not self.cfg.LAYER_OPTIONS[layer] then
+		return nil
+	end
+	local yes = self.council:toggle(id, layer)
+	self.telemetry:record(self.t, "vote", { player = self:nameOf(id), proposal = layer, yes = yes, count = self.council:count(layer), needed = self:needed() })
+	self:checkCouncil()
+	return yes
+end
+
+function Game:otherOption(layer: string): string
+	local opts = self.cfg.LAYER_OPTIONS[layer]
+	return self.layers[layer] == opts[1] and opts[2] or opts[1]
+end
+
+function Game:checkCouncil()
+	local present = self:humans().present
+	for layer in self.cfg.LAYER_OPTIONS do
+		if self.council:passes(layer, present) then
+			local yes = self.council:count(layer)
+			local from, to = self.layers[layer], self:otherOption(layer)
+			self.council:clear(layer)
+			self.layers[layer] = to
+			if self.sim then
+				self.sim:advance(self:rt())
+				self:pull()
+			end
+			self:emit("council", "layer_swapped", layer, { from = from, to = to, yes = yes, present = present })
+			if self.sim then
+				self.sim:setLayer(layer, to)
+				self:settle()
+			end
+			self.telemetry:record(self.t, "layer_swapped", { layer = layer, from = from, to = to })
+		end
+	end
+end
+
+------------------------------------------------------------------------ for clients
+
+-- What a client joining mid-game replays to catch up: the round header and
+-- the town's current state.
+function Game:snapshotEvents(): { any }
+	local list = {}
+	table.insert(list, {
+		seq = self.counter.n,
+		id = "ev-" .. self.counter.n,
+		event_id = "ev-" .. self.counter.n,
+		at = math.floor(math.max(0, self:rt()) * 100 + 0.5) / 100,
+		observer = "town",
+		kind = "round_started",
+		subject = "round-" .. self.round,
+		layer = "game",
+		detail = {
+			round = self.round,
+			seconds = self.cfg.ROUND_SECONDS,
+			layers = { auth = self.layers.auth, registry = self.layers.registry, transport = self.layers.transport },
+			tokens = self.tokens,
+		},
+		snapshot = true,
+	})
+	if self.sim then
+		for _, e in self.sim:snapshotEvents() do
+			table.insert(list, e)
+		end
+	end
+	return list
+end
+
+-- The numbers the HUD shows (the server publishes them as attributes).
+function Game:status()
+	local h = self:humans()
+	return {
+		phase = self.phase,
+		round = self.round,
+		left = math.max(0, self.phaseEnds - self.t),
+		red = self.score.red,
+		blue = self.score.blue,
+		deals = self.sim and self.sim.stats.dealsSettled or (self.lastDeals or 0),
+		tokens = self.tokens,
+		auth = self.layers.auth,
+		registry = self.layers.registry,
+		voteAuth = self.council:count("auth"),
+		voteRegistry = self.council:count("registry"),
+		needed = Council.needed(h.present),
+		present = h.present,
+		redBot = self:botOn("red"),
+		blueBot = self:botOn("blue"),
+		winsRed = self.wins.red,
+		winsBlue = self.wins.blue,
+		escapes = self.tally.escapes,
+		catches = self.tally.catches,
+		falseAlarms = self.tally.false_alarms,
+		blocked = self.tally.blocked,
+	}
+end
+
+return Game
