@@ -40,6 +40,7 @@ Util.LAYER_COLORS = {
 	data_facts = Color3.fromRGB(230, 230, 230),
 	agent = Color3.fromRGB(180, 180, 180),
 	other = Color3.fromRGB(180, 180, 180),
+	game = Color3.fromRGB(235, 235, 245), -- red vs. blue: rounds, catches, escapes, council
 }
 
 function Util.roleColor(role: string?): Color3

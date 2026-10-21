@@ -153,6 +153,9 @@ local function bodySummary(kind: string?, body: { [string]: any }?): string
 	elseif body.cents then
 		table.insert(bits, body.cents .. "¢")
 	end
+	if body.pay_to then
+		table.insert(bits, "→ pay " .. tostring(body.pay_to))
+	end
 	return table.concat(bits, " ")
 end
 
@@ -174,6 +177,8 @@ function Replay.describe(e, trace): string
 		return string.format("<b>%s</b>'s card is pinned <font color='#ff6060'>UNVERIFIED</font> (publisher %s)", subj, tostring(d.publisher))
 	elseif k == "card_publish_refused" then
 		return string.format("Registry <font color='#ff6060'>refuses</font> card %s: %s", subj, tostring(d.reason))
+	elseif k == "signature_invalid" and e.card then
+		return string.format("<font color='#ff6060'>A card claiming %s is not signed by %s's key</font>; index.v1 pins it anyway", subj, tostring(d.claimed))
 	elseif k == "signature_invalid" then
 		return string.format("<font color='#ff6060'>Guards stop a forged signature</font> on %s (claimed %s)", subj, tostring(d.claimed))
 	elseif k == "message_sent" then
@@ -220,6 +225,30 @@ function Replay.describe(e, trace): string
 		return string.format("<b>%s</b> bids %s¢ on %s", who, tostring(d.cents), subj)
 	elseif k == "task_awarded" then
 		return string.format("%s awarded to <b>%s</b> at %s¢", subj, tostring(d.winner), tostring(d.cents))
+	-- live town (RedBlue/TownSim.luau) and the red vs. blue game around it
+	elseif k == "registry_lookup" then
+		return string.format("<b>%s</b> looks up %s on the notice board%s", who, subj, d.owned_check and " (checking each listing's key)" or "")
+	elseif k == "card_withdrawn" then
+		return string.format("Card <b>%s</b> (publisher %s) comes down: %s", subj, tostring(d.publisher), tostring(d.reason))
+	elseif k == "delivery_failed" then
+		return string.format("<font color='#ff6060'>✉ %s to %s never arrives</font>: %s", tostring(d.kind), tostring(d.to), tostring(d.reason))
+	elseif k == "negotiation_abandoned" then
+		return string.format("<b>%s</b> abandons %s with %s: %s", who, subj, tostring(d.seller), tostring(d.reason))
+	elseif k == "message_unhandled" then
+		return string.format("<b>%s</b> ignores %s", who, tostring(d.kind))
+	elseif k == "round_started" then
+		local l = d.layers or {}
+		return string.format("<b>Round %s</b> begins · auth <b>%s</b> · registry <b>%s</b> · red has %s attacks", tostring(d.round), tostring(l.auth), tostring(l.registry), tostring(d.tokens))
+	elseif k == "round_finished" then
+		return string.format("<b>Round %s over</b>: RED %s · BLUE %s · %s deals settled · <b>%s</b> wins", tostring(d.round), tostring(d.red), tostring(d.blue), tostring(d.deals), string.upper(tostring(d.winner)))
+	elseif k == "threat_caught" then
+		return string.format("<font color='#5aa0ff'>Watchtower: <b>%s</b> caught a %s</font> after %s s (+%s blue)", tostring(d.by), d.attack == "forge" and "forged invoice" or "spoofed card", tostring(d.after), tostring(d.points))
+	elseif k == "threat_escaped" then
+		return string.format("<font color='#ff5050'>Red's %s got away with %s</font> (+%s red)", d.attack == "forge" and "forged invoice" or "spoofed card", Util.money(d.cents), tostring(d.points))
+	elseif k == "false_alarm" then
+		return string.format("<font color='#ffb040'>False alarm</font>: <b>%s</b> flagged an honest %s (%s blue); it is held %s s", tostring(d.by), d.what == "card" and "card" or "courier", tostring(d.points), tostring(d.stall))
+	elseif k == "layer_swapped" then
+		return string.format("<font color='#c080ff'>Council</font>: %s switches <b>%s → %s</b> (%s of %s voted)", subj, tostring(d.from), tostring(d.to), tostring(d.yes), tostring(d.present))
 	end
 	return string.format("%s · %s · %s", who, k, subj)
 end
@@ -372,16 +401,25 @@ end
 
 ------------------------------------------------------------------------ run
 
-function Replay.run(trace, opts: { [string]: any }?)
-	local o = opts or {}
-	if Replay.current then
-		Replay.current.cancelled = true -- before the clock restarts under it
-	end
-	Util.startClock(o.clock)
-	Util.speed = o.speed or 1
+-- Build the town, the HUD and the event handlers for `trace` without playing
+-- anything. Returns a stage whose handle(e) draws one event now. Replay.run
+-- feeds it a recorded trace on a schedule; RedBlueView feeds it a live stream.
+-- With o.live the trace has no events, and an event's timing comes from its
+-- own hints instead of looking ahead in the trace: `travel` (seconds a
+-- courier is on the road), `origin` / `dest` (where it really sets off and
+-- lands, if not the sender's or addressee's spot), `copy` (2 = the duplicate's
+-- delivery). See RedBlue/TownSim.luau. o.title / o.subtitle / o.legend
+-- replace the HUD's header and legend text.
+function Replay.stage(trace, o: { [string]: any })
 	local parent = o.parent or workspace
 	local town = Town.build(trace, parent)
-	local hud = Hud.new(trace, o.guiParent or game:GetService("StarterGui"), { rect = o.hudRect, bannerY = o.bannerY })
+	local hud = Hud.new(trace, o.guiParent or game:GetService("StarterGui"), {
+		rect = o.hudRect,
+		bannerY = o.bannerY,
+		title = o.title,
+		subtitle = o.subtitle,
+		legend = o.legend,
+	})
 	local fx = Instance.new("Folder")
 	fx.Name = "Effects"
 	fx.Parent = town.root
@@ -391,7 +429,10 @@ function Replay.run(trace, opts: { [string]: any }?)
 		Replay.overview(cam, o.hudRect and o.hudRect.w)
 	end
 
-	local times, scale = Replay.schedule(trace, o.targetSeconds or 52)
+	local times, scale = {}, 1
+	if not o.live then
+		times, scale = Replay.schedule(trace, o.targetSeconds or 52)
+	end
 	local bySeq = {}
 	for i, e in trace.events do
 		bySeq[e.seq] = i
@@ -400,12 +441,18 @@ function Replay.run(trace, opts: { [string]: any }?)
 		local i = seq and bySeq[seq]
 		return i and times[i] or nil
 	end
+	-- the scheduled time of an event; a live event is shown when it arrives
+	local function nowOf(e): number
+		local i = bySeq[e.seq]
+		return (not o.live and i and times[i]) or Util.now()
+	end
 
 	-- state
 	local balances, initialTotal = {}, 0
 	local escrow, escrowTotal = {}, 0
 	local cards, receipts = {}, {}
 	local envelopes = {} -- message id -> { part, ghost }
+	local orderToNid = {} -- order id -> negotiation id (from purchase orders)
 	local ledgerLog = {}
 	local A = town.agents
 
@@ -418,6 +465,16 @@ function Replay.run(trace, opts: { [string]: any }?)
 			return a.chest
 		end
 		return town.center
+	end
+	-- where a courier really sets off: the sender's spot, unless the event says
+	-- otherwise (live: "gate" for a forgery, an impostor's stall)
+	local function originOf(e): Vector3
+		if e.origin == "gate" then
+			return town.buildings.auth.anchor + Vector3.new(4, 2, 0)
+		elseif e.origin then
+			return posOf(e.origin)
+		end
+		return posOf(e.observer)
 	end
 
 	local function refreshBalance(name: string)
@@ -587,13 +644,21 @@ function Replay.run(trace, opts: { [string]: any }?)
 			local b = d.body or {}
 			return string.format("Shipping %s × %s 📦", tostring(b.quantity), tostring(b.sku))
 		end,
+		invoice = function(d)
+			local b = d.body or {}
+			return string.format("Invoice %s → pay %s", Util.money(b.cents), tostring(b.pay_to))
+		end,
 	}
 
 	handlers.message_sent = function(e)
 		local d = e.detail
 		local m = trace.messages[e.subject] or {}
-		local from, to = posOf(e.observer), posOf(d.to)
+		if o.live and d.body and d.body.order_id and d.body.nid then
+			orderToNid[d.body.order_id] = d.body.nid
+		end
+		local from, to = originOf(e), posOf(e.dest or d.to)
 		local env = makeEnvelope(fx, d.kind, false)
+		env:SetAttribute("MsgId", e.subject)
 		local firstDelivery = m.deliveries and m.deliveries[1]
 		local arrive = timeOf(firstDelivery)
 		-- a dropped message falls at its fault time instead
@@ -603,8 +668,11 @@ function Replay.run(trace, opts: { [string]: any }?)
 				dropSeq = f.seq
 			end
 		end
-		local now = times[bySeq[e.seq]]
+		local now = nowOf(e)
 		local dur = ((arrive or timeOf(dropSeq) or (now + 1.2)) - now)
+		if e.travel then
+			dur = e.travel
+		end
 		dur = math.max(dur, 0.5)
 		envelopes[e.subject] = { part = env, kind = d.kind, to = d.to, from = e.observer }
 		local target = dropSeq and not arrive and (from + to) / 2 + Vector3.new(0, 4, 0) or to
@@ -620,7 +688,7 @@ function Replay.run(trace, opts: { [string]: any }?)
 		local env2 = envelopes[e.subject .. "#dup"]
 		-- the duplicate copy lands at the second delivery
 		local m = trace.messages[e.subject] or {}
-		local isSecond = m.deliveries and m.deliveries[2] == e.seq
+		local isSecond = (m.deliveries and m.deliveries[2] == e.seq) or e.copy == 2
 		local target = isSecond and env2 or env
 		if target and target.part and target.part.Parent then
 			local p = target.part
@@ -657,11 +725,13 @@ function Replay.run(trace, opts: { [string]: any }?)
 		local d = e.detail
 		local m = trace.messages[e.subject] or {}
 		local second = m.deliveries and m.deliveries[2]
-		local now = times[bySeq[e.seq]]
-		local arrive = timeOf(second) or (now + 1.5)
+		local now = nowOf(e)
+		local arrive = timeOf(second) or (now + (e.travel or 1.5))
 		local env = makeEnvelope(fx, d.kind or m.kind, true)
+		env:SetAttribute("MsgId", e.subject)
 		envelopes[e.subject .. "#dup"] = { part = env, kind = d.kind or m.kind }
-		Util.fly(env, posOf(e.from or m.from), posOf(d.to), 15, math.max(arrive - now, 0.6) * 0.97)
+		local src = e.origin and originOf(e) or posOf(e.from or m.from)
+		Util.fly(env, src, posOf(e.dest or d.to), 15, math.max(arrive - now, 0.6) * 0.97)
 		floater(fx, posOf(e.from or m.from) + Vector3.new(0, 8, 0), "⚠ DUPLICATED", Color3.fromRGB(255, 140, 50))
 	end
 
@@ -747,7 +817,6 @@ function Replay.run(trace, opts: { [string]: any }?)
 			end)
 		end
 	end
-	local orderToNid = {}
 	for _, ev in trace.events do
 		local body = ev.kind == "message_sent" and ev.detail and ev.detail.body
 		if body and body.order_id and body.nid then
@@ -924,7 +993,9 @@ function Replay.run(trace, opts: { [string]: any }?)
 		if not ok then
 			warn("[NandaTown] handler", e.kind, e.id, err)
 		end
-		hud:show(e, Replay.describe(e, trace))
+		if not e.snapshot then
+			hud:show(e, Replay.describe(e, trace))
+		end
 		if o.onEvent then
 			local okCb, errCb = pcall(o.onEvent, e)
 			if not okCb then
@@ -932,6 +1003,50 @@ function Replay.run(trace, opts: { [string]: any }?)
 			end
 		end
 	end
+
+	return {
+		trace = trace,
+		town = town,
+		hud = hud,
+		fx = fx,
+		times = times,
+		scale = scale,
+		handle = handle,
+		handlers = handlers,
+		-- for a live view that adds its own handlers on top
+		ctx = {
+			agent = agent,
+			posOf = posOf,
+			originOf = originOf,
+			envelopes = envelopes,
+			balances = balances,
+			refreshBalance = refreshBalance,
+			refreshLedger = refreshLedger,
+			flyPaper = flyPaper,
+			closeDeal = closeDeal,
+		},
+	}
+end
+
+-- Effects a live view reuses (RedBlueView).
+Replay.effects = {
+	setBubble = setBubble,
+	floater = floater,
+	flash = flash,
+	makeEnvelope = makeEnvelope,
+	coinStack = coinStack,
+	flyModel = flyModel,
+}
+
+function Replay.run(trace, opts: { [string]: any }?)
+	local o = opts or {}
+	if Replay.current then
+		Replay.current.cancelled = true -- before the clock restarts under it
+	end
+	Util.startClock(o.clock)
+	Util.speed = o.speed or 1
+	local st = Replay.stage(trace, o)
+	local town, hud, times, scale, handle = st.town, st.hud, st.times, st.scale, st.handle
 
 	local lead = o.lead or 0
 	local state = { done = false, scale = scale, total = times[#times] + lead, town = town, hud = hud, times = times, lead = lead, lastSeq = 0, caughtUp = 0 }

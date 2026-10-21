@@ -10,6 +10,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local NT = ReplicatedStorage:WaitForChild("NandaTown")
 local PlayClock = require(NT:WaitForChild("PlayClock"))
 local Util = require(NT:WaitForChild("Util"))
+-- Red vs. Blue (live): a mode of this place, started from the portal by the spawn
+local RedBlueServer = require(game:GetService("ServerScriptService"):WaitForChild("RedBlueServer"))
 
 ------------------------------------------------------------------------ world
 
@@ -212,10 +214,71 @@ for i, name in PlayClock.ORDER do
 	end
 end
 
------------------------------------------------------------------------- clock
-
 local current = { name = "", start = 0, period = 60 }
 local lastPick = -math.huge
+
+------------------------------------------------------------------------ portal
+
+-- Red vs. Blue (live): an arch on the right of the spawn, opposite the
+-- board. E starts it for everyone; in live mode the same arch leads back to
+-- the replay. The default experience (the replay) never changes until
+-- someone walks through it.
+local PORTAL = Vector3.new(30, 0, 46)
+local portalModel = Instance.new("Model")
+portalModel.Name = "RedBluePortal"
+portalModel.Parent = world
+local portalCF = CFrame.lookAt(PORTAL, Vector3.new(SPAWN.X, 0, SPAWN.Z))
+for i, dx in { -5, 5 } do
+	Util.part({
+		Name = "Pillar",
+		Size = Vector3.new(2, 12, 2),
+		CFrame = portalCF * CFrame.new(dx, 6, 0),
+		Color = i == 1 and Color3.fromRGB(215, 50, 50) or Color3.fromRGB(50, 110, 235),
+		Material = Enum.Material.SmoothPlastic,
+		CanCollide = true,
+		Parent = portalModel,
+	})
+end
+local portalTop = Util.part({ Name = "Lintel", Size = Vector3.new(14, 3, 1.2), CFrame = portalCF * CFrame.new(0, 13.5, 0), Color = Color3.fromRGB(25, 25, 32), CanCollide = true, Parent = portalModel })
+local portalSign = Util.sign(portalTop, Enum.NormalId.Back, "", { bg = Color3.fromRGB(25, 25, 32), color = GOLD, pps = 24 })
+local portalVeil = Util.part({ Name = "Veil", Size = Vector3.new(8, 11.5, 0.3), CFrame = portalCF * CFrame.new(0, 5.9, 0), Color = Color3.fromRGB(160, 110, 230), Material = Enum.Material.Neon, Transparency = 0.55, Parent = portalModel })
+local portalPrompt = Instance.new("ProximityPrompt")
+portalPrompt.Name = "Live"
+portalPrompt.HoldDuration = 0.4
+portalPrompt.MaxActivationDistance = 10
+portalPrompt.RequiresLineOfSight = false
+portalPrompt.KeyboardKeyCode = Enum.KeyCode.E
+portalPrompt.Parent = portalVeil
+
+local function setPortal(on: boolean)
+	portalSign.Text = on and "BACK TO THE REPLAY  ·  E" or "RED vs. BLUE  ·  LIVE  ·  E"
+	portalPrompt.ActionText = on and "Back to the replay (for everyone)" or "Start Red vs. Blue (for everyone)"
+	portalPrompt.ObjectText = on and "Red vs. Blue is on" or "a live town, two teams, a council"
+	portalVeil.Color = on and Color3.fromRGB(250, 190, 60) or Color3.fromRGB(160, 110, 230)
+end
+setPortal(false)
+portalPrompt.Triggered:Connect(function(player)
+	if current.name == PlayClock.LIVE then
+		startRun(PlayClock.DEFAULT, workspace:GetServerTimeNow() + PlayClock.SWITCH_DELAY, player)
+	else
+		startRun(PlayClock.LIVE, workspace:GetServerTimeNow(), player)
+	end
+end)
+
+-- automation (MCP execute_luau on the server): NandaServerCmd = "live" | "replay"
+workspace:GetAttributeChangedSignal("NandaServerCmd"):Connect(function()
+	local cmd = workspace:GetAttribute("NandaServerCmd")
+	if cmd == "live" then
+		startRun(PlayClock.LIVE, workspace:GetServerTimeNow())
+	elseif cmd == "replay" then
+		startRun(PlayClock.DEFAULT, workspace:GetServerTimeNow() + PlayClock.SWITCH_DELAY)
+	end
+	if cmd ~= nil and cmd ~= "" then
+		workspace:SetAttribute("NandaServerCmd", "")
+	end
+end)
+
+------------------------------------------------------------------------ clock
 
 local function highlightPanel(name: string)
 	for n, p in panels do
@@ -225,10 +288,38 @@ local function highlightPanel(name: string)
 	end
 end
 
+local live = nil -- the running RedBlueServer, in live mode
+
 startRun = function(name: string, start: number, by: Player?)
 	local trace = PlayClock.load(name)
-	if not trace then
+	if not trace and name ~= PlayClock.LIVE then
 		return
+	end
+	if by then
+		local now = os.clock()
+		if now - lastPick < 1.0 then
+			return
+		end
+	end
+	if name == PlayClock.LIVE then
+		lastPick = os.clock()
+		if not live then
+			live = RedBlueServer.start(world) -- remotes exist before clients hear of it
+		end
+		current.name, current.start, current.period = name, start, math.huge
+		workspace:SetAttribute("NandaScenario", name)
+		workspace:SetAttribute("NandaStart", start)
+		workspace:SetAttribute("NandaPeriod", 0)
+		workspace:SetAttribute("NandaPickedBy", by and by.DisplayName or "")
+		workspace:SetAttribute("NandaRun", (workspace:GetAttribute("NandaRun") or 0) + 1)
+		highlightPanel("")
+		setPortal(true)
+		return
+	end
+	if live then
+		live.stop()
+		live = nil
+		setPortal(false)
 	end
 	if by then
 		-- one pick per second for the whole server, so two players can't thrash it
@@ -258,7 +349,7 @@ task.spawn(function()
 		task.wait(0.2)
 		local now = workspace:GetServerTimeNow()
 		local nextStart = current.start + current.period
-		if now >= nextStart then
+		if current.name ~= PlayClock.LIVE and now >= nextStart then
 			if now - nextStart > current.period then
 				nextStart = now + PlayClock.SWITCH_DELAY
 			end

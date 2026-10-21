@@ -349,7 +349,13 @@ end
 
 function TownSim:deliver(msg)
 	msg.state = "delivered"
-	self:emit("town", "message_delivered", msg.id, { to = msg.to, kind = msg.kind }, { from = msg.from, _threat = msg.threat })
+	-- hold: seconds an invoice sits on the buyer's desk before it is paid (a
+	-- forged one waits for its payout, an honest one is paid at once)
+	local hold = nil
+	if msg.kind == "invoice" then
+		hold = msg.forged and math.max(0, msg.sentAt + self.cfg.FORGE_WINDOW - self.now) or self.cfg.THINK_SECONDS
+	end
+	self:emit("town", "message_delivered", msg.id, { to = msg.to, kind = msg.kind }, { from = msg.from, hold = hold, _threat = msg.threat })
 	local deal = msg.deal
 	if deal and deal.aborted then
 		return
@@ -902,9 +908,17 @@ function TownSim:snapshotEvents(): { any }
 	self.out = {}
 	local savedN = self.counter.n
 	local cfg = self.cfg
+	-- money in escrow is shown as opened-with, then held again, so the
+	-- client's ledger adds up
+	local held = {}
+	for _, d in self.deals do
+		if d.escrow then
+			held[d.buyer] = (held[d.buyer] or 0) + d.escrow
+		end
+	end
 	local function all(list)
 		for _, n in list do
-			self:emit("town", "account_opened", n, { balance_cents = self.balances[n] or 0 })
+			self:emit("town", "account_opened", n, { balance_cents = (self.balances[n] or 0) + (held[n] or 0) })
 		end
 	end
 	all(cfg.SELLERS)
@@ -921,6 +935,11 @@ function TownSim:snapshotEvents(): { any }
 		local kind = c.verified and "card_registered" or "card_unverified"
 		local detail = c.verified and { capabilities = c.capabilities, verified = true } or { capabilities = c.capabilities, publisher = c.publisher }
 		self:emit("town", kind, c.name, detail, { card = c.id, price = c.price })
+	end
+	for _, d in self.deals do
+		if d.escrow then
+			self:emit("town", "escrow_held", d.order_id, { from = d.buyer, cents = d.escrow })
+		end
 	end
 	for _, s in cfg.SELLERS do
 		if (self.reputation[s] or 0) ~= 0 then

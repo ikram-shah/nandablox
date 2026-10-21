@@ -35,6 +35,7 @@ local Replay = require(NT:WaitForChild("Replay"))
 local Util = require(NT:WaitForChild("Util"))
 local Movie = require(NT:WaitForChild("Movie"))
 local PlayClock = require(NT:WaitForChild("PlayClock"))
+local RedBlueView = require(NT:WaitForChild("RedBlueView"))
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
@@ -53,6 +54,8 @@ end)
 local mode = "walk" -- walk | overview | fly
 local cinema: { [string]: any }? = nil
 local state: any = nil -- the shared replay's state (Replay.run)
+local liveView: any = nil -- Red vs. Blue (live), when the server runs it (RedBlueView)
+local lastRect = "" -- the HUD rect last applied (see the Heartbeat below)
 local shared = { name = nil :: string?, start = 0, run = 0, timeline = nil :: any }
 
 ------------------------------------------------------------------------ helpers
@@ -354,6 +357,33 @@ local function joinShared()
 	if type(name) ~= "string" or type(start) ~= "number" then
 		return
 	end
+	if name == PlayClock.LIVE then
+		-- Red vs. Blue: the server streams a live town instead of a trace
+		state = nil
+		shared.name, shared.start, shared.timeline = name, start, nil
+		shared.run = workspace:GetAttribute("NandaRun") or 0
+		if not liveView then
+			liveView = RedBlueView.start({
+				playerGui = playerGui,
+				camera = camera,
+				rect = hudRect,
+				getMode = function()
+					return mode
+				end,
+				onTown = makeSolid,
+			})
+			lastRect = ""
+		end
+		local by = workspace:GetAttribute("NandaPickedBy")
+		if type(by) == "string" and by ~= "" then
+			shared.toast = { text = string.format("%s started <b>Red vs. Blue</b>", by), untilT = os.clock() + 4 }
+		end
+		return
+	end
+	if liveView then
+		liveView:stop()
+		liveView = nil
+	end
 	local trace = PlayClock.load(name)
 	if not trace then
 		warn("[NandaPlay] unknown scenario", name)
@@ -477,7 +507,9 @@ end
 ------------------------------------------------------------------------ input
 
 local function press(key: string)
-	if key == "M" then
+	if key == "M" and liveView then
+		shared.toast = { text = "cinema plays recorded runs: go back to the replay first", untilT = os.clock() + 3 }
+	elseif key == "M" then
 		startCinema()
 	elseif cinema then
 		return
@@ -553,7 +585,6 @@ RunService:BindToRenderStep("NandaPlayCamera", Enum.RenderPriority.Camera.Value 
 	stepFly()
 end)
 
-local lastRect = ""
 RunService.Heartbeat:Connect(function()
 	if state then
 		workspace:SetAttribute("NandaSeq", state.lastSeq)
@@ -565,7 +596,10 @@ RunService.Heartbeat:Connect(function()
 	-- the HUD lives below the topbar and follows the window
 	local r = hudRect()
 	local key = string.format("%d,%d,%d,%d", r.x, r.y, r.w, r.h)
-	if key ~= lastRect and state and state.hud and not cinema then
+	if key ~= lastRect and liveView and liveView.root then
+		lastRect = key
+		liveView:setRect(r)
+	elseif key ~= lastRect and state and state.hud and not cinema then
 		lastRect = key
 		state.hud:setRect(r)
 	end

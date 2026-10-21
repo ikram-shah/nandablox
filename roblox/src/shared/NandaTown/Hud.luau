@@ -22,6 +22,8 @@ end
 -- opts.rect = {x, y, w, h} (pixels) confines the whole overlay to part of the
 -- screen (movie mode: the 16:9 area the recorder crops to; see Hud:setRect);
 -- opts.bannerY moves the verdict banner down (under movie mode's chapter caption).
+-- opts.title / opts.subtitle / opts.legend replace the header and legend text
+-- (the live red vs. blue town); a trace with no events hides the progress bar.
 function Hud.new(trace, parent: Instance, opts: { [string]: any }?)
 	local bannerY = (opts and opts.bannerY) or 84
 	local old = parent:FindFirstChild("NandaTownHud")
@@ -44,15 +46,17 @@ function Hud.new(trace, parent: Instance, opts: { [string]: any }?)
 	-- title, top-left
 	local title = panel(root, { Name = "Title", Position = UDim2.fromOffset(14, 12), Size = UDim2.fromOffset(470, 62) })
 	Util.label(title, {
-		Text = "NANDA Town  ·  replay of one real run",
+		Name = "Heading",
+		Text = (opts and opts.title) or "NANDA Town  ·  replay of one real run",
 		Size = UDim2.new(1, -20, 0, 32),
 		Position = UDim2.fromOffset(12, 4),
 		TextSize = 26,
 		Font = Util.FONT_HEAVY,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
-	Util.label(title, {
-		Text = string.format(
+	local sub = Util.label(title, {
+		Name = "Sub",
+		Text = (opts and opts.subtitle) or string.format(
 			"scenario <b>%s</b> · seed %s · run %s · %d events",
 			tostring(trace.scenario),
 			tostring(trace.seed),
@@ -80,9 +84,9 @@ function Hud.new(trace, parent: Instance, opts: { [string]: any }?)
 		table.insert(rows, string.format('<font color="rgb(%d,%d,%d)">■</font> %s', c.R * 255, c.G * 255, c.B * 255, r))
 	end
 	local legendText = table.concat(rows, "    ")
-		.. "\n✉ envelope = message on the road"
+		.. ((opts and opts.legend) or ("\n✉ envelope = message on the road"
 		.. "\n● gold coins = money (escrow → vault → payee)"
-		.. "\n★ over a head = reputation score"
+		.. "\n★ over a head = reputation score"))
 	local legend = panel(root, { Name = "Legend", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 12), Size = UDim2.fromOffset(330, 100) })
 	Util.label(legend, {
 		Text = legendText,
@@ -170,6 +174,7 @@ function Hud.new(trace, parent: Instance, opts: { [string]: any }?)
 	local self = setmetatable({
 		gui = g,
 		root = root,
+		sub = sub,
 		clock = clock,
 		evno = evno,
 		chip = chip,
@@ -194,12 +199,18 @@ end
 
 function Hud:show(e, text: string)
 	self.clock.Text = string.format("t = %.2f s", e.at)
-	self.evno.Text = string.format("%s  (%d/%d)", e.id, e.seq, self.total)
+	if self.total > 0 then
+		self.evno.Text = string.format("%s  (%d/%d)", e.id, e.seq, self.total)
+	else
+		self.evno.Text = e.id -- live: no end to count toward
+	end
 	local c = Util.LAYER_COLORS[e.layer] or Util.LAYER_COLORS.other
 	self.chip.BackgroundColor3 = c
 	self.chipText.Text = string.upper(string.gsub(e.layer, "_", " "))
 	self.main.Text = text
-	self.bar.Size = UDim2.new(e.seq / self.total, -28 * e.seq / self.total, 0, 6)
+	if self.total > 0 then
+		self.bar.Size = UDim2.new(e.seq / self.total, -28 * e.seq / self.total, 0, 6)
+	end
 	table.insert(self.history, string.format("<b>%.1fs</b>  %s", e.at, text))
 	local n = #self.history
 	for i = 1, 5 do

@@ -24,6 +24,9 @@ PlayClock.PAUSE = 4.0 -- between runs (a countdown on screen)
 PlayClock.SWITCH_DELAY = 1.0 -- a board pick starts the new run this far ahead
 
 PlayClock.DEFAULT = "marketplace"
+-- Not a trace: NandaScenario = LIVE means Red vs. Blue (live), a TownSim
+-- running on the server (RedBlueServer.luau) instead of a recorded run.
+PlayClock.LIVE = "redblue"
 
 -- The board's order: the movie's scenario first, then the rest by name.
 PlayClock.ORDER = {
