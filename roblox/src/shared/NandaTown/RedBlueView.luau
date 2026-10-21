@@ -33,7 +33,9 @@ local View = {}
 View.__index = View
 
 View.PICK_PX = 44
-View.RED_STALL = Vector3.new(-56, 0.2, 18) -- red's impostor stall, inside the gate, between road and buyers
+-- red's impostor stall: inside the gate, left of buyer-1, clear of the gate's
+-- labels in the overview (placement checked in Studio, 2026-10-21)
+View.RED_STALL = Vector3.new(-58, 0.2, 28)
 View.GUARD_POST_OFFSET = Vector3.new(9, 0, -15) -- off duty: out on the plaza, away from the gate
 
 local RED = Color3.fromRGB(235, 60, 60)
@@ -653,7 +655,8 @@ function View:install()
 	end
 	h.threat_escaped = function(e)
 		local a = ctx.agent(Config.ATTACKER)
-		local pos = a and a.top or View.RED_STALL
+		-- a little to the right of the stall, so the overview's left edge never clips it
+		local pos = (a and a.top or View.RED_STALL) + Vector3.new(10, 0, 0)
 		burst(pos, RED)
 		floatAt(pos, "✗ ESCAPED +" .. tostring(e.detail.points) .. " RED", RED, 3.5)
 	end
