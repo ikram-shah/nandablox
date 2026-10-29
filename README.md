@@ -28,8 +28,11 @@ council of the players votes which layer implementations run. See
 
 Every trader in that town is scripted Luau, except that **one of them can be
 driven by a language model**: `seller-b`, through the harness in `harness/`,
-by pressing **L**. The default is scripted, and the model-driven path runs in
-Studio only, because a live Roblox server cannot reach `localhost`. See
+by pressing **L**. The default is scripted, in Studio and in the published
+place alike. Since a live Roblox server cannot reach `localhost`, the harness
+is also hosted — <https://nanda-harness-production.up.railway.app>, behind a
+shared secret, a spend cap and rate limits — so **L** works in the published
+place too. See
 ["Model-driven agents"](roblox/README.md#model-driven-agents-one-llm-through-an-external-harness).
 
 Everything is in the repo: the place is built by Rojo from `roblox/`, every part is

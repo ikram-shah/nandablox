@@ -498,26 +498,66 @@ model-driven at all. For automation there is `RB_LlmCmd` on the server
 points the server at a harness somewhere other than `Config.LLM_URL` without
 a rebuild.
 
-**Studio only, today.** A Studio playtest can reach `127.0.0.1`; a live Roblox
-server cannot. The published place therefore has no model-driven agent — it is
-the scripted town, exactly as before. To change that, a hosted harness would
-need:
+**Hosted, since 2026-10-29.** A Studio playtest can reach `127.0.0.1`; a live
+Roblox server cannot, so the harness runs on Railway and the published place
+points at it:
 
-1. a **public HTTPS endpoint** (Cloud Run, Railway, Fly, or a `cloudflared`
-   tunnel to this machine) on 443 or any port ≥ 1024, since Roblox blocks
-   ports under 1024 except 80/443 and refuses roblox.com hosts;
-2. the **shared secret** turned on (`--token`, `x-nanda-token`), and ideally
-   the Roblox key held as a `Secret` rather than in the place, because anyone
-   who finds the URL can otherwise spend the key;
-3. `Config.LLM_URL` pointed at it (or `RB_LlmUrl` set on the server);
-4. a **per-place budget**: every Roblox server would poll it, so the cost is
-   per server, not per game, and the harness should cap decisions per minute
-   and fall back to "no action" above it — the game already treats that as
-   scripted;
-5. nothing else: the game needs no inbound connection, which is the point of
+<https://nanda-harness-production.up.railway.app>
+
+Nothing is on by default. The published town is the scripted town for anyone
+who joins, exactly as before, until someone in the server presses **L** (or
+uses the *AGENTS · who decides* button) — then `seller-b` is model-driven for
+everyone present, and the HUD says so.
+
+What had to be true, and now is:
+
+1. a **public HTTPS endpoint** on 443 — Roblox blocks ports under 1024 except
+   80/443 and refuses roblox.com hosts. Railway, built from
+   `../harness/Dockerfile`; `GEMINI_API_KEY` is a service variable there and
+   is in no repo, image or log;
+2. a **shared secret on every call**, `Authorization: Bearer …`, because
+   anyone who found the URL could otherwise spend the key. The server looks
+   for it in the experience's secrets store first
+   (`HttpService:GetSecret(Config.LLM_SECRET)`, name `nanda_harness_token`),
+   and falls back to `ServerStorage.NandaSecrets.LlmToken`, which
+   `tools/secret.sh` writes into the *built place* from `$NANDA_HARNESS_TOKEN`
+   and which is never committed. ServerStorage is not replicated, so no player
+   can read it; anyone who can edit the place can — demo-grade, which is why
+   the secrets store comes first. Deliberately not an attribute: workspace
+   attributes replicate to every client;
+3. `Config.LLM_URL` pointed at it (or `RB_LlmUrl` on the server, for a tunnel
+   or a harness on the LAN);
+4. a **budget in the harness**, because every Roblox server polls it, so cost
+   is per server and not per game: 40 model calls a minute, 1200 an hour, 6000
+   a day, $2 a rolling day, $20 per process. Over a cap the harness keeps
+   answering 200 with the stance already in force and calls no model, so a cap
+   is never felt as an error in the town;
+5. **rate limits**, per address and per Roblox server — the poll now carries
+   `X-Nanda-Server: game.JobId` for exactly that — so one live server cannot
+   monopolise the harness. Over them it is 429, which the game's existing
+   backoff handles;
+6. nothing else: the game needs no inbound connection, which is the point of
    polling.
 
-Not deployed, and nothing about it is enabled in the published place.
+**Measured, hosted** (`tools/llm_demo.sh 45`, the same `Game` / `TownSim` /
+`LlmPolicy` / `Harness` modules the Roblox server runs, over the public
+endpoint): 18 requests, 0 failed, 22.4 requests/min, 10 decisions, mean
+**526 ms** per decision, 0 fell back to the script. Railway's edge adds about
+60 ms over a local harness, which the game never waits on anyway.
+
+**Not yet measured from inside a live Roblox server.** Publishing is hermetic
+here (`tools/publish.sh`, no Studio), but *joining* is not: the Linux client
+(Sober) will not render on a virtual X display — Vulkan has no DRI3 there, and
+its software fallback is refused as "no supported graphics device" — so the
+in-game half of the check (press **L**, watch the violet nameplate, read
+`/metrics` for the real request rate) is a human step. See the top of this
+section for what it looks like in Studio, which is the same code path.
+
+To publish a place that can reach the hosted harness:
+
+```sh
+zsh -c 'source ~/.env; tools/publish.sh'     # bakes the secret into the build
+```
 
 ### Code and tests
 

@@ -94,9 +94,9 @@ tracked, and `NANDA_HARNESS_AGENTS` pins which names are allowed at all
 | `NANDA_HARNESS_MODEL` | `gemini-2.5-flash` | |
 | `NANDA_MAX_PER_MINUTE` / `_HOUR` / `_DAY` | 40 / 1200 / 6000 | model calls |
 | `NANDA_MAX_USD_PER_DAY` / `_TOTAL` | 2 / 20 | rolling 24 h; total since this process started |
-| `NANDA_PER_IP_PER_MINUTE` | 120 | requests |
+| `NANDA_PER_IP_PER_MINUTE` | 300 | requests. Generous because several Roblox servers can share one egress address; the budget, not this, is what guards the money |
 | `NANDA_PER_SERVER_PER_MINUTE` | 45 | requests, per `game.JobId` (the game polls 24/min) |
-| `NANDA_GLOBAL_PER_MINUTE` | 600 | requests |
+| `NANDA_GLOBAL_PER_MINUTE` | 900 | requests |
 | `NANDA_HARNESS_AGENTS` | any | allowlist of agent names |
 
 The dollar *total* is since the process started: a container that restarts

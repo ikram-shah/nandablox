@@ -85,9 +85,9 @@ def main(argv=None) -> int:
     b.add_argument("--price-out", type=float, default=_float("NANDA_PRICE_OUT", 0.0))
 
     r = ap.add_argument_group("rate limits: so one caller cannot monopolise it")
-    r.add_argument("--per-ip-per-minute", type=int, default=_int("NANDA_PER_IP_PER_MINUTE", 120))
+    r.add_argument("--per-ip-per-minute", type=int, default=_int("NANDA_PER_IP_PER_MINUTE", 300))
     r.add_argument("--per-server-per-minute", type=int, default=_int("NANDA_PER_SERVER_PER_MINUTE", 45))
-    r.add_argument("--global-per-minute", type=int, default=_int("NANDA_GLOBAL_PER_MINUTE", 600))
+    r.add_argument("--global-per-minute", type=int, default=_int("NANDA_GLOBAL_PER_MINUTE", 900))
     r.add_argument("--max-agents", type=int, default=_int("NANDA_MAX_AGENTS", 8))
     r.add_argument("--agents", default=os.environ.get("NANDA_HARNESS_AGENTS", ""), help="comma-separated allowlist of agent names (default: any)")
     r.add_argument("--no-trust-proxy", action="store_true", help="take the peer address, not X-Forwarded-For")
