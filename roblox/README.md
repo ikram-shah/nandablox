@@ -330,7 +330,9 @@ layers, outcome if a layer stopped it), `threat_resolved` (outcome, seconds
 alive, each blue watcher's camera mode), `flag` (player, team, target,
 result, **latency** from the threat appearing, camera mode), `click`,
 `camera` (walk / overview / fly / tower), `vote`, `layer_swapped`,
-`round_summary`. For example:
+`round_summary`, and — when a role is model-driven — `llm_mode` (who decides
+now) and `llm_decision` (what the model decided, why, and how long it took).
+For example:
 
 ```
 FLOWBENCH {"kind":"flag","player":"BlueBot","target":"card-3","result":"catch","latency":37.9,"camera":"bot","team":"blue","threat":"threat-1","attack":"spoof","t":51.98,"n":6}

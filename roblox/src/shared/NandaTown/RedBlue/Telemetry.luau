@@ -14,6 +14,8 @@
 --   vote            {player, proposal, yes, count, needed}
 --   layer_swapped   {layer, from, to}
 --   round_summary   {round, red, blue, deals, escapes, catches, false_alarms, blocked}
+--   llm_mode        {agents, model, by}                   (a role switched scripted <-> model-driven)
+--   llm_decision    {agent, model, reason, line, latency, seq}
 
 local Telemetry = {}
 Telemetry.__index = Telemetry
