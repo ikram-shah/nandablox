@@ -1,0 +1,5 @@
+__pycache__/
+.pytest_cache/
+*.egg-info/
+# decisions are logged to $TMPDIR/nanda-harness/ by default, never in the repo
+*.jsonl

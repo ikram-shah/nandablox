@@ -1,0 +1,19 @@
+[project]
+name = "nanda-harness"
+version = "1.0.0"
+description = "External LLM agent harness for NANDA Town in Roblox: the Roblox server polls it over HttpService and feeds the actions into the game's policy interface."
+requires-python = ">=3.11"
+dependencies = []  # standard library only: nothing to install, nothing to pin
+
+[project.scripts]
+nanda-harness = "nanda_harness.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["nanda_harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
