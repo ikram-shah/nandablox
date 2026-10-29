@@ -35,6 +35,11 @@
       "$properties": {
         "ClockTime": 14.5
       }
+    },
+    "HttpService": {
+      "$properties": {
+        "HttpEnabled": true
+      }
     }
   }
 }

@@ -79,7 +79,7 @@ Config.BLUE_BOT_FALSE_ALARM_PER_SECOND = 0.006
 -- nothing here runs until someone presses L, so the published place is
 -- unchanged for anyone who joins. A live Roblox server cannot reach
 -- localhost, so this is Studio and local playtests only today.
-Config.LLM_URL = "http://127.0.0.1:8787" -- the harness; no key or secret in it
+Config.LLM_URL = "http://127.0.0.1:8790" -- the harness; no key or secret in it
 Config.LLM_PATH = "/v1/tick"
 Config.LLM_POLL_SECONDS = 2.5 -- 24 requests/min: HttpService allows 500/min
 Config.LLM_MAX_PER_MINUTE = 40 -- hard ceiling, whatever else goes wrong

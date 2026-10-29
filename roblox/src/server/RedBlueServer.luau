@@ -10,6 +10,10 @@
 --                private keys (leading "_") stripped. Hello -> a snapshot.
 --   HUD          workspace attributes RB_* (phase, clock, scores, tokens, layers, votes)
 --   telemetry    FlowBench records printed as JSON lines ("FLOWBENCH {...}")
+--   agents       RemoteEvent Llm: cycle which roles a language model drives
+--                (Config.LLM_PRESETS; default: none, every trader scripted).
+--                A coroutine polls the external harness over HttpService and
+--                hands what it says to LlmPolicy; nothing waits for it.
 --
 -- Nothing here takes text from players. The structures are built from parts
 -- by code; their positions match the town that Town.luau builds on clients.
@@ -27,6 +31,8 @@ local Util = require(NT:WaitForChild("Util"))
 local RB = NT:WaitForChild("RedBlue")
 local Config = require(RB:WaitForChild("Config"))
 local Game = require(RB:WaitForChild("Game"))
+local LlmPolicy = require(RB:WaitForChild("LlmPolicy"))
+local Harness = require(RB:WaitForChild("Harness"))
 
 local RedBlueServer = {}
 
@@ -205,7 +211,7 @@ function RedBlueServer.start(world: Instance)
 	-- remotes
 	local remotes = Instance.new("Folder")
 	remotes.Name = "NandaRedBlue"
-	for _, n in { "Events", "Hello", "Flag", "Vote", "Camera", "Notice" } do
+	for _, n in { "Events", "Hello", "Flag", "Vote", "Camera", "Notice", "Llm" } do
 		local r = Instance.new("RemoteEvent")
 		r.Name = n
 		r.Parent = remotes
@@ -213,11 +219,16 @@ function RedBlueServer.start(world: Instance)
 	remotes.Parent = ReplicatedStorage
 	self.remotes = remotes
 
-	-- the game
+	-- the game. Every trader's decisions go through LlmPolicy's wrapper, which
+	-- is Policy.Scripted* exactly until someone makes an agent model-driven.
 	local prefix = Config.TELEMETRY_PREFIX
+	local store = LlmPolicy.new({ config = Config })
+	local harness = Harness.new({ config = Config, store = store })
+	self.store, self.harness = store, harness
 	local game_ = Game.new({
 		config = Config,
 		seed = os.time() % 100000,
+		policies = store:policies(),
 		sink = function(r)
 			print(prefix .. HttpService:JSONEncode(r))
 		end,
@@ -326,8 +337,149 @@ function RedBlueServer.start(world: Instance)
 		end
 	end))
 
+	------------------------------------------------------------ model-driven agents
+
+	-- Which traders a language model drives. Default: none, so the published
+	-- place is the scripted town it has always been. L (or the HUD button,
+	-- or the RB_LlmCmd attribute) cycles Config.LLM_PRESETS.
+	local preset = 1
+	local lastLlmJson = nil
+	local function publishLlm()
+		local st = harness:status()
+		local names = store:agents()
+		local health = (#names == 0 and "off")
+			or (st.health == "error" and "error")
+			or (st.llm == "no_key" and "no_key")
+			or (st.ok > 0 and "ok")
+			or "waiting"
+		local model = Config.LLM_MODEL
+		local line, latency = nil, nil
+		for _, a in st.agents do
+			model = a.model or model
+			line = line or a.line
+			latency = latency or a.latency
+		end
+		local json = HttpService:JSONEncode({
+			agents = st.agents,
+			health = health,
+			url = st.url,
+			requests = st.requests,
+			errors = st.errors,
+			actions = st.actions,
+			roundTrip = st.roundTrip,
+			error = st.error,
+			model = model,
+		})
+		if json ~= lastLlmJson then
+			lastLlmJson = json
+			workspace:SetAttribute(ATTR_PREFIX .. "Llm", json)
+		end
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmAgents", table.concat(names, ","))
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmHealth", health)
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmModel", model)
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmLine", line or "")
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmLatency", latency or 0)
+	end
+
+	-- who: a player, or nil for an automated switch
+	local function setPreset(i: number, who: string?)
+		preset = ((i - 1) % #Config.LLM_PRESETS) + 1
+		local names = store:setAgents(Config.LLM_PRESETS[preset])
+		publishLlm()
+		game_.telemetry:record(now(), "llm_mode", { agents = names, model = Config.LLM_MODEL, by = who })
+		local text = #names == 0 and "Agents: every trader is scripted Luau again"
+			or string.format(
+				"Agents: %s %s now model-driven (%s, through the local harness)",
+				table.concat(names, " and "),
+				#names == 1 and "is" or "are",
+				Config.LLM_MODEL
+			)
+		for _, p in Players:GetPlayers() do
+			notice(remotes, p, text, "gold", { seconds = 5 })
+		end
+	end
+
+	table.insert(self.conns, remotes.Llm.OnServerEvent:Connect(function(player, what)
+		if what == nil or what == "toggle" then
+			setPreset(preset + 1, player.DisplayName)
+		elseif what == "off" then
+			setPreset(1, player.DisplayName)
+		end
+	end))
+	-- automation (MCP execute_luau on the server): "toggle" | "off" | "1".."3"
+	table.insert(self.conns, workspace:GetAttributeChangedSignal(ATTR_PREFIX .. "LlmCmd"):Connect(function()
+		local v = workspace:GetAttribute(ATTR_PREFIX .. "LlmCmd")
+		if type(v) ~= "string" or v == "" then
+			return
+		end
+		workspace:SetAttribute(ATTR_PREFIX .. "LlmCmd", "")
+		if v == "toggle" then
+			setPreset(preset + 1)
+		elseif v == "off" then
+			setPreset(1)
+		elseif tonumber(v) then
+			setPreset(tonumber(v) :: number)
+		end
+	end))
+
+	-- The poll loop. It lives in its own coroutine, so the yield inside
+	-- RequestAsync (0.5 s to 12 s, depending on the model) never holds up the
+	-- round: the town keeps trading on each agent's last stance, and on the
+	-- scripted policy once that expires. Harness:due() keeps it to one
+	-- request at a time, one per LLM_POLL_SECONDS, under LLM_MAX_PER_MINUTE.
+	task.spawn(function()
+		while self.running do
+			if harness:due() then
+				local okBody, body = pcall(function()
+					return HttpService:JSONEncode(harness:observation(game_))
+				end)
+				if okBody and harness:begin() then
+					local okReq, res = pcall(function()
+						return HttpService:RequestAsync({
+							Url = harness.url,
+							Method = "POST",
+							Headers = { ["Content-Type"] = "application/json" },
+							Body = body,
+						})
+					end)
+					if not okReq then
+						-- no harness listening, or HTTP requests are off in this place
+						harness:fail(tostring(res))
+					elseif not res.Success then
+						harness:fail(string.format("HTTP %d %s", res.StatusCode, tostring(res.StatusMessage)))
+					else
+						local okJson, decoded = pcall(function()
+							return HttpService:JSONDecode(res.Body)
+						end)
+						if okJson then
+							local n = harness:finish(decoded)
+							if n > 0 then
+								for _, a in store:report() do
+									game_.telemetry:record(now(), "llm_decision", {
+										agent = a.name,
+										model = a.model,
+										reason = a.reason,
+										line = a.line,
+										latency = a.latency,
+										seq = a.seq,
+									})
+								end
+							end
+						else
+							harness:fail("the harness did not answer JSON")
+						end
+					end
+					publishLlm()
+				end
+			end
+			task.wait(0.25)
+		end
+	end)
+	publishLlm()
+
 	-- the clock
 	local acc = 0
+	local llmAcc = 0
 	local function publish()
 		local s = game_:status()
 		workspace:SetAttribute(ATTR_PREFIX .. "Phase", s.phase)
@@ -366,8 +518,16 @@ function RedBlueServer.start(world: Instance)
 				table.insert(out, Game.public(e))
 			end
 			remotes.Events:FireAllClients(out)
+			if store:any() then
+				harness:note(evs) -- the context the model is given, from the town's own events
+			end
 		end
 		publish()
+		llmAcc += dt
+		if llmAcc >= 1 then
+			llmAcc = 0
+			publishLlm() -- a stance can expire with nothing else happening
+		end
 	end))
 	publish()
 
