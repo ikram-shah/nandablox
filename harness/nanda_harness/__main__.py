@@ -36,7 +36,7 @@ def load_env_file(path: str) -> None:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="nanda_harness", description="LLM agent harness for NANDA Town in Roblox")
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8787)
+    ap.add_argument("--port", type=int, default=8790)
     ap.add_argument("--model", default=os.environ.get("NANDA_HARNESS_MODEL", "gemini-2.5-flash"))
     ap.add_argument("--interval", type=float, default=4.0, help="seconds between two model calls for the same agent")
     ap.add_argument("--timeout", type=float, default=20.0, help="seconds before a model call is abandoned")

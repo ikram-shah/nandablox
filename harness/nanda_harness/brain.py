@@ -200,6 +200,7 @@ class Brain:
         }
         try:
             raw, seconds, usage = self.model_call(prompt, schema.response_schema(agent.role))  # type: ignore[misc]
+            record["answer"] = raw  # kept even when it is rejected below
             action = schema.validate(agent.role, raw)
             if action is None:
                 raise GeminiError("answer did not fit the vocabulary")

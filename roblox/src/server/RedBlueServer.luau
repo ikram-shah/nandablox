@@ -399,6 +399,16 @@ function RedBlueServer.start(world: Instance)
 		end
 	end
 
+	-- The harness's address, if it is not the one in Config (a tunnel, another
+	-- machine on the LAN, a hosted endpoint). Set RB_LlmUrl on the server.
+	table.insert(self.conns, workspace:GetAttributeChangedSignal(ATTR_PREFIX .. "LlmUrl"):Connect(function()
+		local v = workspace:GetAttribute(ATTR_PREFIX .. "LlmUrl")
+		if type(v) == "string" and string.match(v, "^https?://[%w%.%-:_/]+$") then
+			harness.url = v .. Config.LLM_PATH
+			publishLlm()
+		end
+	end))
+
 	table.insert(self.conns, remotes.Llm.OnServerEvent:Connect(function(player, what)
 		if what == nil or what == "toggle" then
 			setPreset(preset + 1, player.DisplayName)

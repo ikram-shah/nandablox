@@ -139,7 +139,7 @@ def tail_log(path: str | None, n: int) -> list:
     return out
 
 
-def serve(brain, host: str = "127.0.0.1", port: int = 8787, token: str | None = None, quiet: bool = True):
+def serve(brain, host: str = "127.0.0.1", port: int = 8790, token: str | None = None, quiet: bool = True):
     handler = type("BoundHandler", (Handler,), {"brain": brain, "token": token, "quiet": quiet})
     httpd = ThreadingHTTPServer((host, port), handler)
     httpd.daemon_threads = True

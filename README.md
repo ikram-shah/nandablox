@@ -15,6 +15,7 @@ Each protocol layer is a building, and every motion on screen is one logged even
 | path | what |
 |---|---|
 | `roblox/` | the Roblox project: Rojo (pinned with rokit), the place's Luau, the traces, and the tools to build, serve, publish and record. See [`roblox/README.md`](roblox/README.md). |
+| `harness/` | the external LLM agent harness: a small Python service the Roblox server polls over `HttpService`, so one trader in the town can be driven by a language model instead of a script. |
 | `site/` | the GitHub Pages site. `.github/workflows/pages.yml` deploys this directory and nothing else. |
 | `docs/trace-format.md` | NANDA Town's event format, as the replay reads it |
 
@@ -24,6 +25,12 @@ Town's own code), red attacks it at the seams the layers define (forged
 invoices, spoofed cards), blue flags what looks wrong from a watchtower, and a
 council of the players votes which layer implementations run. See
 [`roblox/README.md`](roblox/README.md#red-vs-blue-live).
+
+Every trader in that town is scripted Luau, except that **one of them can be
+driven by a language model**: `seller-b`, through the harness in `harness/`,
+by pressing **L**. The default is scripted, and the model-driven path runs in
+Studio only, because a live Roblox server cannot reach `localhost`. See
+["Model-driven agents"](roblox/README.md#model-driven-agents-one-llm-through-an-external-harness).
 
 Everything is in the repo: the place is built by Rojo from `roblox/`, every part is
 made by code, and no assets are uploaded. Studio is only a viewer.

@@ -87,6 +87,9 @@ def validate(role: str, raw: Any) -> dict | None:
     outside the vocabulary becomes `steady`, so nothing the model writes can
     reach a screen.
     """
+    if isinstance(raw, list) and len(raw) == 1:
+        # structured output sometimes arrives wrapped in a one-element array
+        raw = raw[0]
     if role not in RANGES or not isinstance(raw, dict):
         return None
     action: dict[str, Any] = {"kind": KIND[role]}

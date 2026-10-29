@@ -84,6 +84,12 @@ def test_validate_clamps_and_closes_the_vocabulary():
     assert schema.validate("wizard", {"quote_pct": 90}) is None
 
 
+def test_an_answer_wrapped_in_an_array_is_still_an_answer():
+    a = schema.validate("seller", [{"quote_pct": 95, "floor_pct": 90, "reason": "hold_price"}])
+    assert a["quote_pct"] == 95
+    assert schema.validate("seller", [{"quote_pct": 95}, {"quote_pct": 90}]) is None
+
+
 def test_buyer_vocabulary():
     a = schema.validate("buyer", {"offer_pct": 80, "accept_pct": 70, "reason": "lowball"})
     assert a == {"kind": "buyer_bargaining", "offer_pct": 80, "accept_pct": 80, "reason": "lowball"}
