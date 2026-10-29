@@ -27,6 +27,8 @@ from typing import Any, Callable
 
 from . import schema
 from .gemini import Gemini, GeminiError
+from .limits import Budget
+from .metrics import Metrics
 
 PROMPT = """You are {name}, the {role} agent in NANDA Town, a small market simulation
 running inside a Roblox world. Other traders are scripted; you are not.
@@ -117,11 +119,26 @@ class Brain:
         min_interval: float = 4.0,
         max_workers: int = 2,
         now: Callable[[], float] = time.monotonic,
+        budget: Budget | None = None,
+        metrics: Metrics | None = None,
+        max_agents: int = 8,
+        allow_agents: list[str] | None = None,
+        echo: bool = True,
     ):
         self.model_call = model_call
         self.model_name = model_name
         self.min_interval = min_interval
         self.now = now
+        # the ceiling on model calls, and the counters behind /metrics; a
+        # Brain made without them is still a Brain (the tests do that)
+        self.budget = budget if budget is not None else Budget()
+        self.metrics = metrics if metrics is not None else Metrics()
+        self.max_agents = max_agents
+        # names a caller may ask for at all. None = any name the game sends,
+        # up to max_agents of them.
+        self.allow_agents = set(allow_agents) if allow_agents else None
+        self.budget_block: str | None = None
+        self.fallbacks = 0
         self.agents: dict[str, Agent] = {}
         self.lock = threading.Lock()
         self.pool = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="decide")
@@ -130,6 +147,9 @@ class Brain:
         self.errors = 0
         self.ticks = 0
         self.log_path = log_path
+        # with a log file, stdout still gets one compact line per decision —
+        # no prompt, no answer — so `railway logs` is readable
+        self.echo = echo and bool(log_path)
         self._log_lock = threading.Lock()
         if log_path:
             os.makedirs(os.path.dirname(os.path.abspath(log_path)), exist_ok=True)
@@ -143,6 +163,22 @@ class Brain:
             with self._log_lock:
                 with open(self.log_path, "a", encoding="utf-8") as f:
                     f.write(line + "\n")
+            if self.echo:
+                print(
+                    json.dumps(
+                        {
+                            "ts": round(record["ts"], 3),
+                            "ev": "decision",
+                            "agent": record.get("agent"),
+                            "ok": record.get("ok"),
+                            "reason": (record.get("action") or {}).get("reason"),
+                            "latency_ms": record.get("latency_ms"),
+                            "usd": record.get("usd"),
+                            "error": record.get("error"),
+                        }
+                    ),
+                    flush=True,
+                )
         else:
             print(line, flush=True)
 
@@ -153,32 +189,65 @@ class Brain:
         return self.model_call is not None
 
     def tick(self, observation: dict) -> list[dict]:
-        """One poll from the game: queue what is due, return what is ready."""
+        """One poll from the game: queue what is due, return what is ready.
+
+        Over budget it queues nothing and returns the stances it already has,
+        so the game keeps trading on them: a cap must never be felt as an
+        error in the town. The Luau side re-stamps a stance it is handed, so a
+        held stance stays in force rather than ageing out mid-round.
+        """
         self.ticks += 1
         shared = {k: v for k, v in observation.items() if k != "agents"}
         out = []
-        for a in observation.get("agents", []):
+        agents = observation.get("agents")
+        if not isinstance(agents, list):
+            agents = []
+        for a in agents[: self.max_agents]:
+            if not isinstance(a, dict):
+                continue
             name, role = a.get("name"), a.get("role")
             if not isinstance(name, str) or role not in schema.RANGES:
                 continue
+            if len(name) > 64 or (self.allow_agents is not None and name not in self.allow_agents):
+                self.metrics.bump("agents_refused")
+                continue
+            blocked = None
             with self.lock:
                 agent = self.agents.get(name)
                 if agent is None or agent.role != role:
+                    if agent is None and len(self.agents) >= self.max_agents:
+                        self.metrics.bump("agents_refused")
+                        continue
                     agent = self.agents[name] = Agent(name, role)
                 due = (
                     self.ready
                     and not agent.inflight
                     and (self.now() - agent.requested_at) >= self.min_interval
                 )
-                if due:
-                    agent.inflight = True
-                    agent.requested_at = self.now()
-                    self.pending += 1
+            if due:
+                # the only place a model call is ever started, so the only
+                # place the budget has to be consulted
+                blocked = self.budget.reserve()
+                with self.lock:
+                    self.budget_block = blocked
+                    if blocked:
+                        due = False
+                    else:
+                        agent.inflight = True
+                        agent.requested_at = self.now()
+                        self.pending += 1
+                if blocked:
+                    self.metrics.bump("budget_blocked")
+                    self.metrics.bump(f"budget_blocked_{blocked}")
             if due:
                 self.pool.submit(self._decide, agent, dict(a), dict(shared))
             with self.lock:
                 if agent.action:
                     out.append(dict(agent.action))
+                else:
+                    self.fallbacks += 1
+                    self.metrics.bump("fallbacks")
+        self.metrics.bump("actions_served", len(out))
         return out
 
     def _decide(self, agent: Agent, a: dict, shared: dict) -> None:
@@ -198,8 +267,13 @@ class Brain:
             "t": shared.get("t"),
             "prompt": prompt,
         }
+        self.metrics.bump("model_calls")
         try:
             raw, seconds, usage = self.model_call(prompt, schema.response_schema(agent.role))  # type: ignore[misc]
+            # tokens are spent whether or not the answer turns out to be
+            # usable, so the money is booked before the answer is judged
+            record["usd"] = round(self.budget.spend(usage or {}), 6)
+            self.metrics.model_latency(seconds * 1000)
             record["answer"] = raw  # kept even when it is rejected below
             action = schema.validate(agent.role, raw)
             if action is None:
@@ -221,6 +295,7 @@ class Brain:
                 self.decisions += 1
             record.update(answer=raw, action=action, latency_ms=latency_ms, usage=usage, ok=True)
         except Exception as e:
+            self.metrics.bump("model_errors")
             with self.lock:
                 agent.errors += 1
                 agent.last_error = str(e)
@@ -236,12 +311,26 @@ class Brain:
 
     # ----------------------------------------------------------------- health
 
+    def llm_state(self) -> str:
+        """What the game is told, in one word: ready | no_key | budget.
+
+        `budget` is not an error: the stances already in force are still
+        served, and the town keeps trading on them.
+        """
+        if not self.ready:
+            return "no_key"
+        return "budget" if self.budget.check() else "ready"
+
     def health(self) -> dict:
+        state = self.llm_state()
+        budget = self.budget.snapshot()
         with self.lock:
             return {
                 "ok": True,
-                "llm": "ready" if self.ready else "no_key",
+                "llm": state,
                 "model": self.model_name,
+                "budget": budget,
+                "fallbacks": self.fallbacks,
                 "min_interval": self.min_interval,
                 "ticks": self.ticks,
                 "pending": self.pending,
