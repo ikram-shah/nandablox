@@ -77,10 +77,25 @@ Config.BLUE_BOT_FALSE_ALARM_PER_SECOND = 0.006
 
 -- The external LLM harness (harness/, see roblox/README.md). Default off:
 -- nothing here runs until someone presses L, so the published place is
--- unchanged for anyone who joins. A live Roblox server cannot reach
--- localhost, so this is Studio and local playtests only today.
-Config.LLM_URL = "http://127.0.0.1:8790" -- the harness; no key or secret in it
+-- unchanged for anyone who joins.
+--
+-- The hosted harness (Railway, harness/Dockerfile) is what a *published*
+-- server can reach: a live Roblox server cannot see localhost. For a local
+-- harness in Studio, set RB_LlmUrl on the server to http://127.0.0.1:8790 (or
+-- edit this line in a branch) — everything else is the same.
+Config.LLM_URL = "https://nanda-harness-production.up.railway.app" -- no key or secret in it
 Config.LLM_PATH = "/v1/tick"
+-- The shared secret the hosted harness requires, as
+-- `Authorization: Bearer …`. Never a literal here, and never in the repo.
+-- RedBlueServer looks for it in two places, in this order:
+--   1. the experience's secrets store, HttpService:GetSecret(LLM_SECRET)
+--      (Creator Dashboard > the experience > Secrets); the real answer
+--   2. ServerStorage.NandaSecrets.LlmToken, a gitignored module written into
+--      the *built place* by roblox/tools/secret.sh from $NANDA_HARNESS_TOKEN.
+--      Server-only, so no player can read it, but anyone who can edit the
+--      place can: demo-grade.
+-- With neither, the harness answers 401 and the town stays scripted.
+Config.LLM_SECRET = "nanda_harness_token"
 Config.LLM_POLL_SECONDS = 2.5 -- 24 requests/min: HttpService allows 500/min
 Config.LLM_MAX_PER_MINUTE = 40 -- hard ceiling, whatever else goes wrong
 Config.LLM_TTL = 20 -- a stance older than this is dropped: scripted again

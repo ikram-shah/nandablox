@@ -7,8 +7,13 @@
 --   tools/llm_demo.sh                  # 90 s with seller-b model-driven
 --   tools/llm_demo.sh 60 scripted      # the same round, nobody model-driven
 --
--- Needs the harness running (harness/run.sh). Without it every request fails
--- and the round plays exactly as a scripted one, which is the point.
+-- Needs a harness: the hosted one in Config.LLM_URL, or a local one
+-- (harness/run.sh) with NANDA_HARNESS_URL=http://127.0.0.1:8790. The shared
+-- secret comes from $NANDA_HARNESS_TOKEN, exactly as the Roblox server reads
+-- it from the experience's secrets store; without either, every request
+-- fails and the round plays exactly as a scripted one, which is the point.
+--
+--   zsh -c 'source ~/.env; tools/llm_demo.sh 90'
 
 local net = require("@lune/net")
 local serde = require("@lune/serde")
@@ -30,6 +35,14 @@ for k, v in Config do
 	cfg[k] = v
 end
 cfg.ROUND_SECONDS = seconds
+cfg.LLM_URL = process.env.NANDA_HARNESS_URL or cfg.LLM_URL
+
+-- The shared secret a hosted harness wants. Never printed: only its length.
+local token = process.env.NANDA_HARNESS_TOKEN
+local headers: { [string]: string } = { ["Content-Type"] = "application/json", ["X-Nanda-Server"] = "lune-" .. tostring(os.time()) }
+if token and token ~= "" then
+	headers["Authorization"] = "Bearer " .. token
+end
 
 -- Lune's os.clock() is CPU time, not the wall clock a sleeping loop needs,
 -- so the seconds task.wait() returns are accumulated instead. (In Roblox
@@ -45,7 +58,7 @@ local harness = Harness.new({ config = cfg, store = store, clock = clock })
 local game = Game.new({ config = cfg, seed = os.time() % 100000, policies = store:policies(), sink = function() end })
 
 print(string.format("NANDA Town, %d s, %s", seconds, #store:agents() == 0 and "every trader scripted" or ("model-driven: " .. table.concat(store:agents(), ", "))))
-print(string.format("harness: %s", harness.url))
+print(string.format("harness: %s (%s)", harness.url, (token and token ~= "") and (tostring(#token) .. "-character token, not shown") or "no token"))
 print("")
 
 game:start(0)
@@ -62,7 +75,7 @@ local function poll()
 	local ok, res = pcall(net.request, {
 		url = harness.url,
 		method = "POST",
-		headers = { ["Content-Type"] = "application/json" },
+		headers = headers,
 		body = body,
 	})
 	if not ok then

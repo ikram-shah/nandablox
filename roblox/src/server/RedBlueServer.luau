@@ -22,6 +22,7 @@
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
 local Teams = game:GetService("Teams")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -45,6 +46,68 @@ RedBlueServer.CHAMBER = Vector3.new(-82, 0, 40)
 RedBlueServer.PADS = { red = Vector3.new(-14, 0, 57), blue = Vector3.new(14, 0, 57) }
 
 local ATTR_PREFIX = "RB_"
+
+------------------------------------------------------------------ the secret
+
+-- The shared secret a hosted harness requires (see Config.LLM_SECRET). Looked
+-- up once and cached. It is never printed: a `Secret` cannot be printed at
+-- all, and the fallback is only ever concatenated into a header.
+--
+--   1. HttpService:GetSecret(Config.LLM_SECRET) -- the experience's secrets
+--      store, which is the right place for it: not in the place file at all.
+--      It does not exist in Studio or in a local run, and that is fine.
+--   2. ServerStorage.NandaSecrets.LlmToken -- a module baked into the *built*
+--      place by tools/secret.sh, never committed. ServerStorage is not
+--      replicated, so no player can read it; anyone who can edit the place
+--      can. Demo-grade, and second for that reason.
+--
+-- Deliberately no attribute and no RemoteEvent route: workspace attributes
+-- replicate to every client, which would hand the token to everyone present.
+local llmAuth: any = nil -- the Authorization value; false once we know there is none
+local llmAuthSource = "none"
+
+local function resolveLlmAuth()
+	if llmAuth ~= nil then
+		return
+	end
+	local name = Config.LLM_SECRET
+	if type(name) == "string" and name ~= "" then
+		local ok, header = pcall(function()
+			return (HttpService :: any):GetSecret(name):AddPrefix("Bearer ")
+		end)
+		if ok and header then
+			llmAuth, llmAuthSource = header, "secrets_store"
+			return
+		end
+	end
+	local box = ServerStorage:FindFirstChild("NandaSecrets")
+	local mod = box and box:FindFirstChild("LlmToken")
+	if mod and mod:IsA("ModuleScript") then
+		local ok, token = pcall(require, mod)
+		if ok and type(token) == "string" and token ~= "" then
+			llmAuth, llmAuthSource = "Bearer " .. token, "place"
+			return
+		end
+	end
+	llmAuth, llmAuthSource = false, "none"
+end
+
+local function llmTokenSource(): string
+	resolveLlmAuth()
+	return llmAuthSource
+end
+
+-- The headers for one poll: JSON, the shared secret, and which Roblox server
+-- this is. The harness rate-limits per JobId, so one live server cannot
+-- monopolise it however many are running.
+local function llmHeaders(serverId: string): { [string]: any }
+	resolveLlmAuth()
+	local headers: { [string]: any } = { ["Content-Type"] = "application/json", ["X-Nanda-Server"] = serverId }
+	if llmAuth then
+		headers["Authorization"] = llmAuth
+	end
+	return headers
+end
 
 local function notice(remotes, player: Player, text: string, color: string?, extra: { [string]: any }?)
 	local n = { text = text, color = color }
@@ -225,6 +288,8 @@ function RedBlueServer.start(world: Instance)
 	local store = LlmPolicy.new({ config = Config })
 	local harness = Harness.new({ config = Config, store = store })
 	self.store, self.harness = store, harness
+	harness.serverId = (game.JobId ~= "" and game.JobId) or "studio"
+	harness.tokenSource = llmTokenSource()
 	local game_ = Game.new({
 		config = Config,
 		seed = os.time() % 100000,
@@ -370,6 +435,7 @@ function RedBlueServer.start(world: Instance)
 			roundTrip = st.roundTrip,
 			error = st.error,
 			model = model,
+			token = st.token, -- where the shared secret came from, never the secret
 		})
 		if json ~= lastLlmJson then
 			lastLlmJson = json
@@ -449,7 +515,7 @@ function RedBlueServer.start(world: Instance)
 						return HttpService:RequestAsync({
 							Url = harness.url,
 							Method = "POST",
-							Headers = { ["Content-Type"] = "application/json" },
+							Headers = llmHeaders(harness.serverId),
 							Body = body,
 						})
 					end)

@@ -5,6 +5,11 @@
 #   tools/publish.sh --check    # only check the key: does it have universe-places:write here?
 #   tools/publish.sh --dry-run  # build and print what would be sent, send nothing
 #
+# Run it with the environment loaded, so the hosted harness's shared secret
+# goes into the build (tools/secret.sh; never into the repo):
+#
+#   zsh -c 'source ~/.env; tools/publish.sh'
+#
 # The place is built by the pinned Rojo from the repo (hermetic: nothing made by
 # hand in Studio) into build/play.rbxl, then sent with
 #
@@ -100,6 +105,9 @@ fi
 
 need_ids
 mkdir -p "$here/build"
+# the hosted harness's shared secret, into the build only (never the repo);
+# a no-op without NANDA_HARNESS_TOKEN, and the place still builds
+"$here/tools/secret.sh" >&2
 "$here/tools/rojo.sh" build play.project.json -o build/play.rbxl >&2
 file="$here/build/play.rbxl"
 url="https://apis.roblox.com/universes/v1/$universe/places/$place/versions?versionType=Published"

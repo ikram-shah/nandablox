@@ -55,6 +55,8 @@ function Harness.new(opts)
 		nextAt = 0,
 		backoff = 0,
 		stats = { requests = 0, ok = 0, errors = 0, actions = 0, rejected = 0, refused = 0 },
+		serverId = opts.server or "local", -- which Roblox server this is (JobId)
+		tokenSource = opts.tokenSource or "none", -- where the shared secret came from
 		lastError = nil :: string?,
 		lastOkAt = nil :: number?,
 		lastRoundTrip = nil :: number?,
@@ -300,6 +302,7 @@ function Harness:status()
 	local now = self.clock()
 	return {
 		url = self.url,
+		token = self.tokenSource, -- "secrets_store" | "place" | "none"; never the secret
 		health = self.health,
 		llm = self.llm, -- "ready" | "no_key", as the harness reports it
 		requests = self.stats.requests,

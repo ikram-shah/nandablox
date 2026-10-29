@@ -6,3 +6,7 @@
 /*.rbxl.lock
 sourcemap.json
 __pycache__/
+
+# The hosted harness's shared secret, baked into the build by tools/secret.sh
+# from $NANDA_HARNESS_TOKEN. Never committed: see Config.LLM_SECRET.
+/src/server/secrets/
