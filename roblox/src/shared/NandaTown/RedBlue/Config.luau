@@ -73,6 +73,24 @@ Config.BLUE_BOT_REACTION = 3.5 -- seconds before it can notice a threat
 Config.BLUE_BOT_DETECT_PER_SECOND = 0.06
 Config.BLUE_BOT_FALSE_ALARM_PER_SECOND = 0.006
 
+--------------------------------------------------------------- model-driven agents
+
+-- The external LLM harness (harness/, see roblox/README.md). Default off:
+-- nothing here runs until someone presses L, so the published place is
+-- unchanged for anyone who joins. A live Roblox server cannot reach
+-- localhost, so this is Studio and local playtests only today.
+Config.LLM_URL = "http://127.0.0.1:8787" -- the harness; no key or secret in it
+Config.LLM_PATH = "/v1/tick"
+Config.LLM_POLL_SECONDS = 2.5 -- 24 requests/min: HttpService allows 500/min
+Config.LLM_MAX_PER_MINUTE = 40 -- hard ceiling, whatever else goes wrong
+Config.LLM_TTL = 20 -- a stance older than this is dropped: scripted again
+Config.LLM_BACKOFF = { 3, 30 } -- after a failed request: double from 3 s to 30 s
+Config.LLM_TICKER = 6 -- recent town events sent as context
+Config.LLM_MODEL = "gemini-2.5-flash" -- expected; the nameplate shows what the harness reports
+-- Which roles may be model-driven, and what L cycles through.
+Config.LLM_AGENT_ROLE = { ["seller-b"] = "seller", ["buyer-3"] = "buyer" }
+Config.LLM_PRESETS = { {}, { "seller-b" }, { "seller-b", "buyer-3" } }
+
 ------------------------------------------------------------------------ server
 
 Config.TICK_SECONDS = 0.1
