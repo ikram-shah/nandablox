@@ -216,6 +216,9 @@ class Handler(BaseHTTPRequestHandler):
     # -------------------------------------------------------------- routing
 
     def handle_one_request(self):  # time and count every request, whatever it is
+        # a keep-alive connection waits here for the next request line, so the
+        # handlers below re-stamp this: otherwise every log line would report
+        # the idle time between two polls as the time taken to answer
         self._t0 = time.monotonic()
         self.status = 0
         self._ip = None
@@ -231,6 +234,7 @@ class Handler(BaseHTTPRequestHandler):
             self.access(self.status)
 
     def do_GET(self):
+        self._t0 = time.monotonic()  # the request is here now; the wait before it was idle
         route = urlparse(self.path)
         path = route.path.rstrip("/") or "/"
         if not self._gate(path):
@@ -286,6 +290,7 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, {"error": "no such route"})
 
     def do_POST(self):
+        self._t0 = time.monotonic()
         route = urlparse(self.path)
         path = route.path.rstrip("/") or "/"
         if not self._gate(path):
