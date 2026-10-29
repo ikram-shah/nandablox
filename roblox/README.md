@@ -432,7 +432,7 @@ home connection, headless and in Studio):
 | cost | **$0.0002 per decision**, about **$0.0076 per agent per 3-minute round**, $0.15 per agent-hour |
 | requests to the harness | **22.6/min** measured over 90 s in Studio, of 500 allowed |
 | decisions that fell back to the script | 0 in a 120 s headless round |
-| answers the harness had to throw away | 10 of 177 (6%): gemini-2.5-flash sometimes wraps the object in an array, now handled |
+| answers the harness had to throw away | 11 of 186 (6%), all one quirk — gemini-2.5-flash sometimes wraps its object in an array, now unwrapped: 0 of the next 41 |
 
 Slower models are fine, because the game never waits on one: `gemini-2.5-pro`
 answers in about 12 s and `gemini-3.1-pro-preview` in about 7 s, which only
