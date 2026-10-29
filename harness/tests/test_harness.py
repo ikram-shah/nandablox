@@ -6,6 +6,7 @@ Run: cd harness && python -m pytest -q   (or python -m unittest discover tests)
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import sys
@@ -85,9 +86,14 @@ def test_validate_clamps_and_closes_the_vocabulary():
 
 
 def test_an_answer_wrapped_in_an_array_is_still_an_answer():
+    # gemini-2.5-flash wraps the object in an array now and then, sometimes
+    # repeating it; one answer was asked for, so the first one is the answer
     a = schema.validate("seller", [{"quote_pct": 95, "floor_pct": 90, "reason": "hold_price"}])
     assert a["quote_pct"] == 95
-    assert schema.validate("seller", [{"quote_pct": 95}, {"quote_pct": 90}]) is None
+    b = schema.validate("seller", [{"quote_pct": 70, "floor_pct": 60, "reason": "steady"}] * 2)
+    assert b["quote_pct"] == 70
+    assert schema.validate("seller", []) is None
+    assert schema.validate("seller", ["nope"]) is None
 
 
 def test_buyer_vocabulary():
@@ -110,7 +116,7 @@ def test_the_luau_side_has_the_same_reason_codes():
 
 
 def test_a_tick_returns_nothing_until_the_model_has_answered():
-    brain = Brain(model_call=fake_model({"quote_pct": 92, "floor_pct": 86, "reason": "undercut_rival"}, seconds=0.05), log_path=None, min_interval=0)
+    brain = Brain(model_call=fake_model({"quote_pct": 92, "floor_pct": 86, "reason": "undercut_rival"}, seconds=0.05), log_path=os.devnull, min_interval=0)
     assert brain.tick(OBS) == []  # the game is scripted meanwhile; it never waits
     settle(brain)
     actions = brain.tick(OBS)
@@ -121,7 +127,7 @@ def test_a_tick_returns_nothing_until_the_model_has_answered():
 
 
 def test_a_model_error_leaves_the_game_with_no_action():
-    brain = Brain(model_call=fake_model(None, fail=True), log_path=None, min_interval=0)
+    brain = Brain(model_call=fake_model(None, fail=True), log_path=os.devnull, min_interval=0)
     brain.tick(OBS)
     settle(brain)
     assert brain.tick(OBS) == []
@@ -130,7 +136,7 @@ def test_a_model_error_leaves_the_game_with_no_action():
 
 
 def test_a_nonsense_answer_is_an_error_not_an_action():
-    brain = Brain(model_call=fake_model({"quote_pct": "free"}), log_path=None, min_interval=0)
+    brain = Brain(model_call=fake_model({"quote_pct": "free"}), log_path=os.devnull, min_interval=0)
     brain.tick(OBS)
     settle(brain)
     assert brain.tick(OBS) == []
@@ -138,14 +144,14 @@ def test_a_nonsense_answer_is_an_error_not_an_action():
 
 
 def test_no_key_means_no_calls_and_a_clear_health_line():
-    brain = Brain(model_call=None, log_path=None)
+    brain = Brain(model_call=None, log_path=os.devnull)
     assert brain.tick(OBS) == []
     assert brain.health()["llm"] == "no_key"
 
 
 def test_one_call_per_agent_per_interval_however_often_the_game_polls():
     call = fake_model({"quote_pct": 95, "floor_pct": 90, "reason": "steady"})
-    brain = Brain(model_call=call, log_path=None, min_interval=10)
+    brain = Brain(model_call=call, log_path=os.devnull, min_interval=10)
     for _ in range(25):
         brain.tick(OBS)
         settle(brain)
@@ -154,7 +160,7 @@ def test_one_call_per_agent_per_interval_however_often_the_game_polls():
 
 def test_the_prompt_carries_the_market_and_no_player_text():
     call = fake_model({"quote_pct": 95, "floor_pct": 90, "reason": "steady"})
-    brain = Brain(model_call=call, log_path=None, min_interval=0)
+    brain = Brain(model_call=call, log_path=os.devnull, min_interval=0)
     brain.tick(OBS)
     settle(brain)
     prompt = call.calls[0]
@@ -210,7 +216,7 @@ def test_the_api_the_game_talks_to(tmp_path):
 
 
 def test_a_token_locks_the_api_down_for_a_hosted_harness(tmp_path):
-    brain = Brain(model_call=None, log_path=None)
+    brain = Brain(model_call=None, log_path=os.devnull)
     httpd = serve(brain, port=0, token="s3cret")
     port = httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()

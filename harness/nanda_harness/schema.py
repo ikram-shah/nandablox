@@ -87,9 +87,11 @@ def validate(role: str, raw: Any) -> dict | None:
     outside the vocabulary becomes `steady`, so nothing the model writes can
     reach a screen.
     """
-    if isinstance(raw, list) and len(raw) == 1:
-        # structured output sometimes arrives wrapped in a one-element array
-        raw = raw[0]
+    if isinstance(raw, list):
+        # Structured output sometimes arrives wrapped in an array, now and then
+        # with the same object repeated (seen ~6% of the time with
+        # gemini-2.5-flash). One answer was asked for: take the first.
+        raw = next((x for x in raw if isinstance(x, dict)), None)
     if role not in RANGES or not isinstance(raw, dict):
         return None
     action: dict[str, Any] = {"kind": KIND[role]}

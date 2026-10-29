@@ -1121,7 +1121,7 @@ end
 local HEALTH = {
 	off = "",
 	waiting = "waiting for the harness at %s",
-	ok = "harness: %d decisions, %s per decision",
+	ok = "harness: %d decisions · %s per decision · the round never waits",
 	no_key = "the harness has no API key: scripted until it does",
 	error = "the harness is not answering (%s): scripted until it does",
 }
@@ -1182,7 +1182,13 @@ function View:refreshLlm()
 	end
 	local tail = HEALTH[d.health or "off"]
 	if d.health == "ok" then
-		tail = string.format(tail, d.actions or 0, d.roundTrip and string.format("%.1f s", d.roundTrip / 1000) or "?")
+		-- the model's own time, not the round trip to the harness, which is a
+		-- millisecond or two: it answers from the decision it already has
+		local ms = nil
+		for _, a in driven do
+			ms = ms or a.latency
+		end
+		tail = string.format(tail, d.actions or 0, ms and string.format("%.1f s", ms / 1000) or "?")
 	elseif d.health == "waiting" then
 		tail = string.format(tail, d.url or "")
 	elseif d.health == "error" then

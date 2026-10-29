@@ -344,6 +344,7 @@ function RedBlueServer.start(world: Instance)
 	-- or the RB_LlmCmd attribute) cycles Config.LLM_PRESETS.
 	local preset = 1
 	local lastLlmJson = nil
+	local lastLogged = {} -- agent -> the decision seq already in the telemetry
 	local function publishLlm()
 		local st = harness:status()
 		local names = store:agents()
@@ -464,15 +465,19 @@ function RedBlueServer.start(world: Instance)
 						if okJson then
 							local n = harness:finish(decoded)
 							if n > 0 then
+								-- one telemetry line per *new* decision, not per poll
 								for _, a in store:report() do
-									game_.telemetry:record(now(), "llm_decision", {
-										agent = a.name,
-										model = a.model,
-										reason = a.reason,
-										line = a.line,
-										latency = a.latency,
-										seq = a.seq,
-									})
+									if a.seq and lastLogged[a.name] ~= a.seq then
+										lastLogged[a.name] = a.seq
+										game_.telemetry:record(now(), "llm_decision", {
+											agent = a.name,
+											model = a.model,
+											reason = a.reason,
+											line = a.line,
+											latency = a.latency,
+											seq = a.seq,
+										})
+									end
 								end
 							end
 						else
