@@ -95,6 +95,12 @@ return function(t)
 			kinds[th.kind] = (kinds[th.kind] or 0) + 1
 		end
 		A.ok((kinds.forge or 0) > 0 and (kinds.spoof or 0) > 0 and (kinds.bait or 0) > 0, "forge, spoof and bait all used")
+		-- spoofs undercut the honest market, not each other (no $0.02 widgets)
+		for _, c in r100.game.sim.cards do
+			if c.threat then
+				A.ok(c.price >= 1000, "a fake at a believable price: " .. c.price)
+			end
+		end
 	end)
 
 	t.case("the town grows live, and money is conserved at 100", function(A)

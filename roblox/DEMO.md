@@ -109,8 +109,8 @@ says after a minute:" and show backup slide 1.
 > with it: threats per minute go from two to eight. Judgment calls go past
 > what one person can do — the bar turns red — and the queue starts to grow."
 
-Point at: **events/min ~620**, **threats/min ~8**, **calls/min ~25 (red,
-2× the tick)**, **queue ~8**.
+Point at: **events/min ~600–730**, **threats/min ~8**, **calls/min 25–45
+(red, 2–4× the tick)**, **queue ~8**.
 
 *Fallback:* "The town is growing — while it fills, the slide has the
 steady state." Backup slide 2.
@@ -119,15 +119,15 @@ steady state." Backup slide 2.
 
 **B.** Seventy-five more. The board fills, couriers everywhere.
 
-> "A hundred agents. Two and a half thousand events a minute. A hundred and
-> twenty decisions a minute land on one person who can make twelve. Watch the
+> "A hundred agents. Nearly three thousand events a minute. Well over a
+> hundred decisions a minute land on one person who can make twelve. Watch the
 > queue: it never drains. Cases expire before she reaches them — and the
 > escapes are all *waited too long*. Not because she's careless. Because
 > she's one person."
 
-Point at: **events/min ~2,600**, **threats/min ~34**, **calls/min ~120 (10×,
-the bar full)**, **queue 25–35**, **escaped climbing, all "waited too long"**,
-**caught ~0**.
+Point at: **events/min ~2,600–2,900**, **threats/min ~34**, **calls/min
+120–155 (10–13×, the bar full)**, **queue 16–35 and growing**, **escaped
+climbing, all "waited too long"**, **caught 0**.
 
 *Fallback (if the frame rate drops):* press **N** is not needed — say "this is
 what one hundred looks like on the panel" and show backup slide 3. If the
@@ -141,15 +141,17 @@ client stutters badly, press **F** and fly up, or **V** again.
 > gate?', 'is this card signed by the name on it?', 'is the payee on the
 > board?' — handle the clear cases themselves and only pass up what they
 > can't decide. Same hundred agents, same flood of events. Judgment calls
-> fall from a hundred and twenty to about six: back under the line. Catches
+> fall from over a hundred to about ten: back under the line. Catches
 > come back — most by the monitors, a few by the human, on the ambiguous
 > ones. And it isn't magic: these escapes were *missed by the monitors* —
 > fly-by-night sellers priced just under the radar. That's the case a human
 > still has to judge."
 
-Point at: **events/min still ~2,700**, **calls/min ~6 (green)**, **queue
-0–2**, **caught ~15 (monitors ~11, human ~4)**, **escaped 1–3, "missed by the
-monitors"**, **false alarms 0**.
+Point at: **events/min still ~2,700**, **calls/min 5–14 (back at the
+tick)**, **queue 0–3**, **caught 9–15 (most by the monitors, a few by the
+human)**, **escaped 0–3, any "missed by the monitors"**, **false alarms 0**.
+If escaped is still 0, say: "over a few minutes, a couple get past — the
+cheap ones, priced just under the line."
 
 *Fallback:* press **H** directly. If the numbers lag: "give it twenty
 seconds — the rate is over the last half-minute"; else backup slide 4.
@@ -162,11 +164,12 @@ seconds — the rate is over the last half-minute"; else backup slide 4.
 > courier a second. The guards leave. Two things happen. Forgeries now get
 > through the gate: 'stopped by the layers' drops to zero. And the monitors
 > go half-blind — without signatures, a reprice and a spoofed card look the
-> same — so they escalate again: judgment calls jump back to forty. The
+> same — so they escalate again: judgment calls jump back to forty or fifty. The
 > layers were doing oversight work too. That's the cost of the faster town."
 
-Point at: **guards walking**, **blocked by the layers 0**, **calls/min ~45
-(red again)**, **queue ~15**, **events/min up (~3,500: the faster town)**.
+Point at: **guards walking**, **stopped by the layers 0**, **calls/min 40–60
+(red again)**, **queue ~15**, **events/min up (~3,200–3,600: the faster
+town)**.
 
 *Fallback:* "The council's vote is a button" — if B misfired, the council
 panel is hidden in the demo, so press B again for the next beat and say the
@@ -203,19 +206,38 @@ panel read about 30–40 s into each beat:
 
 | beat | agents | monitors | auth | events/min | threats/min | judgment calls/min | queue | caught (monitors · human) | escaped (missed · waited · wrong) | false alarms |
 |---|---|---|---|---|---|---|---|---|---|---|
-STUDIO_TABLE
+| 1 small | 5 | off | hmac.v1 | 142 | 2 | **6** | 1 | 0 (0 · 0) | 0 | 0 |
+| 2 grow | 25 | off | hmac.v1 | 728 | 8 | **44** | 8 | 0 (0 · 0) | 0 | 0 |
+| 3 grow | 100 | off | hmac.v1 | 2,902 | 34 | **154** | 16 (shown as 19 a moment later) | 0 (0 · 0) | 2 (0 · 2 · 0) | 0 |
+| 4 monitors | 100 | **on** | hmac.v1 | 2,666 | 34 | **14** | 3 | 9 (5 · 4) | 0 | 0 |
+| 5 council | 100 | on | **plain.v1** | 3,242 | 34 | **58** | 16 | 11 (10 · 1) | 2 (0 · 2 · 0) | 0 |
+| 6 restore | 100 | on | hmac.v1 | 2,950 | 33 | **5** | 0 | 7 (6 · 1) | 0 | 0 |
+| (extra) | 5 | on | hmac.v1 | 160 | 2 | **0** | 0 | 0 | 0 | 0 |
+| (extra) | 25 | on | hmac.v1 | 714 | 2 | **2** | 1 | 0 | 0 | 0 |
+
+Frame rate 55–60 throughout (client, Studio on this machine). At 100 agents
+the clients draw 43–57% of the events. After the last B: demo off, 5
+agents, hmac.v1, an ordinary 180-second round. Screenshots:
+`screenshots/scale-01-…` through `scale-09-back-to-game.png` (5/25/100 with
+monitors off, 100 with monitors on, the council's plain.v1 with the guards
+walking, 5 and 25 with monitors on).
+
+The Studio numbers run a little higher than the headless ones (e.g. 154 vs.
+118 calls/min at 100) because they are read 35–40 s into a beat, when the
+window still holds the newcomers' opening cards; they settle toward the
+headless figures within a minute.
 
 Headless (`tools/scale_demo.sh 60 <seed>`, the same modules, mean of seeds
 1–5, the panel read 60 s into each beat):
 
 | beat | agents | monitors | auth | events/min | threats/min | judgment calls/min | queue | caught (monitors · human) | escaped (missed · waited · wrong) | blocked by layers |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 small | 5 | off | hmac.v1 | 138 | 2.0 | **6.4** | 2.2 | 0.2 (0 · 0.2) | 0.2 (0 · 0 · 0.2) | 1.4 |
-| 2 grow | 25 | off | hmac.v1 | 618 | 8.4 | **24** | 7.6 | 3.2 (0 · 3.2) | 0.8 (0 · 0.6 · 0.2) | 2.2 |
-| 3 grow | 100 | off | hmac.v1 | 2,569 | 34 | **118** | 33 | 0 | 9.2 (0 · 9.2 · 0) | 12.6 |
-| 4 monitors | 100 | **on** | hmac.v1 | 2,691 | 34 | **5.6** | 0.6 | 15.4 (11.2 · 4.2) | 1.6 (0.8 · 0.2 · 0.6) | 13.6 |
-| 5 council | 100 | on | **plain.v1** | 3,576 | 34 | **47** | 17 | 22 (20.4 · 1.6) | 3.4 (1.4 · 1.8 · 0.2) | 0 |
-| 6 restore | 100 | on | hmac.v1 | 2,735 | 34 | **6.0** | 0.6 | 17 (13.6 · 3.4) | 3.0 (0.6 · 1.0 · 1.4) | 12 |
+| 1 small | 5 | off | hmac.v1 | 138 | 2 | **6** | 2 | 0.2 (0 · 0.2) | 0.2 (0 · 0 · 0.2) | 1.4 |
+| 2 grow | 25 | off | hmac.v1 | 618 | 8 | **24** | 8 | 3.2 (0 · 3.2) | 0.8 (0 · 0.6 · 0.2) | 2.2 |
+| 3 grow | 100 | off | hmac.v1 | 2,579 | 34 | **120** | 35 | 0 | 8.2 (0 · 8.2 · 0) | 12.6 |
+| 4 monitors | 100 | **on** | hmac.v1 | 2,708 | 34 | **6** | 0 | 15.8 (11.2 · 4.6) | 1.8 (1.0 · 0 · 0.8) | 13.6 |
+| 5 council | 100 | on | **plain.v1** | 3,576 | 34 | **47** | 16 | 21.8 (20.4 · 1.4) | 3.8 (1.2 · 1.8 · 0.8) | 0 |
+| 6 restore | 100 | on | hmac.v1 | 2,769 | 34 | **6** | 1 | 16.4 (13.6 · 2.8) | 3.4 (2.2 · 0.6 · 0.6) | 12 |
 
 One human decides 12 a minute. The paper's floor (a perfect hierarchy, five
 agents, red's default four attacks a round) is about 1.3 a minute; the
@@ -233,6 +255,18 @@ something to see in five minutes.
 | the whole live mode misbehaves | — | walk through the arch (back to the replay) and back; or show the backup slides |
 | L: harness down | agents panel says "not answering" | it is the designed fallback (scripted); say so and move on |
 | Studio vs. published | — | both run the same code; the published place is version VERSION |
+
+## A note on tonight's build (2026-11-03)
+
+Rojo live-sync into the open Studio was broken: the plugin's socket to
+`tools/serve.sh play` (:34872) stayed open but it applied no patches. So
+the Studio test place was updated by copying each changed repo file,
+one way, into its ModuleScript's `Source` through the Studio MCP, and
+checking byte lengths against the files (33/33 scripts equal to the
+commit). Nothing was edited in Studio and nothing was saved or published
+from it; the published place is built by `tools/publish.sh` (`rojo build`
+from the repo). If Rojo misbehaves again: Plugins → Rojo → Disconnect,
+then Connect.
 
 ## Where the code is
 

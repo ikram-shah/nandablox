@@ -107,6 +107,7 @@ function TownSim.new(opts)
 		started = false,
 		-- who is in town: the five, plus a crowd at scale (joined grows as they arrive)
 		pop = Scale.population(cfg, opts.size),
+		scaled = opts.size ~= nil, -- the oversight demo (any size, 5 included)
 		sellerNames = {},
 		buyerNames = {},
 		joined = {},
@@ -932,7 +933,11 @@ function TownSim:spoof(claimed: string?)
 	self.stats.spoofs += 1
 	local cheapest = math.huge
 	for _, c in self.cards do
-		cheapest = math.min(cheapest, c.price)
+		-- at scale, undercut the honest listings only: undercutting red's own
+		-- earlier fakes compounds to absurd prices ($1.32 for a widget)
+		if not (self.scaled and c.threat) then
+			cheapest = math.min(cheapest, c.price)
+		end
 	end
 	if cheapest == math.huge then
 		cheapest = 2000
