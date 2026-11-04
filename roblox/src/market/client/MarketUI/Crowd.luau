@@ -240,7 +240,8 @@ local function placeOne(p, cf: CFrame, moving: boolean)
 	if p.rig then
 		rigs.place(p.rig, cf, moving, p.mood == "cheated")
 	else
-		simple.place(p.fig, cf, moving)
+		-- beyond NEAR the legs don't swing (they don't read at that distance)
+		simple.place(p.fig, cf, moving, nil, (p.dist or 0) > NEAR)
 	end
 end
 

@@ -120,9 +120,10 @@ end
 local t = 0
 local queue = {} -- figures placed since the last flush
 
-function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, _far: boolean?)
+function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, far: boolean?)
 	f.cf = cf
 	f.moving = moving
+	f.far = far
 	if not f.queued then
 		f.queued = true
 		table.insert(queue, f)
@@ -146,7 +147,7 @@ function Simple.flush(dt: number)
 		if live[f] and not f.hidden then
 			local cf = f.cf
 			local swing, up = 0, cf
-			if f.moving and not f.hidden then
+			if f.moving and not f.far then
 				local s = math.sin((t + f.phase) * 11)
 				swing = s * 0.5
 				up = cf * CFrame.new(0, math.abs(s) * 0.15, 0)
@@ -154,15 +155,26 @@ function Simple.flush(dt: number)
 			local body = f.mood == "cheated" and up * OFF.body * SLUMP or up * OFF.body
 			moveParts[n + 1], moveCFs[n + 1] = f.body, body
 			moveParts[n + 2], moveCFs[n + 2] = f.head, f.mood == "cheated" and body * CFrame.new(0, 1.8, 0) or up * HEAD
+			n += 2
+			-- legs: swing up close; far away they only need to follow, and only
+			-- when the figure actually moved
 			if swing ~= 0 then
-				moveParts[n + 3], moveCFs[n + 3] = f.legL, cf * LEG_L * CFrame.Angles(swing, 0, 0) * LEG_DOWN
-				moveParts[n + 4], moveCFs[n + 4] = f.legR, cf * LEG_R * CFrame.Angles(-swing, 0, 0) * LEG_DOWN
-			else
-				moveParts[n + 3], moveCFs[n + 3] = f.legL, cf * OFF.legL
-				moveParts[n + 4], moveCFs[n + 4] = f.legR, cf * OFF.legR
+				moveParts[n + 1], moveCFs[n + 1] = f.legL, cf * LEG_L * CFrame.Angles(swing, 0, 0) * LEG_DOWN
+				moveParts[n + 2], moveCFs[n + 2] = f.legR, cf * LEG_R * CFrame.Angles(-swing, 0, 0) * LEG_DOWN
+				n += 2
+				f.legsSwung = true
+			elseif f.moving or f.legsSwung or f.legsAt ~= cf then
+				moveParts[n + 1], moveCFs[n + 1] = f.legL, cf * OFF.legL
+				moveParts[n + 2], moveCFs[n + 2] = f.legR, cf * OFF.legR
+				n += 2
+				f.legsSwung = false
+				f.legsAt = cf
 			end
-			moveParts[n + 5], moveCFs[n + 5] = f.bag, up * OFF.bag
-			n += 5
+			-- the parcel only while carrying (it is invisible otherwise)
+			if f.bag.Transparency < 1 then
+				moveParts[n + 1], moveCFs[n + 1] = f.bag, up * OFF.bag
+				n += 1
+			end
 		end
 	end
 	for i = #moveParts, n + 1, -1 do
