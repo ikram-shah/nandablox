@@ -254,7 +254,7 @@ something to see in five minutes.
 | double press | skipped a beat | the banner says which beat; **N** / **H** set size and monitors directly; the council is the only one that needs **B** |
 | the whole live mode misbehaves | — | walk through the arch (back to the replay) and back; or show the backup slides |
 | L: harness down | agents panel says "not answering" | it is the designed fallback (scripted); say so and move on |
-| Studio vs. published | — | both run the same code; the published place is version VERSION |
+| Studio vs. published | — | both run the same code; the published place is version 13 (2026-11-03 23:42 PT, `077a2b9`) |
 
 ## A note on tonight's build (2026-11-03)
 
