@@ -95,7 +95,7 @@ function Simple.give(f)
 	table.insert(pool, f)
 end
 
--- hidden while a rig stands in for this figure
+-- hidden (out of the world) while a rig stands in for this figure
 function Simple.show(f, on: boolean)
 	f.m.Parent = on and folder or nil
 	f.hidden = not on
@@ -119,7 +119,6 @@ end
 
 local t = 0
 local queue = {} -- figures placed since the last flush
-local HIDDEN = CFrame.new(0, -200, 0)
 
 function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, _far: boolean?)
 	f.cf = cf
@@ -130,14 +129,6 @@ function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, _far: boo
 	end
 end
 
--- hidden while a rig stands in for this figure
-function Simple.hide(f, on: boolean)
-	f.hidden = on
-	if not f.queued then
-		f.queued = true
-		table.insert(queue, f)
-	end
-end
 
 local LEG_L = CFrame.new(-0.45, 2.5, 0)
 local LEG_R = CFrame.new(0.45, 2.5, 0)
@@ -152,11 +143,8 @@ function Simple.flush(dt: number)
 		local f = queue[i]
 		queue[i] = nil
 		f.queued = false
-		if live[f] then
+		if live[f] and not f.hidden then
 			local cf = f.cf
-			if f.hidden then
-				cf = HIDDEN
-			end
 			local swing, up = 0, cf
 			if f.moving and not f.hidden then
 				local s = math.sin((t + f.phase) * 11)
