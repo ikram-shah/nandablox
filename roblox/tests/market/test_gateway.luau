@@ -13,7 +13,7 @@ end
 
 local function sim()
 	local s = lib.MarketSim.new({ seed = 21, n = 300 })
-	s:setMonitor("external", "gateway")
+	s:setMonitor("external")
 	s:addWatcher("me")
 	s:runUntil(10)
 	s:injectFraud("scam", { price = 0.7 })
@@ -55,7 +55,7 @@ return function(t)
 		local b = seen.body
 		A.eq(b.server, "job-1")
 		A.eq(seen.headers["X-Nanda-Server"], "job-1", "the per-server rate-limit key")
-		A.eq(b.monitor, nil, "monitor named 'gateway': ask every registered monitor")
+		A.eq(b.monitor, nil, "no monitor named: ask every registered monitor")
 		A.ok(type(b.t) == "number" and type(b.market.bread) == "number", "t, market")
 		A.eq(b.lever.signatures, true)
 		A.ok(#b.cases > 0, "cases")
