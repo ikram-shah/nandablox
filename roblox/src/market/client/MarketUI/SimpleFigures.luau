@@ -90,8 +90,18 @@ end
 
 function Simple.give(f)
 	live[f] = nil
+	f.hidden = false
 	f.m.Parent = nil
 	table.insert(pool, f)
+end
+
+-- hidden while a rig stands in for this figure
+function Simple.show(f, on: boolean)
+	f.m.Parent = on and folder or nil
+	f.hidden = not on
+end
+Simple.hide = function(f, hidden: boolean)
+	Simple.show(f, not hidden)
 end
 
 function Simple.carry(f, good: string?)
@@ -108,34 +118,63 @@ function Simple.mood(f, mood: string?)
 end
 
 local t = 0
+local queue = {} -- figures placed since the last flush
+local HIDDEN = CFrame.new(0, -200, 0)
+
 function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, _far: boolean?)
 	f.cf = cf
 	f.moving = moving
-	f.dirty = true
+	if not f.queued then
+		f.queued = true
+		table.insert(queue, f)
+	end
 end
+
+-- hidden while a rig stands in for this figure
+function Simple.hide(f, on: boolean)
+	f.hidden = on
+	if not f.queued then
+		f.queued = true
+		table.insert(queue, f)
+	end
+end
+
+local LEG_L = CFrame.new(-0.45, 2.5, 0)
+local LEG_R = CFrame.new(0.45, 2.5, 0)
+local LEG_DOWN = CFrame.new(0, -1.25, 0)
+local HEAD = OFF.body * CFrame.new(0, 1.8, 0)
+local SLUMP = CFrame.Angles(math.rad(-14), 0, 0)
 
 function Simple.flush(dt: number)
 	t += dt
 	local n = 0
-	for f in live do
-		if f.dirty then
-			-- placed this frame by Crowd (which already skips far and standing figures)
-			f.dirty = false
+	for i = 1, #queue do
+		local f = queue[i]
+		queue[i] = nil
+		f.queued = false
+		if live[f] then
 			local cf = f.cf
-			local swing = f.moving and math.sin((t + f.phase) * 11) * 0.5 or 0
-			local bob = f.moving and math.abs(math.sin((t + f.phase) * 11)) * 0.15 or 0
-			local slump = f.mood == "cheated" and CFrame.Angles(math.rad(-14), 0, 0) or CFrame.identity
-			local up = CFrame.new(0, bob, 0)
-			n += 1
-			moveParts[n], moveCFs[n] = f.body, cf * up * OFF.body * slump
-			n += 1
-			moveParts[n], moveCFs[n] = f.head, cf * up * OFF.body * slump * CFrame.new(0, 1.8, 0)
-			n += 1
-			moveParts[n], moveCFs[n] = f.legL, cf * CFrame.new(-0.45, 2.5, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.25, 0)
-			n += 1
-			moveParts[n], moveCFs[n] = f.legR, cf * CFrame.new(0.45, 2.5, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.25, 0)
-			n += 1
-			moveParts[n], moveCFs[n] = f.bag, cf * up * OFF.bag
+			if f.hidden then
+				cf = HIDDEN
+			end
+			local swing, up = 0, cf
+			if f.moving and not f.hidden then
+				local s = math.sin((t + f.phase) * 11)
+				swing = s * 0.5
+				up = cf * CFrame.new(0, math.abs(s) * 0.15, 0)
+			end
+			local body = f.mood == "cheated" and up * OFF.body * SLUMP or up * OFF.body
+			moveParts[n + 1], moveCFs[n + 1] = f.body, body
+			moveParts[n + 2], moveCFs[n + 2] = f.head, f.mood == "cheated" and body * CFrame.new(0, 1.8, 0) or up * HEAD
+			if swing ~= 0 then
+				moveParts[n + 3], moveCFs[n + 3] = f.legL, cf * LEG_L * CFrame.Angles(swing, 0, 0) * LEG_DOWN
+				moveParts[n + 4], moveCFs[n + 4] = f.legR, cf * LEG_R * CFrame.Angles(-swing, 0, 0) * LEG_DOWN
+			else
+				moveParts[n + 3], moveCFs[n + 3] = f.legL, cf * OFF.legL
+				moveParts[n + 4], moveCFs[n + 4] = f.legR, cf * OFF.legR
+			end
+			moveParts[n + 5], moveCFs[n + 5] = f.bag, up * OFF.bag
+			n += 5
 		end
 	end
 	for i = #moveParts, n + 1, -1 do

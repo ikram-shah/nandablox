@@ -3,9 +3,11 @@
 -- on every client, and each frame we place every figure where it should be.
 -- Sellers stand behind their counters.
 --
--- A figure is built by a `Figures` provider (simple parts now, pooled R15
--- rigs later) and moved with workspace:BulkMoveTo, the cheapest way to move
--- hundreds of parts a frame. Far figures update less often (LOD).
+-- Two levels of detail. Everyone has a cheap simple figure (SimpleFigures:
+-- five anchored parts moved with BulkMoveTo). The nearest MAX_RIGS people to
+-- the camera are shown as real R15 rigs instead (RigFigures: pooled,
+-- AnimationController walk/idle), chosen again a few times a second. Far
+-- simple figures update less often, and anyone standing still is not touched.
 
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
 local Layout = require(Market.Layout)
@@ -16,17 +18,63 @@ local Crowd = {}
 local folder: Folder
 local buyers: { [string]: any } = {}
 local sellers: { [string]: any } = {} -- seller id -> figure standing at its stall
-local figures -- the provider
+local simple -- SimpleFigures
+local rigs -- RigFigures (optional)
 local frame = 0
 
-local WALKING = { walk = true, stroll = true, cheated = true }
+Crowd.MAX_RIGS = 70
+local NEAR, MID = 90, 200
+local RIG_EVERY = 0.4 -- seconds between re-choosing who is near
 
-function Crowd.init(parent: Instance, provider)
+local WALKING = { walk = true, stroll = true, cheated = true }
+local FACE_STALL = { deal = true, wait = true, queue = true }
+
+function Crowd.init(parent: Instance, simpleProvider, rigProvider)
 	folder = Instance.new("Folder")
 	folder.Name = "Crowd"
 	folder.Parent = parent
-	figures = provider
-	figures.init(folder)
+	simple = simpleProvider
+	simple.init(folder)
+	rigs = rigProvider
+	if rigs then
+		rigs.init(folder)
+	end
+end
+
+------------------------------------------------------------------ people
+
+-- a person: { fig (simple), rig (or nil), look, role, carry, mood, cf, ... }
+local function newPerson(look: number, role: string)
+	return { fig = simple.take(look, role), look = look or 1, role = role }
+end
+
+local function dropRig(p)
+	if p.rig then
+		rigs.give(p.rig)
+		p.rig = nil
+		simple.show(p.fig, true)
+		p.dirty = true
+	end
+end
+
+local function giveRig(p)
+	if p.rig or not rigs or not rigs.ready then
+		return
+	end
+	local r = rigs.take(p.look, p.role)
+	if not r then
+		return
+	end
+	p.rig = r
+	simple.show(p.fig, false)
+	rigs.carry(r, p.carry and Theme.GOODS[p.carry] and Theme.GOODS[p.carry].color or nil)
+	p.dirty = true
+	p.settled = false
+end
+
+local function release(p)
+	dropRig(p)
+	simple.give(p.fig)
 end
 
 ------------------------------------------------------------------ buyers
@@ -44,22 +92,28 @@ end
 function Crowd.buyer(e)
 	local b = buyers[e.id]
 	if not b then
-		b = { id = e.id, look = e.look, fig = figures.take(e.look, "buyer") }
+		b = newPerson(e.look, "buyer")
+		b.id = e.id
 		buyers[e.id] = b
 	end
 	b.from, b.to, b.t0, b.t1, b.state, b.target = e.from, e.to, e.t0, e.t1, e.state, e.target
 	if b.carry ~= e.carry then
 		b.carry = e.carry
-		figures.carry(b.fig, e.carry)
+		simple.carry(b.fig, e.carry)
+		if b.rig then
+			rigs.carry(b.rig, e.carry and Theme.GOODS[e.carry] and Theme.GOODS[e.carry].color or nil)
+		end
 	end
-	figures.mood(b.fig, e.state == "cheated" and "cheated" or nil)
+	b.mood = e.state == "cheated" and "cheated" or nil
+	simple.mood(b.fig, b.mood)
+	b.settled = false
 	setPath(b)
 end
 
 function Crowd.buyerGone(id: string)
 	local b = buyers[id]
 	if b then
-		figures.give(b.fig)
+		release(b)
 		buyers[id] = nil
 	end
 end
@@ -70,28 +124,27 @@ local STANDING = { open = true, setup = true, restock = true, blocked = true, sh
 
 function Crowd.seller(s)
 	local f = sellers[s.id]
-	if s.state == "gone" or s.state == "rejected" or not STANDING[s.state] then
+	if not STANDING[s.state] then
 		if f then
-			figures.give(f.fig)
+			release(f)
 			sellers[s.id] = nil
 		end
 		return
 	end
 	if not f then
-		f = { fig = figures.take(s.look or 1, "seller"), slot = s.slot }
+		f = newPerson(s.look or 1, "seller")
 		sellers[s.id] = f
-		local L = Layout.SLOTS[s.slot]
-		local p = Vector3.new(L.back.x, 0, L.back.z)
-		f.cf = CFrame.lookAt(p, p + Vector3.new(L.facing.x, 0, L.facing.z))
 	end
 	-- a blocked or shuttered seller turns their back on the square
 	local L = Layout.SLOTS[s.slot]
 	local p = Vector3.new(L.back.x, 0, L.back.z)
+	local face = Vector3.new(L.facing.x, 0, L.facing.z)
 	if s.state == "blocked" or s.state == "shuttered" then
-		f.cf = CFrame.lookAt(p, p - Vector3.new(L.facing.x, 0, L.facing.z))
-	else
-		f.cf = CFrame.lookAt(p, p + Vector3.new(L.facing.x, 0, L.facing.z))
+		face = -face
 	end
+	f.cf = CFrame.lookAt(p, p + face)
+	f.pos = p
+	f.mood = (s.state == "blocked" or s.state == "shuttered") and "cheated" or nil
 	f.dirty = true
 end
 
@@ -100,7 +153,7 @@ function Crowd.clear()
 		Crowd.buyerGone(id)
 	end
 	for id, f in sellers do
-		figures.give(f.fig)
+		release(f)
 		sellers[id] = nil
 	end
 end
@@ -119,7 +172,7 @@ local function where(b, now: number): (Vector3, Vector3?, boolean)
 	return Vector3.new(p.x, 0, p.z), nil, false
 end
 
-function Crowd.count(): (number, number)
+function Crowd.count(): (number, number, number)
 	local nb, ns = 0, 0
 	for _ in buyers do
 		nb += 1
@@ -127,54 +180,101 @@ function Crowd.count(): (number, number)
 	for _ in sellers do
 		ns += 1
 	end
-	return nb, ns
+	return nb, ns, rigs and rigs.count() or 0
+end
+
+-- who is nearest the camera gets a rig
+local rigClock = 0
+local scratch = {}
+local function chooseRigs(cam: Vector3)
+	table.clear(scratch)
+	for _, b in buyers do
+		local p = b.lastP or (b.to and Vector3.new(b.to.x, 0, b.to.z))
+		if p then
+			b.dist = (p - cam).Magnitude
+			table.insert(scratch, b)
+		end
+	end
+	for _, f in sellers do
+		f.dist = (f.pos - cam).Magnitude
+		table.insert(scratch, f)
+	end
+	table.sort(scratch, function(a, b)
+		return a.dist < b.dist
+	end)
+	-- drop rigs that are no longer among the nearest, then hand out the freed ones
+	local cut = math.min(#scratch, Crowd.MAX_RIGS)
+	for i = cut + 1, #scratch do
+		dropRig(scratch[i])
+	end
+	for i = 1, cut do
+		if scratch[i].dist < NEAR * 1.6 then
+			giveRig(scratch[i])
+		else
+			dropRig(scratch[i])
+		end
+	end
+end
+
+local function placeOne(p, cf: CFrame, moving: boolean)
+	if p.rig then
+		rigs.place(p.rig, cf, moving, p.mood == "cheated")
+	else
+		simple.place(p.fig, cf, moving)
+	end
 end
 
 -- place everyone for simulated time `now`; cam = the camera's position
--- LOD by distance: near figures update every frame, middle ones every 2nd,
--- far ones every 4th (staggered by `look`, so the work spreads evenly). A
--- figure that is standing still is placed once and left alone.
-local NEAR, MID = 90, 200
-
 function Crowd.update(now: number, cam: Vector3, dt: number)
 	frame += 1
+	if rigs and rigs.ready then
+		rigClock -= dt
+		if rigClock <= 0 then
+			rigClock = RIG_EVERY
+			chooseRigs(cam)
+		end
+	end
 	for _, b in buyers do
-		local d = b.lastP and (b.lastP - cam).Magnitude or 0
-		local every = d < NEAR and 1 or (d < MID and 2 or 4)
-		local far = every > 1
-		local still = b.settled and b.settledT == b.t0
-		if not still and (every == 1 or (frame + (b.look or 0)) % every == 0) then
-			local p, d, moving = where(b, now)
-			b.lastP = p
-			local facing = b.facing
-			if d and d.Magnitude > 1e-3 then
-				facing = d.Unit
-			elseif b.state == "deal" or b.state == "wait" or b.state == "queue" then
-				-- face the stall
-				if b.target then
+		-- a figure standing still is placed once, until its next segment
+		if not b.settled then
+			local d = b.dist or (b.lastP and (b.lastP - cam).Magnitude) or 0
+			local every = (b.rig or d < NEAR) and 1 or (d < MID and 2 or 4)
+			if every == 1 or (frame + b.look) % every == 0 then
+				local p, dir, moving = where(b, now)
+				b.lastP = p
+				local facing = b.facing
+				if dir and dir.Magnitude > 1e-3 then
+					facing = dir.Unit
+				elseif FACE_STALL[b.state] and b.target then
 					local f = sellers[b.target]
 					if f then
-						local dir = (f.cf.Position - p) * Vector3.new(1, 0, 1)
-						if dir.Magnitude > 1e-3 then
-							facing = dir.Unit
+						local v = (f.pos - p) * Vector3.new(1, 0, 1)
+						if v.Magnitude > 1e-3 then
+							facing = v.Unit
 						end
 					end
 				end
+				b.facing = facing or Vector3.new(0, 0, -1)
+				placeOne(b, CFrame.lookAt(p, p + b.facing), moving)
+				if not moving and now >= b.t0 then
+					b.settled = true
+				end
 			end
-			b.facing = facing or Vector3.new(0, 0, -1)
-			figures.place(b.fig, CFrame.lookAt(p, p + b.facing), moving, b.state, far)
-			-- standing (browsing, waiting, dealing): nothing changes until the next segment
-			b.settled = not moving and now >= b.t0
-			b.settledT = b.t0
+		elseif b.dirty then
+			b.dirty = false
+			b.settled = false
 		end
 	end
 	for _, f in sellers do
 		if f.dirty then
 			f.dirty = false
-			figures.place(f.fig, f.cf, false, "seller", false)
+			placeOne(f, f.cf, false)
 		end
 	end
-	figures.flush(dt, cam)
+	simple.flush(dt, cam)
+	if rigs then
+		rigs.flush()
+	end
 end
 
 return Crowd
