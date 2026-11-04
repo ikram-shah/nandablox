@@ -21,9 +21,11 @@ local sellers: { [string]: any } = {} -- seller id -> figure standing at its sta
 local simple -- SimpleFigures
 local rigs -- RigFigures (optional)
 local frame = 0
+local scratchBuyers: { any }
 
 Crowd.MAX_RIGS = 16 -- animated R15 rigs are dear (Animator + 15 parts each): only the closest few
 local NEAR, MID = 90, 200
+Crowd.BUDGET = 70 -- non-near figure placements per frame
 Crowd.RIG_RANGE = 110
 local RIG_EVERY = 0.4 -- seconds between re-choosing who is near
 
@@ -187,9 +189,12 @@ end
 -- who is nearest the camera gets a rig
 local rigClock = 0
 local scratch = {}
+scratchBuyers = {} :: { any } -- buyers as an array, rebuilt with the distances
 local function chooseRigs(cam: Vector3)
 	table.clear(scratch)
+	table.clear(scratchBuyers)
 	for _, b in buyers do
+		table.insert(scratchBuyers, b)
 		local p = b.lastP or (b.to and Vector3.new(b.to.x, 0, b.to.z))
 		if p then
 			b.dist = (p - cam).Magnitude
@@ -203,6 +208,9 @@ local function chooseRigs(cam: Vector3)
 	table.sort(scratch, function(a, b)
 		return a.dist < b.dist
 	end)
+	if not (rigs and rigs.ready) then
+		return
+	end
 	-- hysteresis: a rig stays with its person until they are well out of
 	-- range; free rigs go to the nearest people without one (no churn)
 	local held = 0
@@ -239,23 +247,36 @@ end
 -- place everyone for simulated time `now`; cam = the camera's position
 function Crowd.update(now: number, cam: Vector3, dt: number)
 	frame += 1
-	if rigs and rigs.ready then
-		rigClock -= dt
-		if rigClock <= 0 then
-			rigClock = RIG_EVERY
-			chooseRigs(cam)
-		end
+	rigClock -= dt
+	if rigClock <= 0 then
+		rigClock = RIG_EVERY
+		chooseRigs(cam) -- also refreshes everyone's distance to the camera
 	end
-	for _, b in buyers do
-		-- a figure standing still is placed once, until its next segment
+	-- walkers: rigs and near figures every frame; everyone else shares a
+	-- budget of BUDGET placements per frame, round-robin (far figures that
+	-- move every 2nd-4th frame still read as smooth from the overview)
+	local spent = 0
+	local list = scratchBuyers
+	local n = #list
+	local start = n > 0 and (frame * 37) % n or 0
+	for k = 1, n do
+		local b = list[(start + k - 1) % n + 1]
+		if b.dirty then
+			b.dirty = false
+			b.settled = false
+		end
 		if not b.settled then
-			local d = b.dist or (b.lastP and (b.lastP - cam).Magnitude) or 0
-			local every = (b.rig or d < NEAR) and 1 or (d < MID and 2 or 4)
-			if every == 1 or (frame + b.look) % every == 0 then
+			local d = b.dist or 0
+			local due = b.rig ~= nil or d < NEAR or (frame - (b.lastF or 0)) >= (d < MID and 2 or 4)
+			if due and (b.rig or d < NEAR or spent < Crowd.BUDGET) then
+				if not b.rig and d >= NEAR then
+					spent += 1
+				end
+				b.lastF = frame
 				local p, dir, moving = where(b, now)
 				b.lastP = p
 				local facing = b.facing
-				if dir and dir.Magnitude > 1e-3 then
+				if dir and (dir.X ~= 0 or dir.Z ~= 0) then
 					facing = dir.Unit
 				elseif FACE_STALL[b.state] and b.target then
 					local f = sellers[b.target]
@@ -272,9 +293,6 @@ function Crowd.update(now: number, cam: Vector3, dt: number)
 					b.settled = true
 				end
 			end
-		elseif b.dirty then
-			b.dirty = false
-			b.settled = false
 		end
 	end
 	for _, f in sellers do
