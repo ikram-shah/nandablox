@@ -118,7 +118,8 @@ function Simple.flush(dt: number)
 	t += dt
 	local n = 0
 	for f in live do
-		if f.dirty or f.moving then
+		if f.dirty then
+			-- placed this frame by Crowd (which already skips far and standing figures)
 			f.dirty = false
 			local cf = f.cf
 			local swing = f.moving and math.sin((t + f.phase) * 11) * 0.5 or 0

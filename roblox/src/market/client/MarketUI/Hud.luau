@@ -491,9 +491,18 @@ function Hud.status(s)
 		table.insert(bits, string.format("gateway: %s (%d ok, %d errors)", s.gateway.health, s.gateway.ok, s.gateway.errors))
 	end
 	if s.watchers then
+		-- no account names on screen (it is on stage and on video): "you", then numbers
 		local names = {}
+		local k = 1
 		for _, w in s.watchers do
-			table.insert(names, w.label .. (w.auto and " (auto)" or ""))
+			local name
+			if w.id == you then
+				name = "you"
+			else
+				k += 1
+				name = "watcher " .. k
+			end
+			table.insert(names, name .. (w.auto and " (auto)" or ""))
 		end
 		table.insert(bits, "watchers: " .. table.concat(names, ", "))
 	end

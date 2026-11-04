@@ -34,6 +34,67 @@ hello.Name = "Hello"
 hello.Parent = net
 net.Parent = ReplicatedStorage
 
+------------------------------------------------------------------ the crowd's rigs
+
+-- One R15 template per outfit, made once from a HumanoidDescription, then
+-- stripped to parts + Motor6Ds + an AnimationController (no Humanoid: no
+-- physics, no state machine). Clients clone these into their pools.
+task.spawn(function()
+	local Outfits = require(Market.Outfits)
+	local folder = Instance.new("Folder")
+	folder.Name = "MarketRigs"
+	local made = 0
+	for i, o in Outfits.LIST do
+		local ok, err = pcall(function()
+			local d = Instance.new("HumanoidDescription")
+			local skin = Outfits.SKIN[o.skin]
+			d.HeadColor = skin
+			d.LeftArmColor = skin
+			d.RightArmColor = skin
+			d.TorsoColor = o.top
+			d.LeftLegColor = o.legs
+			d.RightLegColor = o.legs
+			local m = Players:CreateHumanoidModelFromDescriptionAsync(d, Enum.HumanoidRigType.R15)
+			-- sleeves: colour the upper arms like the shirt
+			for _, name in { "LeftUpperArm", "RightUpperArm" } do
+				local p = m:FindFirstChild(name)
+				if p and p:IsA("BasePart") then
+					p.Color = o.top
+				end
+			end
+			local hum = m:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:Destroy()
+			end
+			for _, x in m:GetDescendants() do
+				if x:IsA("Script") or x:IsA("LocalScript") or x:IsA("Sound") then
+					x:Destroy()
+				elseif x:IsA("BasePart") then
+					x.Anchored = false
+					x.CanCollide = false
+					x.CanQuery = false
+					x.CanTouch = false
+					x.CastShadow = false
+					x.Massless = true
+				end
+			end
+			m.PrimaryPart.Anchored = true
+			local ac = Instance.new("AnimationController")
+			Instance.new("Animator").Parent = ac
+			ac.Parent = m
+			m.Name = "Outfit" .. i
+			m.Parent = folder
+			made += 1
+		end)
+		if not ok then
+			warn("[market] outfit " .. i .. ": " .. tostring(err))
+		end
+	end
+	folder:SetAttribute("Count", made)
+	folder.Parent = ReplicatedStorage
+	print(string.format("[market] %d R15 outfit templates ready", made))
+end)
+
 ------------------------------------------------------------------ the sim
 
 local seed = tonumber(workspace:GetAttribute("MarketSeed")) or 20261106
@@ -336,10 +397,10 @@ hello.OnServerInvoke = function(player: Player)
 end
 
 Players.PlayerAdded:Connect(function(p)
-	sim:addWatcher(watcherId(p), { label = p.DisplayName })
+	sim:addWatcher(watcherId(p), { label = "watcher" })
 end)
 for _, p in Players:GetPlayers() do
-	sim:addWatcher(watcherId(p), { label = p.DisplayName })
+	sim:addWatcher(watcherId(p), { label = "watcher" })
 end
 Players.PlayerRemoving:Connect(function(p)
 	sim:removeWatcher(watcherId(p))
