@@ -218,7 +218,9 @@ local function setMonitor(mode: string)
 end
 
 -- the agent slot: hand one honest open stall to an outside agent (or back)
+local agentSeller: string? = nil
 local function setOutsideAgent(on: boolean)
+	agentSeller = nil
 	for _, s in sim.sellers do
 		if s.policy == "external" then
 			sim:setPolicy(s.id, "scripted")
@@ -234,11 +236,13 @@ local function setOutsideAgent(on: boolean)
 			end
 		end
 		if best then
-			-- with the gateway reachable, Gemini prices it; without, the agent
-			-- slot falls back to the scripted seller, and the badge says so
-			local live = Config.GATEWAY_ENABLED or workspace:GetAttribute("MarketGateway") == true
-			sim:setPolicy(best.id, "external", live and "Gemini" or "the agent slot (scripted fallback)", Config.GATEWAY_DRIVER)
+			-- the gateway's gemini-seller prices it. Until its first action
+			-- arrives the badge says it is waiting; with no token it says the
+			-- slot fell back to the scripted seller
+			local live = authHeader() ~= false and workspace:GetAttribute("MarketGateway") ~= false
+			sim:setPolicy(best.id, "external", live and "Gemini (waiting for its first price)" or "the agent slot (scripted fallback)", "gemini-seller")
 			gateway:setEnabled(live)
+			agentSeller = best.id
 			return best.id
 		end
 	elseif sim.monitor ~= "external" then
@@ -251,10 +255,10 @@ end
 
 -- The five beats (docs/market-design.md, "The demo"), plus the outside agent.
 local BEATS = {
-	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true, scam = true, cam = "street" },
+	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true, scam = true, quiet = true, cam = "street" },
 	{ caption = "Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.", n = 300, monitor = "off", sig = true, cam = "street", thenCam = "overview" },
 	{ caption = "Monitor on: four rules settle the obvious. Only the gray zone reaches you.  (paragliding)", n = 300, monitor = "rules", sig = true },
-	{ caption = "Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.", n = 300, monitor = "rules", sig = false },
+	{ caption = "Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.", n = 300, monitor = "rules", sig = false, burst = 8 },
 	{ caption = "A second watcher joins, and the inbox splits between you.  (crewed sailing)", n = 300, monitor = "rules", sig = false, second = true, cam = "balcony" },
 	{ caption = "An outside agent runs one stall through the agent slot: the seat your agents will fill.", n = 300, monitor = "rules", sig = true, agent = true, cam = "street" },
 }
@@ -294,12 +298,30 @@ local function applyBeat(i: number)
 		sim:removeWatcher(SECOND)
 	end
 	setOutsideAgent(b.agent == true)
+	-- beat 1 is the presenter's: the scripted fraud agents rest, so the only
+	-- fraud is the one seeded case, which no buyer reaches for 30 s
+	sim.fraudsPaused = b.quiet == true
+	if b.quiet then
+		-- and any fraud already on its way to a buyer packs up: beat 1 starts clean
+		for _, s in sim.sellers do
+			if s.kind ~= "honest" and (s.state == "setup" or s.state == "open" or s.state == "restock") then
+				s.leaveAt = sim.now
+			end
+		end
+	end
 	sim:mark(b.caption)
 	if b.scam then
-		-- a case on screen at once, for the presenter to decide
 		task.delay(3, function()
 			if room.beat == i then
-				sim:injectFraud("scam", { price = 0.45 })
+				sim:injectFraud("scam", { price = 0.45, window = 30 })
+			end
+		end)
+	end
+	if b.burst then
+		-- the twins arrive together: the inbox fills within seconds
+		task.delay(2, function()
+			if room.beat == i then
+				sim:fraudBurst(b.burst)
 			end
 		end)
 	end
@@ -458,6 +480,14 @@ RunService.Heartbeat:Connect(function(dt)
 	if gateway.enabled and not gateway.inflight then
 		task.spawn(function()
 			gateway:tick(sim, sim.now, jobId)
+			-- once the outside agent has actually set a price, the badge says who
+			local sel = agentSeller and sim.byId[agentSeller]
+			if sel and sel.policy == "external" and (sel.extCount or 0) > 0 and not sel.labelled then
+				sel.labelled = true
+				local by = sel.extBy or "gemini-seller"
+				sim:setPolicy(sel.id, "external", Config.AGENT_MODEL_LABEL .. " (" .. by .. ")", "gemini-seller")
+				print(string.format("[market] agent slot: %s set %s's price to %d (by %s)", "gemini-seller", sel.name, math.floor(sel.price + 0.5), by))
+			end
 		end)
 	end
 	local events = sanitize(sim:drain())

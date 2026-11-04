@@ -113,5 +113,8 @@ Config.GATEWAY_MONITOR = nil :: string?
 -- who drives a trader whose policy is "external" (nil: the gateway's choice,
 -- which for sellers ends at its `gemini-seller`)
 Config.GATEWAY_DRIVER = nil :: string?
+-- what the beat-6 badge calls the hosted gateway's gemini-seller once it has
+-- set a price (its /v1/health reports the model: gemini-2.5-flash)
+Config.AGENT_MODEL_LABEL = "Gemini 2.5 Flash"
 
 return Config

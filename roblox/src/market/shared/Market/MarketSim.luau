@@ -272,6 +272,8 @@ function MarketSim:publicSeller(s)
 		rating_avg = shown and shown.ratings > 0 and shown.ratingSum / shown.ratings or nil,
 		policy = s.policy,
 		label = s.label,
+		extCount = s.extCount,
+		extBy = s.extBy,
 		look = s.look,
 		-- ground truth only once it no longer matters (the aftermath)
 		truth = (s.state == "shuttered" or s.state == "blocked" or s.state == "gone") and s.kind or nil,
@@ -364,7 +366,8 @@ local function list(self, s)
 		self:emit({ k = "rejected", seller = s.id, name = s.name, slot = s.slot })
 		return
 	end
-	s.openAt = self.now + windowLength(self)
+	s.openAt = self.now + (s.window or windowLength(self))
+	s.window = nil
 	setState(self, s, "setup")
 	local c = caseFor(self, s, "listing")
 	route(self, c)
@@ -440,7 +443,8 @@ local function arrive(self, p)
 end
 
 -- A fraud agent acts. kind = "scam" | "impostor"; opts.good, opts.price (fraction
--- of market), opts.victim (a seller id) for a human red player.
+-- of market), opts.victim (a seller id) for a human red player, opts.window
+-- (seconds until the first buyer: a long one for a case the presenter decides).
 function MarketSim:injectFraud(kind: string, opts)
 	opts = opts or {}
 	local rng = self.rng
@@ -470,6 +474,7 @@ function MarketSim:injectFraud(kind: string, opts)
 		end
 		s.look = victim.look -- dressed the same, too
 		s.leaveAt = self.now + cfg.FRAUD_LIFETIME
+		s.window = opts.window
 		self.count.frauds += 1
 		list(self, s)
 		return s
@@ -481,10 +486,38 @@ function MarketSim:injectFraud(kind: string, opts)
 			return nil
 		end
 		s.leaveAt = self.now + cfg.FRAUD_LIFETIME
+		s.window = opts.window
 		self.count.frauds += 1
 		list(self, s)
 		return s
 	end
+end
+
+-- Several impostors at once, each copying a different live stall (the twins
+-- arrive together, so with signatures off the inbox fills in seconds).
+function MarketSim:fraudBurst(k: number): number
+	local made = 0
+	local used = {}
+	for _ = 1, k * 3 do
+		if made >= k then
+			break
+		end
+		local cands = {}
+		for _, s in self.sellers do
+			if s.kind == "honest" and (s.state == "open" or s.state == "setup") and not used[s.id] then
+				table.insert(cands, s)
+			end
+		end
+		if #cands == 0 then
+			break
+		end
+		local v = self.rng:pick(cands)
+		used[v.id] = true
+		if self:injectFraud("impostor", { victim = v.id }) then
+			made += 1
+		end
+	end
+	return made
 end
 
 local function remove(self, s, why: string?)
@@ -1258,7 +1291,7 @@ function MarketSim:step(dt: number)
 
 	-- the scripted fraud agents: a steady rate that scales with N
 	local perMin = math.max(cfg.FRAUD_MIN_PER_MIN, cfg.FRAUD_PER_TRADER_MIN * self.n)
-	if rng:chance(perMin / 60 * dt) then
+	if not self.fraudsPaused and rng:chance(perMin / 60 * dt) then
 		self:injectFraud(rng:chance(cfg.IMPOSTOR_SHARE) and "impostor" or "scam")
 	end
 
@@ -1484,6 +1517,8 @@ function MarketSim:applyGateway(resp)
 					local base = self.goods[s.good].base
 					s.price = math.clamp(a.set_price, base * cfg.PRICE_CLAMP[1], base * cfg.PRICE_CLAMP[2])
 					s.extAt = self.now
+					s.extBy = type(a.by) == "string" and string.sub(a.by, 1, 32) or nil
+					s.extCount = (s.extCount or 0) + 1
 					emitStall(self, s)
 					na += 1
 				end
