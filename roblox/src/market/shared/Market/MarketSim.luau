@@ -1113,13 +1113,14 @@ function MarketSim:setSignatures(on: boolean)
 end
 
 -- The agent slot: a seller's policy is "scripted" or "external" (the gateway).
-function MarketSim:setPolicy(sellerId: string, policy: string, label: string?)
+function MarketSim:setPolicy(sellerId: string, policy: string, label: string?, driver: string?)
 	local s = self.byId[sellerId]
 	if not s then
 		return false
 	end
 	s.policy = policy
 	s.label = label
+	s.driver = driver
 	emitStall(self, s)
 	return true
 end
@@ -1388,6 +1389,8 @@ function MarketSim:gatewayRequest(serverId: string?)
 			end
 			table.insert(decisions, {
 				agent = s.id,
+				-- the registration that drives it (gateway decision 5); nil = the first with the role
+				driver = s.driver or cfg.GATEWAY_DRIVER,
 				role = "seller",
 				good = s.good,
 				stock = s.stock,
@@ -1400,8 +1403,11 @@ function MarketSim:gatewayRequest(serverId: string?)
 	return {
 		server = serverId or "local",
 		t = math.floor(self.now * 10 + 0.5) / 10,
+		-- which registered monitor to ask (gateway decision 4); none = every one, then its rules
+		monitor = self.monitorName ~= "external" and self.monitorName or cfg.GATEWAY_MONITOR,
 		market = self:prices(),
 		lever = { signatures = self.signatures },
+		-- the slot is off unless it is external: then no cases are sent at all
 		cases = cases,
 		decisions = decisions,
 	}
@@ -1421,7 +1427,8 @@ function MarketSim:applyGateway(resp)
 				local c = self.cases[v.case]
 				local verdict = v.verdict
 				if c and c.stage == "monitor" and (verdict == "allow" or verdict == "block" or verdict == "escalate") then
-					local reason = type(v.reason) == "string" and string.sub(v.reason, 1, 80) or nil
+					-- untrusted text (gateway decision 7): the server filters it before a player sees it
+					local reason = type(v.reason) == "string" and string.sub(v.reason, 1, 120) or nil
 					local name = type(v.monitor) == "string" and string.sub(v.monitor, 1, 32) or "external"
 					self:monitorVerdict(c, verdict, reason, name)
 					nv += 1

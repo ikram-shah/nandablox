@@ -1,0 +1,55 @@
+{
+  "name": "NandaMarket",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Market": {
+        "$path": "src/market/shared/Market"
+      }
+    },
+    "ServerStorage": {
+      "NandaSecrets": {
+        "$path": { "optional": "src/server/secrets" }
+      }
+    },
+    "ServerScriptService": {
+      "MarketServer": {
+        "$path": "src/market/server/MarketServer.server.luau"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "MarketClient": {
+          "$path": "src/market/client/MarketClient.client.luau"
+        },
+        "MarketUI": {
+          "$path": "src/market/client/MarketUI"
+        }
+      }
+    },
+    "Players": {
+      "$properties": {
+        "CharacterAutoLoads": false
+      }
+    },
+    "Lighting": {
+      "$properties": {
+        "ClockTime": 16.2,
+        "GeographicLatitude": 38,
+        "Brightness": 2.6,
+        "EnvironmentDiffuseScale": 0.6,
+        "EnvironmentSpecularScale": 0.5,
+        "GlobalShadows": true,
+        "Technology": "Future",
+        "OutdoorAmbient": [0.55, 0.5, 0.47],
+        "Ambient": [0.2, 0.19, 0.18],
+        "ShadowSoftness": 0.25
+      }
+    },
+    "HttpService": {
+      "$properties": {
+        "HttpEnabled": true
+      }
+    }
+  }
+}
