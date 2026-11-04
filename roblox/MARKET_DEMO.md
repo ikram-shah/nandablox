@@ -42,7 +42,7 @@ so give each beat ~45 s before reading the number out.
 
 | # | press | the words (the caption) | what to point at | expect | fallback |
 |---|---|---|---|---|---|
-| 1 | N | *Five traders. You can decide every case, and you keep up.* (biking) | Click one card: Allow an at-market newcomer; Block a 50%-off stranger | meter **2–4**, green; inbox empty most of the time | If no case comes within 20 s, press the red **Scam stall** button (controls, H to show) and block it |
+| 1 | N | *Five traders. You can decide every case, and you keep up.* (biking) | Click one card: Allow an at-market newcomer; Block a 50%-off stranger | a half-price scam listing appears 3 s in (seeded): block it; then meter **2–4**, green | If no case shows, press the red **Scam stall** button (controls, H to show) and block it |
 | 2 | N | *Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.* | The square filling; the inbox "+N more waiting"; red ✕ over cheated buyers; a stall shuttered "CLOSED" | meter climbs past 12 within ~20 s, **30–40** by a minute; escaped ticks up | If the meter is slow to climb, say "a minute from now this is 37" and show the headless table below |
 | 3 | N | *Monitor on: four rules settle the obvious. Only the gray zone reaches you.* (paragliding) | Inbox thins to gray-zone cases; boarded-up "BLOCKED" stalls appear without you | meter falls to **~11**; caught rises (the monitor's); a few false alarms | Read the four rules out from the slide; the number is in the table |
 | 4 | N | *Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.* | "⚠ TWO STALLS, ONE NAME" cards; deals/min goes up | meter back to **~26**; escapes rise | Same table row |
@@ -81,6 +81,16 @@ In Studio the meter at 300 with the monitor off reads 27 at 30 s, 33 at 60 s,
 | A beat misfires | Press its number of N again from beat 1, or use the controls (H to show): traders, monitor, signature vote |
 | Gateway errors on beat 6 | Ignore: it is off by default and the scripted fallback runs; the badge still shows |
 | Rendering is choppy | Presenter view (H) and overview camera (V); the crowd's cost is ~3 ms a frame at 300 |
+
+## Performance
+
+Client script cost, measured in a Studio playtest (`MarketScriptMs`, per frame):
+**0.3–1.4 ms at 5 traders, ~1.4 ms at 50, 3.1–3.5 ms at 300**. The 16 people
+nearest the camera are R15 rigs (walk and idle animations); everyone else is a
+3-part figure moved in one `BulkMoveTo`, near ones every frame and far ones on
+a budget of 40 per frame. Studio under Wine on the dev machine renders a flat
+~15 fps whatever the load (an unfocused, throttled window; heartbeat runs at
+60), so measure frame rate on the presenting machine.
 
 ## Words, if asked
 
