@@ -53,8 +53,11 @@ function Cam.update(dt: number, n: number)
 	if mode == "overview" then
 		-- high and to one side, looking at the plaza, offset so the inbox on the
 		-- right does not cover the middle
-		local r = dist * 1.55 + 20
-		local h = dist * 1.15 + 30
+		-- small market: low and close, among the people; big market: up high,
+		-- the whole square. k runs 0 (5 traders) .. 1 (the full square).
+		local k = math.clamp((dist - 44) / (Layout.EDGE_R - 44), 0, 1)
+		local r = dist * (1.05 + 0.5 * k) + 18
+		local h = 16 + dist * (0.25 + 0.95 * k)
 		local eye = Vector3.new(r * math.cos(angle), h, r * math.sin(angle))
 		local look = Vector3.new(0, 0, 0)
 		cf = CFrame.lookAt(eye, look)
