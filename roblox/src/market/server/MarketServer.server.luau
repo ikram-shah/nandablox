@@ -224,8 +224,11 @@ local function setOutsideAgent(on: boolean)
 			end
 		end
 		if best then
-			sim:setPolicy(best.id, "external", "Gemini", Config.GATEWAY_DRIVER)
-			gateway:setEnabled(true)
+			-- with the gateway reachable, Gemini prices it; without, the agent
+			-- slot falls back to the scripted seller, and the badge says so
+			local live = Config.GATEWAY_ENABLED or workspace:GetAttribute("MarketGateway") == true
+			sim:setPolicy(best.id, "external", live and "Gemini" or "the agent slot (scripted fallback)", Config.GATEWAY_DRIVER)
+			gateway:setEnabled(live)
 			return best.id
 		end
 	elseif sim.monitor ~= "external" then
