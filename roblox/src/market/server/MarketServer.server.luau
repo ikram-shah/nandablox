@@ -238,12 +238,12 @@ end
 
 -- The five beats (docs/market-design.md, "The demo"), plus the outside agent.
 local BEATS = {
-	{ caption = "Five traders. You see every case, and you keep up.", n = 5, monitor = "off", sig = true },
-	{ caption = "Grow to 300. The inbox overflows; frauds escape while their cases wait.", n = 300, monitor = "off", sig = true },
-	{ caption = "Monitor on. Rules settle the obvious; only the gray zone reaches you.", n = 300, monitor = "rules", sig = true },
-	{ caption = "Signatures off. Trade speeds up, twins appear, the inbox floods again.", n = 300, monitor = "rules", sig = false },
-	{ caption = "A second watcher joins. The inbox splits.", n = 300, monitor = "rules", sig = false, second = true },
-	{ caption = "An outside agent: one stall is run by Gemini through the agent slot.", n = 300, monitor = "rules", sig = true, agent = true },
+	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true },
+	{ caption = "Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.", n = 300, monitor = "off", sig = true },
+	{ caption = "Monitor on: four rules settle the obvious. Only the gray zone reaches you.  (paragliding)", n = 300, monitor = "rules", sig = true },
+	{ caption = "Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.", n = 300, monitor = "rules", sig = false },
+	{ caption = "A second watcher joins, and the inbox splits between you.  (crewed sailing)", n = 300, monitor = "rules", sig = false, second = true },
+	{ caption = "An outside agent runs one stall through the agent slot: the seat your agents will fill.", n = 300, monitor = "rules", sig = true, agent = true },
 }
 
 local SECOND = "helper"
