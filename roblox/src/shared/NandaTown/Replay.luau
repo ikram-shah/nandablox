@@ -137,6 +137,8 @@ local function trunc(s: any): string
 	return tostring(s)
 end
 
+local ATTACK_NAME = { forge = "forged invoice", spoof = "spoofed card", bait = "fly-by-night stall" }
+
 local function bodySummary(kind: string?, body: { [string]: any }?): string
 	if not body then
 		return ""
@@ -242,13 +244,18 @@ function Replay.describe(e, trace): string
 	elseif k == "round_finished" then
 		return string.format("<b>Round %s over</b>: RED %s · BLUE %s · %s deals settled · <b>%s</b> wins", tostring(d.round), tostring(d.red), tostring(d.blue), tostring(d.deals), string.upper(tostring(d.winner)))
 	elseif k == "threat_caught" then
-		return string.format("<font color='#5aa0ff'>Watchtower: <b>%s</b> caught a %s</font> after %s s (+%s blue)", tostring(d.by), d.attack == "forge" and "forged invoice" or "spoofed card", tostring(d.after), tostring(d.points))
+		return string.format("<font color='#5aa0ff'>Watchtower: <b>%s</b> caught a %s</font> after %s s (+%s blue)", tostring(d.by), ATTACK_NAME[d.attack] or "spoofed card", tostring(d.after), tostring(d.points))
 	elseif k == "threat_escaped" then
-		return string.format("<font color='#ff5050'>Red's %s got away with %s</font> (+%s red)", d.attack == "forge" and "forged invoice" or "spoofed card", Util.money(d.cents), tostring(d.points))
+		return string.format("<font color='#ff5050'>Red's %s got away with %s</font> (+%s red)", ATTACK_NAME[d.attack] or "spoofed card", Util.money(d.cents), tostring(d.points))
 	elseif k == "false_alarm" then
 		return string.format("<font color='#ffb040'>False alarm</font>: <b>%s</b> flagged an honest %s (%s blue); it is held %s s", tostring(d.by), d.what == "card" and "card" or "courier", tostring(d.points), tostring(d.stall))
 	elseif k == "layer_swapped" then
 		return string.format("<font color='#c080ff'>Council</font>: %s switches <b>%s → %s</b> (%s of %s voted)", subj, tostring(d.from), tostring(d.to), tostring(d.yes), tostring(d.present))
+	elseif k == "town_grew" then
+		return string.format("<b>The town grows to %s agents</b>: newcomers open stalls and start trading", tostring(d.size))
+	elseif k == "monitors_switched" then
+		return d.on and "<font color='#78e68c'><b>Monitors on</b></font>: rule monitors sort every case; only the ambiguous reach the human"
+			or "<font color='#ffb060'><b>Monitors off</b></font>: every case at a seam goes to the human"
 	end
 	return string.format("%s · %s · %s", who, k, subj)
 end
@@ -464,6 +471,11 @@ function Replay.stage(trace, o: { [string]: any })
 		if a then
 			return a.chest
 		end
+		-- a live view may place agents the trace never listed (the crowd at scale)
+		local p = o.posOf and name and o.posOf(name)
+		if p then
+			return p
+		end
 		return town.center
 	end
 	-- where a courier really sets off: the sender's spot, unless the event says
@@ -487,11 +499,25 @@ function Replay.stage(trace, o: { [string]: any })
 	local function refreshLedger()
 		local bank = town.buildings.payments
 		local lines, total = {}, 0
+		local listed = {}
 		for _, n in town.order do
 			if balances[n] then
+				listed[n] = true
 				total += balances[n]
 				table.insert(lines, string.format("%s  %s", n, Util.money(balances[n])))
 			end
+		end
+		-- accounts with no figure of their own (a live town's crowd): one line
+		local others, otherCents = 0, 0
+		for n, v in balances do
+			if not listed[n] then
+				others += 1
+				otherCents += v
+			end
+		end
+		if others > 0 then
+			total += otherCents
+			table.insert(lines, string.format("+%d more  %s", others, Util.money(otherCents)))
 		end
 		total += escrowTotal
 		table.insert(lines, string.format("in escrow  %s", Util.money(escrowTotal)))

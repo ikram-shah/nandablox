@@ -356,8 +356,8 @@ function Game:tick(t: number): { any }
 	if self.phase == "play" then
 		local rt = self:rt()
 		if self.demo then
-			-- the oversight demo: red at the town's scale; blue's bot is the
-			-- attention-budgeted human in Oversight, not BlueBot's dice
+			-- the oversight demo: red at the town's scale; blue's watcher is
+			-- the attention-budgeted human in Oversight, not BlueBot's dice
 			if self:botOn("red") then
 				self.redBot:scaledTick(self, rt, Scale.factor(self.cfg, self.size))
 			end
@@ -716,7 +716,10 @@ end
 
 function Game:tickOversight(rt: number)
 	local sim = self.sim
-	local watcher = self:botOn("blue")
+	-- the human at the top is always modelled (12 calls a minute), so the
+	-- audience sees what one person can and cannot decide; a human player on
+	-- blue flags on top of it (their flags decide queue cases too)
+	local watcher = true
 	self.oversight:tick(rt, {
 		watcher = watcher,
 		live = function(threatId: string): boolean
@@ -745,7 +748,7 @@ function Game:oversightMetrics()
 		beats = #Oversight.BEATS,
 		beatLabel = Oversight.BEATS[self.beat] and Oversight.BEATS[self.beat].label or nil,
 		nextLabel = Oversight.BEATS[(self.beat % #Oversight.BEATS) + 1].label,
-		watcher = self:botOn("blue") and "BlueBot" or "you",
+		watcher = "one human",
 		deals = sim.stats.dealsSettled,
 	})
 end

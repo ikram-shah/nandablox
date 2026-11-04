@@ -10,6 +10,12 @@
 --                private keys (leading "_") stripped. Hello -> a snapshot.
 --   HUD          workspace attributes RB_* (phase, clock, scores, tokens, layers, votes)
 --   telemetry    FlowBench records printed as JSON lines ("FLOWBENCH {...}")
+--   oversight    RemoteEvent Scale: the oversight demo (DEMO.md). Town size
+--                5 / 25 / 100, the rule monitors, the demo's beats. Also the
+--                OVERSIGHT CONSOLE on the watchtower's deck, and RB_ScaleCmd
+--                for automation. Off by default. At scale the server sends a
+--                sample of the town's events (RedBlue/Scale.luau's Filter):
+--                every event is simulated and counted, a fraction is drawn.
 --   agents       RemoteEvent Llm: cycle which roles a language model drives
 --                (Config.LLM_PRESETS; default: none, every trader scripted).
 --                A coroutine polls the external harness over HttpService and
@@ -33,6 +39,8 @@ local RB = NT:WaitForChild("RedBlue")
 local Config = require(RB:WaitForChild("Config"))
 local Game = require(RB:WaitForChild("Game"))
 local LlmPolicy = require(RB:WaitForChild("LlmPolicy"))
+local Scale = require(RB:WaitForChild("Scale"))
+local Oversight = require(RB:WaitForChild("Oversight"))
 local Harness = require(RB:WaitForChild("Harness"))
 
 local RedBlueServer = {}
@@ -274,7 +282,7 @@ function RedBlueServer.start(world: Instance)
 	-- remotes
 	local remotes = Instance.new("Folder")
 	remotes.Name = "NandaRedBlue"
-	for _, n in { "Events", "Hello", "Flag", "Vote", "Camera", "Notice", "Llm" } do
+	for _, n in { "Events", "Hello", "Flag", "Vote", "Camera", "Notice", "Llm", "Scale" } do
 		local r = Instance.new("RemoteEvent")
 		r.Name = n
 		r.Parent = remotes
@@ -321,7 +329,7 @@ function RedBlueServer.start(world: Instance)
 			notice(remotes, player, team == "red" and "You joined RED: attack at the gate and the notice board" or "You joined BLUE: climb the watchtower and flag what looks wrong", team, { seconds = 5 })
 		end
 	end)
-	buildTower(folder)
+	local deck = buildTower(folder)
 	local laws = buildChamber(folder)
 
 	local function attack(kind: string)
@@ -558,6 +566,144 @@ function RedBlueServer.start(world: Instance)
 	end)
 	publishLlm()
 
+	------------------------------------------------------------ the oversight demo
+
+	-- who: a player's name, or nil for automation. what: "size" (next town
+	-- size), "monitors" (toggle), "beat" (next beat), "off" (back to the
+	-- five-agent game), or a size ("5" | "25" | "100").
+	local lastScaleCmd = -math.huge
+	local function scaleCmd(what: string, who: string?)
+		if os.clock() - lastScaleCmd < 0.6 then
+			return -- one step per press, however the key bounces
+		end
+		lastScaleCmd = os.clock()
+		local text
+		if what == "beat" then
+			local b = game_:setBeat()
+			text = b and string.format("Demo %d/%d: %s", game_.beat == 0 and #Oversight.BEATS or game_.beat, #Oversight.BEATS, b.label)
+		elseif what == "size" then
+			if not game_.demo then
+				game_:setBeat(1)
+			else
+				game_:setSize(Scale.nextSize(Config, game_.size))
+			end
+			text = string.format("Town: %d agents", game_.size)
+		elseif what == "monitors" then
+			game_:setMonitors(not game_.monitors)
+			text = game_.monitors and "Monitors ON: the rules sort every case, the human gets the ambiguous ones" or "Monitors OFF: every case goes to the human"
+		elseif what == "off" then
+			game_:setBeat(#Oversight.BEATS)
+			text = "Back to the five-agent game"
+		elseif tonumber(what) then
+			game_:setSize(tonumber(what) :: number)
+			text = string.format("Town: %d agents", game_.size)
+		end
+		if text then
+			for _, p in Players:GetPlayers() do
+				notice(remotes, p, text, "gold", { seconds = 4 })
+			end
+		end
+		game_.telemetry:record(now(), "demo_cmd", { what = what, by = who, size = game_.size, monitors = game_.monitors, demo = game_.demo })
+	end
+	self.scaleCmd = scaleCmd
+	table.insert(self.conns, remotes.Scale.OnServerEvent:Connect(function(player, what)
+		if type(what) == "string" and #what <= 12 then
+			scaleCmd(what, player.DisplayName)
+		end
+	end))
+	table.insert(self.conns, workspace:GetAttributeChangedSignal(ATTR_PREFIX .. "ScaleCmd"):Connect(function()
+		local v = workspace:GetAttribute(ATTR_PREFIX .. "ScaleCmd")
+		if type(v) == "string" and v ~= "" then
+			workspace:SetAttribute(ATTR_PREFIX .. "ScaleCmd", "")
+			lastScaleCmd = -math.huge
+			scaleCmd(v)
+		end
+	end))
+
+	-- the console on the watchtower's deck: two levers, two keys (Roblox shows
+	-- only the nearest prompt per key, so they must differ)
+	do
+		local base = RedBlueServer.TOWER
+		local h = RedBlueServer.TOWER_HEIGHT
+		local desk = Util.part({
+			Name = "OversightConsole",
+			Size = Vector3.new(6, 3, 1.6),
+			CFrame = CFrame.lookAt(base + Vector3.new(4.5, h + 2.5, 6.2), base + Vector3.new(4.5, h + 2.5, 0)),
+			Color = Color3.fromRGB(30, 30, 40),
+			CanCollide = true,
+			Parent = deck.Parent,
+		})
+		local face = Util.sign(desk, Enum.NormalId.Front, "OVERSIGHT CONSOLE\nE: grow the town · R: monitors", { bg = Color3.fromRGB(30, 30, 40), color = Color3.fromRGB(250, 190, 60), pps = 40, scaled = true })
+		self.consoleFace = face
+		local function lever(name: string, key: Enum.KeyCode, action: string, cmd: string, dx: number)
+			local p = Instance.new("ProximityPrompt")
+			p.Name = name
+			p.ActionText = action
+			p.ObjectText = "Oversight console"
+			p.KeyboardKeyCode = key
+			p.HoldDuration = 0.2
+			p.MaxActivationDistance = 12
+			p.RequiresLineOfSight = false
+			local a = Instance.new("Attachment")
+			a.Position = Vector3.new(dx, 2, 0)
+			a.Parent = desk
+			p.Parent = a
+			p.Triggered:Connect(function(player)
+				scaleCmd(cmd, player.DisplayName)
+			end)
+			return p
+		end
+		self.growLever = lever("Grow", Enum.KeyCode.E, "Grow the town (5 → 25 → 100)", "size", -1.5)
+		self.monitorLever = lever("Monitors", Enum.KeyCode.R, "Monitors on / off", "monitors", 1.5)
+	end
+
+	-- the sampler for clients: rebuilt when the town (its population) changes
+	local filter, filterPop = nil, nil
+	local function sample(evs: { any }): { any }
+		local sim = game_.sim
+		if not game_.demo or not sim then
+			return evs
+		end
+		if not filter then
+			filter = Scale.Filter.new(Config, sim.pop)
+			filterPop = sim.pop
+		elseif filterPop ~= sim.pop then
+			filter:setPopulation(sim.pop)
+			filterPop = sim.pop
+		end
+		if sim.pop.size <= #Config.SELLERS + #Config.BUYERS then
+			return evs
+		end
+		local out = {}
+		for _, e in evs do
+			if filter:keep(e) then
+				table.insert(out, e)
+			end
+		end
+		return out
+	end
+
+	local lastOv = 0
+	local lastOvJson = nil
+	local function publishOversight()
+		local m = game_:oversightMetrics()
+		local json = m and HttpService:JSONEncode(m) or ""
+		if filter and m then
+			-- what the clients draw, of everything simulated
+			m.drawn = filter.total > 0 and math.floor(filter.shown / filter.total * 100 + 0.5) or 100
+			json = HttpService:JSONEncode(m)
+		end
+		if json ~= lastOvJson then
+			lastOvJson = json
+			workspace:SetAttribute(ATTR_PREFIX .. "Ov", json)
+		end
+		if self.consoleFace then
+			self.consoleFace.Text = game_.demo
+					and string.format("OVERSIGHT CONSOLE · %d agents · monitors %s\nE: grow the town · R: monitors", game_.size, game_.monitors and "ON" or "off")
+				or "OVERSIGHT CONSOLE\nE: grow the town · R: monitors"
+		end
+	end
+
 	-- the clock
 	local acc = 0
 	local llmAcc = 0
@@ -583,6 +729,10 @@ function RedBlueServer.start(world: Instance)
 		workspace:SetAttribute(ATTR_PREFIX .. "Escapes", s.escapes)
 		workspace:SetAttribute(ATTR_PREFIX .. "Catches", s.catches)
 		workspace:SetAttribute(ATTR_PREFIX .. "FalseAlarms", s.falseAlarms)
+		workspace:SetAttribute(ATTR_PREFIX .. "Demo", s.demo)
+		workspace:SetAttribute(ATTR_PREFIX .. "Size", s.size)
+		workspace:SetAttribute(ATTR_PREFIX .. "Monitors", s.monitors)
+		workspace:SetAttribute(ATTR_PREFIX .. "Beat", s.beat)
 		laws.Text = string.format("THE TOWN'S LAWS\nauth: %s\nregistry: %s\nround %d · red %d · blue %d", s.auth, s.registry, s.round, s.red, s.blue)
 	end
 	game_:start(now()) -- its first events go out with the first tick
@@ -594,16 +744,23 @@ function RedBlueServer.start(world: Instance)
 		acc = 0
 		local evs = game_:tick(now())
 		if #evs > 0 then
-			local out = table.create(#evs)
-			for _, e in evs do
-				table.insert(out, Game.public(e))
+			local drawn = sample(evs)
+			if #drawn > 0 then
+				local out = table.create(#drawn)
+				for _, e in drawn do
+					table.insert(out, Game.public(e))
+				end
+				remotes.Events:FireAllClients(out)
 			end
-			remotes.Events:FireAllClients(out)
 			if store:any() then
 				harness:note(evs) -- the context the model is given, from the town's own events
 			end
 		end
 		publish()
+		if os.clock() - lastOv >= 0.5 then
+			lastOv = os.clock()
+			publishOversight()
+		end
 		llmAcc += dt
 		if llmAcc >= 1 then
 			llmAcc = 0

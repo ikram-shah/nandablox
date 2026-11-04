@@ -12,6 +12,11 @@
 --     laws with vote buttons, what your team does, personal notices
 --   * blue's flagging: click (or tap) near a courier or a card; the nearest
 --     one on screen within PICK_PX is sent to the server by id
+--   * the oversight demo (DEMO.md): the crowd of a 25- or 100-agent town as
+--     small figures around the five, and the OVERSIGHT panel (events,
+--     threats and judgment calls per minute, the human's queue, catches,
+--     escapes, false alarms). N grows the town, H turns the monitors on or
+--     off, B steps through the demo's beats (also buttons on the panel).
 --   * the model-driven agents: a violet nameplate under the figure's own
 --     ("seller-b" / "gemini-2.5-flash"), and a panel saying what the model
 --     last decided and why. L switches them between scripted and
@@ -22,7 +27,8 @@
 -- Automation (MCP execute_luau on client-1), all through the same code paths
 -- as a mouse: workspace attribute RBClickAt = Vector2 (a click at that
 -- viewport point), RBVote = "auth" | "registry" (the vote button), RBLlm =
--- "toggle" | "off" (the L key). The view reports RBTeam, RBHover (the id
+-- "toggle" | "off" (the L key), RBScale = "size" | "monitors" | "beat" |
+-- "off" | "5" | "25" | "100" (the N / H / B keys). The view reports RBTeam, RBHover (the id
 -- under the mouse), RBLastNotice and RBFlaggables (how many clickable things
 -- are on screen) back as attributes.
 
@@ -35,6 +41,7 @@ local UserInputService = game:GetService("UserInputService")
 local Util = require(script.Parent.Util)
 local Replay = require(script.Parent.Replay)
 local Config = require(script.Parent.RedBlue.Config)
+local Scale = require(script.Parent.RedBlue.Scale)
 
 local View = {}
 View.__index = View
@@ -91,6 +98,8 @@ function View.start(opts)
 		myVotes = {},
 		layers = { auth = Config.DEFAULT_LAYERS.auth, registry = Config.DEFAULT_LAYERS.registry },
 		stopped = false,
+		crowd = {}, -- name -> { model, pos, chest } (the town at scale)
+		baitSlots = 0,
 	}, View)
 	self.remotes = ReplicatedStorage:WaitForChild("NandaRedBlue", 10)
 	if not self.remotes then
@@ -158,7 +167,13 @@ function View:build(layers)
 	Util.speed = 1
 	table.clear(self.flaggables)
 	table.clear(self.cards)
+	table.clear(self.crowd)
+	self.baitSlots = 0
 	self.stage = Replay.stage(trace, {
+		posOf = function(name: string): Vector3?
+			local c = self.crowd[name]
+			return c and c.chest or nil
+		end,
 		live = true,
 		parent = workspace,
 		guiParent = self.opts.playerGui,
@@ -300,6 +315,55 @@ function View:setSub(building, prefix: string, text: string)
 	end
 end
 
+------------------------------------------------------------------------ the crowd
+
+-- A crowd agent (the town at 25 or 100): a small figure with no nameplate,
+-- in the role's colour, at its slot around the five (RedBlue/Scale.luau). A
+-- seller nobody listed before (a newcomer red opened) stands in the row of
+-- new stalls behind the market.
+function View:addCrowd(e)
+	local name = tostring(e.subject)
+	if self.crowd[name] or (self.town and self.town.agents[name]) then
+		return
+	end
+	local role = tostring(e.detail.role or "buyer")
+	local x, z, facing
+	if e.detail.crowd then
+		x, z, facing = Scale.slot(role, e.detail.crowd)
+	else
+		self.baitSlots += 1
+		local k = self.baitSlots - 1
+		x, z, facing = -24 + (k % 11) * 4.8, -31 - (k // 11) * 4.4, 1
+	end
+	local pos = Vector3.new(x, 0.2, z)
+	local look = CFrame.lookAt(pos, pos + Vector3.new(0, 0, facing))
+	local m = Instance.new("Model")
+	m.Name = name
+	local color = Util.roleColor(role)
+	local body = Util.part({ Name = "Body", Size = Vector3.new(3, 3.7, 1.8), CFrame = look * CFrame.new(0, 1.85, 0), Color = color, Parent = m })
+	Util.part({ Name = "Head", Size = Vector3.new(2.3, 2.3, 2.3), CFrame = look * CFrame.new(0, 4.85, 0), Color = Color3.fromRGB(245, 215, 180), Parent = m })
+	Util.part({ Name = "Hat", Size = Vector3.new(2.5, 0.55, 2.5), CFrame = look * CFrame.new(0, 6.3, 0), Color = color, Parent = m })
+	m.PrimaryPart = body
+	m.Parent = self.town.root
+	self.crowd[name] = { model = m, pos = pos, chest = pos + Vector3.new(0, 3, 0), role = role }
+	if not e.snapshot then
+		local parts = {}
+		for _, p in m:GetChildren() do
+			parts[p] = p.CFrame
+		end
+		Util.animate(0.5, function(a)
+			local drop = (1 - Util.ease(a)) * 10
+			for p, cf in parts do
+				p.CFrame = cf + Vector3.new(0, drop, 0)
+			end
+		end, function()
+			for p, cf in parts do
+				p.CFrame = cf
+			end
+		end)
+	end
+end
+
 ------------------------------------------------------------------------ flaggables
 
 function View:addFlaggable(part: BasePart?, id: string)
@@ -342,10 +406,23 @@ end
 
 local PAPER_W, PAPER_H = 3.8, 2.6
 
+View.BOARD_PAPERS = 9 -- 3 x 3 fit on the board; at scale the newest are pinned
+
 function View:layoutCards()
 	local board = self.town.buildings.registry.board :: BasePart
 	local cols = 3
-	for i, c in self.cards do
+	local skip = math.max(0, #self.cards - View.BOARD_PAPERS)
+	for idx, c in self.cards do
+		local hidden = idx <= skip
+		if c.part and c.part.Parent then
+			c.part.Transparency = hidden and 1 or 0
+			for _, g in c.part:GetChildren() do
+				if g:IsA("SurfaceGui") then
+					g.Enabled = not hidden
+				end
+			end
+		end
+		local i = math.max(1, idx - skip)
 		local col, row = (i - 1) % cols, (i - 1) // cols
 		-- the town-facing side of the board is +z; turned half round, a paper's
 		-- Front face (its SurfaceGui) faces the square, read left to right
@@ -362,7 +439,14 @@ end
 function View:refreshCardPanel()
 	local reg = self.town.buildings.registry
 	local lines = {}
-	for _, c in self.cards do
+	local skip = math.max(0, #self.cards - 4)
+	if skip > 0 then
+		table.insert(lines, string.format("<font color='#666666'>+%d more listings</font>", skip))
+	end
+	for i, c in self.cards do
+		if i <= skip then
+			continue
+		end
 		table.insert(lines, string.format("%s <b>%s</b>  %s%s", c.verified and "<font color='#1a8a2a'>✓</font>" or "<font color='#d02020'>✗</font>", c.name, Util.money(c.price), c.verified and "" or "  <font color='#d02020'>UNVERIFIED</font>"))
 	end
 	reg.panel.Text = table.concat(lines, "\n")
@@ -464,6 +548,26 @@ function View:install()
 			s.Transparency = 0.2 + 0.8 * a
 		end, function()
 			s:Destroy()
+		end)
+	end
+
+	local joinedOrig = h.participant_joined
+	h.participant_joined = function(e)
+		joinedOrig(e)
+		if not town.agents[e.subject] then
+			self:addCrowd(e)
+		end
+	end
+	h.town_grew = function(e)
+		local b = self.stage.hud:banner(string.format("THE TOWN GROWS TO %s AGENTS", tostring(e.detail.size)), Color3.fromRGB(250, 190, 60))
+		Util.delay(3.5, function()
+			b:Destroy()
+		end)
+	end
+	h.monitors_switched = function(e)
+		local b = self.stage.hud:banner(e.detail.on and "MONITORS ON · the rules sort, the human judges" or "MONITORS OFF · every case goes to the human", e.detail.on and Color3.fromRGB(120, 230, 140) or Color3.fromRGB(255, 176, 96))
+		Util.delay(3.5, function()
+			b:Destroy()
 		end)
 	end
 
@@ -658,8 +762,9 @@ function View:install()
 
 	h.threat_caught = function(e)
 		local pos = self:where(e.detail.target)
-		burst(pos, BLUE)
-		floatAt(pos, "✓ CAUGHT +" .. tostring(e.detail.points), BLUE, 3.5)
+		local monitor = e.detail.by == "Monitors"
+		burst(pos, monitor and Color3.fromRGB(90, 220, 200) or BLUE)
+		floatAt(pos, (monitor and "✓ MONITOR CAUGHT +" or "✓ CAUGHT +") .. tostring(e.detail.points), monitor and Color3.fromRGB(90, 220, 200) or BLUE, 3.5)
 	end
 	h.threat_escaped = function(e)
 		local a = ctx.agent(Config.ATTACKER)
@@ -778,6 +883,21 @@ function View:bindInput()
 	self:connect(UserInputService.InputBegan, function(input, processed)
 		if not processed and input.KeyCode == Enum.KeyCode.L then
 			self.remotes.Llm:FireServer("toggle")
+		end
+	end)
+	-- the oversight demo: N town size, H monitors (the hierarchy), B next beat
+	local SCALE_KEYS = { [Enum.KeyCode.N] = "size", [Enum.KeyCode.H] = "monitors", [Enum.KeyCode.B] = "beat" }
+	self:connect(UserInputService.InputBegan, function(input, processed)
+		local what = not processed and SCALE_KEYS[input.KeyCode]
+		if what then
+			self:scale(what)
+		end
+	end)
+	self:connect(workspace:GetAttributeChangedSignal("RBScale"), function()
+		local v = workspace:GetAttribute("RBScale")
+		if type(v) == "string" and v ~= "" then
+			workspace:SetAttribute("RBScale", nil)
+			self:scale(v)
 		end
 	end)
 	self:connect(workspace:GetAttributeChangedSignal("RBLlm"), function()
@@ -991,6 +1111,8 @@ function View:buildHud()
 	end)
 	self.llmButton = llmButton
 
+	self:buildOversight(root)
+
 	-- personal notices: under the scoreboard
 	local toast = Instance.new("TextLabel")
 	toast.Name = "Notice"
@@ -1015,6 +1137,221 @@ function View:buildHud()
 	self.results = res
 end
 
+------------------------------------------------------------------ oversight panel
+
+local GREEN = Color3.fromRGB(120, 230, 140)
+local AMBER = Color3.fromRGB(255, 176, 96)
+
+local function fmtInt(n: number): string
+	local s = tostring(math.floor(n + 0.5))
+	local out = string.gsub(string.reverse(s), "(%d%d%d)", "%1,")
+	out = string.reverse(out)
+	return (string.gsub(out, "^,", ""))
+end
+
+-- The oversight demo's panel, left, where the role panel is (it takes its
+-- place while the demo runs). Hidden otherwise.
+function View:buildOversight(root: Instance)
+	local W = 452
+	local ov = panel(root, { Name = "Oversight", Position = UDim2.fromOffset(14, 86), Size = UDim2.fromOffset(W, 470), Visible = false, BackgroundTransparency = 0 })
+	self.ovPanel = ov
+	local function lbl(y: number, h: number, props: { [string]: any }): TextLabel
+		local base: { [string]: any } = {
+			Text = "",
+			Size = UDim2.new(1, -24, 0, h),
+			Position = UDim2.fromOffset(12, y),
+			TextSize = 16,
+			Font = Util.FONT_BOLD,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextYAlignment = Enum.TextYAlignment.Top,
+			TextWrapped = true,
+		}
+		for k, v in props do
+			base[k] = v
+		end
+		return Util.label(ov, base)
+	end
+	self.ovTitle = lbl(6, 24, { TextSize = 19, Font = Util.FONT_HEAVY, TextColor3 = GOLD })
+	self.ovSetting = lbl(30, 20, { TextSize = 15, Font = Util.FONT, TextColor3 = Color3.fromRGB(205, 205, 215) })
+	self.ovFeed = lbl(54, 46, { TextSize = 16 })
+	-- the number the talk is about
+	self.ovCallsLabel = lbl(104, 22, { TextSize = 17, Font = Util.FONT_HEAVY, Text = "JUDGMENT CALLS / MIN" })
+	self.ovCalls = lbl(96, 46, { TextSize = 42, Font = Util.FONT_HEAVY, TextXAlignment = Enum.TextXAlignment.Right })
+	self.ovCallsSub = lbl(126, 20, { TextSize = 14, Font = Util.FONT, TextColor3 = Color3.fromRGB(200, 200, 210) })
+	-- the budget bar: one human's 12 calls a minute is the white tick
+	local bar = Instance.new("Frame")
+	bar.Name = "Budget"
+	bar.Position = UDim2.fromOffset(12, 150)
+	bar.Size = UDim2.new(1, -24, 0, 12)
+	bar.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	bar.BorderSizePixel = 0
+	bar.Parent = ov
+	Util.corner(bar, 6)
+	local fill = Instance.new("Frame")
+	fill.Name = "Fill"
+	fill.Size = UDim2.fromScale(0, 1)
+	fill.BorderSizePixel = 0
+	fill.BackgroundColor3 = GREEN
+	fill.Parent = bar
+	Util.corner(fill, 6)
+	local tick = Instance.new("Frame")
+	tick.Name = "Capacity"
+	tick.Size = UDim2.new(0, 3, 1, 8)
+	tick.AnchorPoint = Vector2.new(0.5, 0.5)
+	tick.Position = UDim2.fromScale(0.1, 0.5)
+	tick.BackgroundColor3 = Color3.new(1, 1, 1)
+	tick.BorderSizePixel = 0
+	tick.Parent = bar
+	self.ovFill, self.ovTick = fill, tick
+	self.ovQueueHead = lbl(170, 22, { TextSize = 17, Font = Util.FONT_HEAVY })
+	self.ovQueue = lbl(194, 126, { TextSize = 14, Font = Util.FONT, TextTruncate = Enum.TextTruncate.AtEnd })
+	self.ovOutcome = lbl(322, 64, { TextSize = 15 })
+	self.ovHonest = lbl(388, 36, { TextSize = 13, Font = Util.FONT, TextColor3 = Color3.fromRGB(205, 205, 215) })
+	-- three buttons: the same as N, H and B
+	self.ovButtons = {}
+	for i, spec in { "size", "monitors", "beat" } do
+		local b = Instance.new("TextButton")
+		b.Name = "Ov " .. spec
+		b.Size = UDim2.new(1 / 3, -12, 0, 34)
+		b.Position = UDim2.new((i - 1) / 3, 12 - (i - 1) * 4, 0, 428)
+		b.BackgroundColor3 = Color3.fromRGB(60, 45, 90)
+		b.AutoButtonColor = true
+		b.RichText = true
+		b.Font = Util.FONT_BOLD
+		b.TextSize = 14
+		b.TextColor3 = Color3.new(1, 1, 1)
+		b.Text = ""
+		b.Parent = ov
+		Util.corner(b, 8)
+		b.Activated:Connect(function()
+			self:scale(spec)
+		end)
+		self.ovButtons[spec] = b
+	end
+	-- outside the demo: one button under the agents panel, to start it
+	local start = Instance.new("TextButton")
+	start.Name = "OversightStart"
+	start.AnchorPoint = Vector2.new(1, 0)
+	start.Position = UDim2.new(1, -14, 0, 484)
+	start.Size = UDim2.fromOffset(330, 34)
+	start.BackgroundColor3 = Color3.fromRGB(70, 55, 20)
+	start.AutoButtonColor = true
+	start.RichText = true
+	start.Font = Util.FONT_BOLD
+	start.TextSize = 15
+	start.TextColor3 = GOLD
+	start.Text = "B · OVERSIGHT AT SCALE (demo)"
+	start.Parent = root
+	Util.corner(start, 8)
+	start.Activated:Connect(function()
+		self:scale("beat")
+	end)
+	self.ovStart = start
+end
+
+function View:scale(what: string)
+	if self.remotes then
+		self.remotes.Scale:FireServer(what)
+	end
+end
+
+-- Returns whether the demo is on.
+function View:refreshOversight(): boolean
+	local demo = workspace:GetAttribute("RB_Demo") == true
+	self.ovPanel.Visible = demo
+	self.ovStart.Visible = not demo
+	if not demo then
+		return false
+	end
+	local json = workspace:GetAttribute("RB_Ov")
+	if json == self.ovJson then
+		return true
+	end
+	self.ovJson = json
+	local ok, m = pcall(function()
+		return HttpService:JSONDecode(json or "")
+	end)
+	if not ok or type(m) ~= "table" then
+		return true
+	end
+	local cap = m.capacityPerMin or 12
+	local calls = m.callsPerMin or 0
+	local over = calls > cap
+	self.ovTitle.Text = "OVERSIGHT · one human, " .. tostring(cap) .. " judgment calls a minute"
+	self.ovSetting.Text = string.format(
+		"<b>%d agents</b>%s · monitors <b><font color='%s'>%s</font></b> · auth %s",
+		m.size or 0,
+		(m.target and m.size and m.target > m.size) and string.format(" (→ %d)", m.target) or "",
+		hex(m.monitors and GREEN or AMBER),
+		m.monitors and "ON" or "OFF",
+		tostring(m.auth)
+	)
+	self.ovFeed.Text = string.format(
+		"events / min <font size='22'><b>%s</b></font> <font color='#a0a0b0'>the raw feed%s</font>\nthreats / min <b>%s</b> · open now <b>%d</b> · deals <b>%s</b>",
+		fmtInt(m.eventsPerMin or 0),
+		(m.drawn and m.drawn < 100) and string.format(", %d%% drawn", m.drawn) or "",
+		string.format("%.0f", m.threatsPerMin or 0),
+		m.openThreats or 0,
+		fmtInt(m.deals or 0)
+	)
+	self.ovCalls.Text = fmtInt(calls)
+	self.ovCalls.TextColor3 = over and Color3.fromRGB(255, 90, 90) or GREEN
+	self.ovCallsLabel.TextColor3 = over and Color3.fromRGB(255, 120, 120) or GREEN
+	self.ovCallsSub.Text = over and string.format("<b>%.0f×</b> what one human can make (%d)", calls / cap, cap) or string.format("within one human's %d", cap)
+	-- the bar spans 0 .. 10 × capacity
+	local span = cap * 10
+	self.ovFill.Size = UDim2.fromScale(math.clamp(calls / span, 0, 1), 1)
+	self.ovFill.BackgroundColor3 = over and Color3.fromRGB(235, 70, 70) or GREEN
+	self.ovTick.Position = UDim2.fromScale(cap / span, 0.5)
+	local q = m.queue or 0
+	self.ovQueueHead.Text = string.format("AWAITING A HUMAN: <font color='%s'>%d</font>", hex(q > 5 and Color3.fromRGB(255, 110, 110) or GREEN), q)
+	local rows = {}
+	for _, r in m.rows or {} do
+		table.insert(
+			rows,
+			string.format(
+				"%s %s%s <font color='#a0a0b0'>%ds</font>",
+				r.reviewing and "<font color='#ffd060'>▶</font>" or "·",
+				tostring(r.text),
+				r.ambiguous and " <font color='#ffb060'>? ambiguous</font>" or "",
+				r.left or 0
+			)
+		)
+	end
+	if #rows == 0 then
+		table.insert(rows, "<font color='#a0a0b0'>nothing waiting</font>")
+	elseif q > #rows then
+		table.insert(rows, string.format("<font color='#a0a0b0'>… and %d more</font>", q - #rows))
+	end
+	self.ovQueue.Text = table.concat(rows, "\n")
+	self.ovOutcome.Text = string.format(
+		"<font color='#a0a0b0'>since this setting (%.1f min):</font>\n<font color='%s'>✓ caught %d</font> <font color='#a0a0b0'>(monitors %d · human %d)</font>   <font color='#ff6060'>✗ escaped %d</font>\n<font color='%s'>false alarms %d</font>   stopped by the layers %d",
+		m.minutes or 0,
+		hex(BLUE),
+		m.caught or 0,
+		m.autoCaught or 0,
+		m.humanCaught or 0,
+		m.escaped or 0,
+		hex(GOLD),
+		m.falseAlarms or 0,
+		m.blocked or 0
+	)
+	self.ovHonest.Text = string.format(
+		"escapes: <b>%d missed by the monitors</b> (cleared as honest) · %d waited too long for the human · %d judged wrong",
+		m.missedByMonitors or 0,
+		m.escapedWaiting or 0,
+		m.humanWrong or 0
+	)
+	local nextSize = Scale.nextSize(Config, m.target or m.size or 5)
+	self.ovButtons.size.Text = string.format("N · town → <b>%d</b>", nextSize)
+	self.ovButtons.monitors.Text = m.monitors and "H · monitors <b>off</b>" or "H · monitors <b>on</b>"
+	self.ovButtons.monitors.BackgroundColor3 = m.monitors and Color3.fromRGB(40, 90, 60) or Color3.fromRGB(60, 45, 90)
+	self.ovButtons.beat.Text = string.format("B · next beat (%d/%d)", (m.beat or 0) % (m.beats or 7) + 1, m.beats or 7)
+	-- for automation and the evidence: the numbers on screen
+	workspace:SetAttribute("RBOvShown", string.format("%d agents, monitors %s: %.0f events/min, %.0f threats/min, %.0f calls/min, queue %d, caught %d, escaped %d, false alarms %d", m.size or 0, m.monitors and "on" or "off", m.eventsPerMin or 0, m.threatsPerMin or 0, calls, q, m.caught or 0, m.escaped or 0, m.falseAlarms or 0))
+	return true
+end
+
 function View:setRect(r)
 	self.root.Position = UDim2.fromOffset(r.x, r.y)
 	self.root.Size = UDim2.fromOffset(r.w, r.h)
@@ -1032,6 +1369,8 @@ local function attr(name: string, default: any): any
 end
 
 function View:refreshHud(team: string?)
+	local demo = self:refreshOversight()
+	self.rolePanel.Visible = not demo
 	local phase = attr("RB_Phase", "idle")
 	local left = math.max(0, attr("RB_Ends", 0) - workspace:GetServerTimeNow())
 	local clock = string.format("%d:%02d", math.floor(left / 60), math.floor(left % 60))
@@ -1040,6 +1379,17 @@ function View:refreshHud(team: string?)
 	local you = Players.LocalPlayer.DisplayName
 	local redWho = attr("RB_RedBot", false) and " (RedBot)" or (team == "red" and " (you)" or "")
 	local blueWho = attr("RB_BlueBot", false) and " (BlueBot)" or (team == "blue" and " (you)" or "")
+	if demo then
+		self.scoreText.Text = string.format(
+			"OVERSIGHT DEMO · %s   <font color='%s'>RED %d</font> (RedBot)   <font color='%s'>BLUE %d</font>   TOWN <b>%d</b> deals",
+			clock,
+			hex(RED),
+			attr("RB_Red", 0),
+			hex(BLUE),
+			attr("RB_Blue", 0),
+			attr("RB_Deals", 0)
+		)
+	else
 	self.scoreText.Text = string.format(
 		"%s %s   <font color='%s'>RED %d</font> <font color='%s'>%s</font>%s   <font color='%s'>BLUE %d</font>%s   TOWN <b>%d</b> deals",
 		phase == "results" and "NEXT ROUND IN" or ("ROUND " .. tostring(attr("RB_Round", 0)) .. " ·"),
@@ -1054,6 +1404,7 @@ function View:refreshHud(team: string?)
 		blueWho,
 		attr("RB_Deals", 0)
 	)
+	end
 	local auth, registry = attr("RB_Auth", "hmac.v1"), attr("RB_Registry", "index.v1")
 	if team == "red" then
 		self.rolePanel.BackgroundColor3 = Color3.fromRGB(60, 18, 18)
