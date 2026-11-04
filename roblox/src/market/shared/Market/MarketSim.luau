@@ -555,6 +555,11 @@ function MarketSim:publicCase(c)
 		watcher = c.watcher,
 		slot = self.byId[c.seller] and self.byId[c.seller].slot,
 		seller = c.seller,
+		-- why it was escalated, and by whom (text from outside code is flagged
+		-- `untrusted`: the server filters or drops it)
+		why = c.reason,
+		whyBy = c.monitorName,
+		untrusted = c.untrusted,
 	}
 end
 
@@ -647,6 +652,10 @@ function MarketSim.closeCase(self, c, verdict: string, by: string, who: string?,
 		truth = c.truth,
 		correct = (verdict == "block") == fraud,
 		reason = reason,
+		untrusted = c.untrusted,
+		stall = c.stall,
+		good = c.good,
+		seller = c.seller,
 	})
 end
 
@@ -664,9 +673,10 @@ function route(self, c)
 	end
 end
 
-function MarketSim:monitorVerdict(c, v: string, why: string?, name: string?)
+function MarketSim:monitorVerdict(c, v: string, why: string?, name: string?, untrusted: boolean?)
 	c.monitorName = name
 	c.monitorReason = why
+	c.untrusted = untrusted or nil
 	if v == "allow" or v == "block" then
 		MarketSim.closeCase(self, c, v, "monitor", name, why)
 	else
@@ -1430,7 +1440,7 @@ function MarketSim:applyGateway(resp)
 					-- untrusted text (gateway decision 7): the server filters it before a player sees it
 					local reason = type(v.reason) == "string" and string.sub(v.reason, 1, 120) or nil
 					local name = type(v.monitor) == "string" and string.sub(v.monitor, 1, 32) or "external"
-					self:monitorVerdict(c, verdict, reason, name)
+					self:monitorVerdict(c, verdict, reason, name, name ~= "rules")
 					nv += 1
 				end
 			end
