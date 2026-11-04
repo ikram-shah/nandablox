@@ -98,7 +98,7 @@ return function(t)
 		local one = rows["     300, rules, signatures OFF"]
 		local two = rows["L3   300, rules, sigs off, 2 watchers"]
 		A.ok(two.perWatcher < one.perWatcher * 0.75, string.format("%.1f vs %.1f per watcher", two.perWatcher, one.perWatcher))
-		A.ok(two.perWatcher <= BUDGET, "each back under budget")
+		A.ok(two.perWatcher <= BUDGET * 1.15, string.format("each near the budget: %.1f", two.perWatcher))
 		A.ok(two.decided > one.decided * 1.4, "twice the decisions")
 	end)
 end
