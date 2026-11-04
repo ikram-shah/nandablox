@@ -17,9 +17,17 @@
 --   -- every server tick:
 --   gw:tick(sim, now, jobId)            -- returns at once; post runs in the caller's coroutine
 --
--- `post(url, bodyString, headers) -> (ok: boolean, status: number, body: string)`
+-- `post(url, bodyString, headers) -> (ok: boolean, status: number, body: string, retryAfter: number?)`
 -- may yield (HttpService:RequestAsync does); the server calls gw:tick inside
--- task.spawn so nothing else waits for it.
+-- task.spawn so nothing else waits for it, and gives HttpService 2 s or more
+-- (the gateway takes up to ~900 ms).
+--
+-- What the gateway promises (harness/README.md on branch `gateway`, "Decisions
+-- the Roblox side must know"): always 200 with `verdicts`, `actions`,
+-- `errors`, `served_ms`; at most one verdict per case and one action per
+-- trader, anything missing ours to decide; `401` / `429` (with Retry-After) as
+-- before; 45 requests a minute per `X-Nanda-Server`, shared with the old town;
+-- `reason` is untrusted text (the server filters it before a player sees it).
 
 local Gateway = {}
 Gateway.__index = Gateway
@@ -103,19 +111,33 @@ function Gateway:tick(sim, now: number, serverId: string?): string
 		self.inflight = false
 		return self:fail(now, "encode: " .. tostring(text))
 	end
-	local okCall, ok, status, respText = pcall(self.post, self.url, text, self.headers)
+	local headers = table.clone(self.headers)
+	headers["X-Nanda-Server"] = serverId or "local"
+	local okCall, ok, status, respText, retryAfter = pcall(self.post, self.url, text, headers)
 	self.inflight = false
 	if not okCall then
 		return self:fail(now, tostring(ok))
 	end
 	if not ok or (status and (status < 200 or status >= 300)) then
-		return self:fail(now, "HTTP " .. tostring(status))
+		local r = self:fail(now, "HTTP " .. tostring(status))
+		if status == 429 and type(retryAfter) == "number" then
+			self.nextAt = math.max(self.nextAt, now + math.min(60, retryAfter))
+		end
+		if status == 401 then
+			self.nextAt = now + 60 -- a wrong token will not fix itself
+		end
+		return r
 	end
 	local okDec, resp = pcall(self.decode, respText)
 	if not okDec or type(resp) ~= "table" then
 		return self:fail(now, "bad JSON")
 	end
 	local nv, na = sim:applyGateway(resp)
+	if type(resp.errors) == "table" and #resp.errors > 0 and type(resp.errors[1]) == "table" then
+		local e = resp.errors[1]
+		self.lastRemoteError = string.sub(tostring(e.from) .. ": " .. tostring(e.error), 1, 120)
+	end
+	self.servedMs = type(resp.served_ms) == "number" and resp.served_ms or nil
 	self.stats.ok += 1
 	self.stats.verdicts += nv
 	self.stats.actions += na
@@ -140,6 +162,8 @@ function Gateway:status()
 		enabled = self.enabled,
 		health = self.health,
 		lastError = self.lastError,
+		lastRemoteError = self.lastRemoteError,
+		servedMs = self.servedMs,
 		requests = self.stats.requests,
 		ok = self.stats.ok,
 		errors = self.stats.errors,

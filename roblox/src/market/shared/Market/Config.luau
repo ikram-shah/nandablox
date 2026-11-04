@@ -76,10 +76,13 @@ Config.RULE_ALLOW_RATINGS = 5
 Config.RULE_BLOCK_PRICE = 0.5
 Config.RULE_BLOCK_AGE = 60
 
--- An external monitor has this long to answer before the rules decide.
-Config.MONITOR_WAIT_S = 3.0
--- An external agent's price holds this long before the scripted policy resumes.
-Config.AGENT_HOLD_S = 8.0
+-- An external monitor has this long to answer before the rules decide: one
+-- tick interval plus the gateway's 900 ms, with room.
+Config.MONITOR_WAIT_S = 4.5
+-- An external agent's price holds this long before the scripted policy
+-- resumes (the gateway's gemini-seller refreshes each trader every 12 s and
+-- answers a tick late).
+Config.AGENT_HOLD_S = 20.0
 
 -- The modelled watcher (headless tests, rehearsal, and "auto" watchers):
 -- one call every 5 s, right this often.
@@ -95,9 +98,18 @@ Config.GATEWAY_ENABLED = false
 Config.GATEWAY_URL = "https://nanda-harness-production.up.railway.app"
 Config.GATEWAY_PATH = "/v1/tick"
 Config.GATEWAY_EVERY_S = 2.0
-Config.GATEWAY_MAX_PER_MINUTE = 40
+-- market ticks share the harness's 45/min per-server limit with the old town;
+-- a tick every 2 s is 30
+Config.GATEWAY_MAX_PER_MINUTE = 30
+Config.GATEWAY_TIMEOUT_S = 2.5 -- the gateway takes up to ~900 ms
 Config.GATEWAY_SECRET = "nanda_harness_token"
-Config.GATEWAY_MAX_CASES = 60
+Config.GATEWAY_MAX_CASES = 200 -- the gateway takes at most 500
 Config.GATEWAY_MAX_DECISIONS = 40
+-- which registration answers: nil asks every registered monitor (then the
+-- gateway's own `rules`); a name asks only that one
+Config.GATEWAY_MONITOR = nil :: string?
+-- who drives a trader whose policy is "external" (nil: the gateway's choice,
+-- which for sellers ends at its `gemini-seller`)
+Config.GATEWAY_DRIVER = nil :: string?
 
 return Config
