@@ -234,12 +234,47 @@ local function balcony(parent)
 	Landmarks.balconyCF = cf * CFrame.new(0, 13.4, -0.5)
 end
 
+-- bunting strung across each street at every aisle, for colour
+local function bunting(parent)
+	local f = Instance.new("Folder")
+	f.Name = "Bunting"
+	f.Parent = parent
+	local colors = {
+		Color3.fromRGB(214, 74, 60), Color3.fromRGB(240, 196, 70), Color3.fromRGB(60, 120, 190),
+		Color3.fromRGB(80, 160, 100), Color3.fromRGB(240, 236, 226),
+	}
+	-- strings across each street, near every aisle
+	for _, s in Layout.STREETS do
+		local c, sn = math.cos(s), math.sin(s)
+		local tx, tz = -sn, c
+		for j = 0, Layout.AISLES - 1 do
+			local r = Layout.aisleRadius(j)
+			local a = Vector3.new(r * c + tx * (Layout.STREET_HALF + 0.6), 10.5, r * sn + tz * (Layout.STREET_HALF + 0.6))
+			local b = Vector3.new(r * c - tx * (Layout.STREET_HALF + 0.6), 10.5, r * sn - tz * (Layout.STREET_HALF + 0.6))
+			local flags = 7
+			for k = 0, flags - 1 do
+				local u = (k + 0.5) / flags
+				local p = a:Lerp(b, u) - Vector3.new(0, math.sin(u * math.pi) * 1.4, 0)
+				part(f, {
+					Name = "Flag",
+					Size = Vector3.new(0.9, 1.1, 0.06),
+					CFrame = CFrame.lookAt(p, p + Vector3.new(c, 0, sn)) * CFrame.Angles(0, 0, math.rad(45)),
+					Color = colors[(k + j) % #colors + 1],
+					Material = Enum.Material.Fabric,
+					CastShadow = false,
+				})
+			end
+		end
+	end
+end
+
 function Landmarks.build(parent: Instance)
 	local f = Instance.new("Folder")
 	f.Name = "Landmarks"
 	f.Parent = parent
 	tower(f)
 	balcony(f)
+	bunting(f)
 	return f
 end
 
