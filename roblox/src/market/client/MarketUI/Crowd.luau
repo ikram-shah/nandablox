@@ -203,16 +203,27 @@ local function chooseRigs(cam: Vector3)
 	table.sort(scratch, function(a, b)
 		return a.dist < b.dist
 	end)
-	-- drop rigs that are no longer among the nearest, then hand out the freed ones
-	local cut = math.min(#scratch, Crowd.MAX_RIGS)
-	for i = cut + 1, #scratch do
-		dropRig(scratch[i])
+	-- hysteresis: a rig stays with its person until they are well out of
+	-- range; free rigs go to the nearest people without one (no churn)
+	local held = 0
+	for _, p in scratch do
+		if p.rig then
+			if p.dist > Crowd.RIG_RANGE * 1.4 then
+				dropRig(p)
+			else
+				held += 1
+			end
+		end
 	end
-	for i = 1, cut do
-		if scratch[i].dist < Crowd.RIG_RANGE then
-			giveRig(scratch[i])
-		else
-			dropRig(scratch[i])
+	for _, p in scratch do
+		if held >= Crowd.MAX_RIGS or p.dist > Crowd.RIG_RANGE then
+			break
+		end
+		if not p.rig then
+			giveRig(p)
+			if p.rig then
+				held += 1
+			end
 		end
 	end
 end
