@@ -17,6 +17,7 @@ local Hud = require(UI.Hud)
 local Figures = require(UI.SimpleFigures)
 local Rigs = require(UI.RigFigures)
 local Cam = require(UI.Camera)
+local Landmarks = require(UI.Landmarks)
 
 local net = ReplicatedStorage:WaitForChild("MarketNet")
 local Batch = net:WaitForChild("Batch")
@@ -43,8 +44,10 @@ local lastMeter = hello.meter
 local lastState = hello.state
 local prices = hello.snapshot.prices
 local auto = false
+local lastPrices, prevPrices, lastPricesAt = nil, nil, 0
 
 local world = World.build()
+Landmarks.build(world)
 Crowd.init(world, Figures, Rigs)
 Hud.build({ send = send, you = me, sizes = hello.config.sizes })
 Cam.init()
@@ -171,6 +174,7 @@ RunService.RenderStepped:Connect(function(dt)
 	Crowd.update(now, cam.CFrame.Position, dt)
 	crowdCpu += os.clock() - tc
 	Hud.tickCards(now)
+	Landmarks.clock(now)
 	fpsN += 1
 	fpsT += dt
 	cpu += os.clock() - t0
@@ -196,6 +200,12 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		if prices then
 			Hud.prices(prices)
+			-- arrows compare with the price ~30 s ago
+			if not lastPrices or now - lastPricesAt > 30 then
+				lastPrices, lastPricesAt = prevPrices or prices, now
+				prevPrices = prices
+			end
+			Landmarks.prices(prices, lastPrices)
 		end
 	end
 end)
