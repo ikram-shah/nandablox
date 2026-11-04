@@ -18,7 +18,7 @@ local mode = "auto"
 local t = 0
 local dist = 60
 local scripted = true
-Cam.balconyCFrame = nil :: CFrame? -- set from Landmarks
+Cam.balconyCF = nil :: CFrame? -- set from Landmarks
 
 function Cam.init()
 	local cam = workspace.CurrentCamera
@@ -82,7 +82,7 @@ local function overview(n: number, dt: number): (CFrame, number)
 end
 
 local function balcony(): (CFrame, number)
-	local b = Cam.balconyCFrame
+	local b = Cam.balconyCF
 	if not b then
 		return overview(300, 0)
 	end

@@ -270,7 +270,7 @@ local function applyBeat(i: number)
 	room.beat = i
 	room.caption = b.caption
 	-- the shot: some beats start close and cut wide after a few seconds
-	room.cam = b.cam or "overview"
+	room.cam = b.cam or "auto"
 	if b.thenCam then
 		task.delay(10, function()
 			if room.beat == i then
