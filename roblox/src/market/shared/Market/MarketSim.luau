@@ -915,10 +915,10 @@ local function addBuyer(self, atGate: boolean)
 		carry = nil,
 	}
 	self.nextBuyer += 1
-	b.pos = atGate and Layout.gate(rng) or Layout.randomSpot(rng, self:aisles())
+	b.pos = atGate and Layout.gate(rng) or Layout.randomSpot(rng, self:aisles(), self:spread())
 	table.insert(self.buyers, b)
 	if atGate then
-		walkTo(self, b, Layout.randomSpot(rng, self:aisles()), "stroll")
+		walkTo(self, b, Layout.randomSpot(rng, self:aisles(), self:spread()), "stroll")
 	else
 		standUntil(self, b, self.now + rng:range(0, 4), "browse")
 	end
@@ -944,7 +944,7 @@ local function shop(self, b)
 		walkTo(self, b, counterSpot(self, b, s), "walk")
 	else
 		b.target = nil
-		walkTo(self, b, Layout.randomSpot(rng, self:aisles()), "stroll")
+		walkTo(self, b, Layout.randomSpot(rng, self:aisles(), self:spread()), "stroll")
 	end
 end
 
@@ -980,7 +980,7 @@ local function dealDone(self, b, s)
 		if s.stock <= 0 then
 			setState(self, s, "restock", self.now + self.rng:range(cfg.RESTOCK_S[1], cfg.RESTOCK_S[2]))
 		end
-		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles()), "stroll")
+		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles(), self:spread()), "stroll")
 	else
 		-- a fraud nobody blocked in time: a buyer paid it. An escape.
 		local why = s.allowedBy == "monitor" and "missed" or (s.allowedBy == "watcher" and "judged" or "waited")
@@ -997,7 +997,7 @@ local function dealDone(self, b, s)
 		})
 		s.reason = "took payment, never delivered"
 		setState(self, s, "shuttered", self.now + cfg.BOARDED_S)
-		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles()), "cheated")
+		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles(), self:spread()), "cheated")
 	end
 end
 
@@ -1058,6 +1058,22 @@ local function stepBuyer(self, b)
 end
 
 ------------------------------------------------------------------ size
+
+-- a small market's reach around the first aisle (radians from HOME), so its
+-- shoppers mill among its stalls; nil once the market fills the ring
+function MarketSim:spread(): number?
+	if self.n > 50 then
+		return nil
+	end
+	local reach = 0.2
+	for slot in self.slots do
+		local L = Layout.SLOTS[slot]
+		if L and L.aisle == 0 then
+			reach = math.max(reach, math.abs(Layout.delta(L.theta, Layout.HOME)) + 0.1)
+		end
+	end
+	return reach < 2.8 and reach or nil
+end
 
 function MarketSim:aisles(): number
 	-- enough aisles for the stalls this market needs, with room to spare

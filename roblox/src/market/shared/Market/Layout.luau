@@ -24,6 +24,8 @@ Layout.STREETS = { 0, math.pi / 2, math.pi, 3 * math.pi / 2 }
 Layout.ARC_STEP = math.rad(7)
 
 local TAU = 2 * math.pi
+-- the angle the small market clusters around (and the camera starts from)
+Layout.HOME = math.rad(-60)
 local GOLDEN = 0.6180339887498949
 
 function Layout.aisleRadius(j: number): number
@@ -89,10 +91,19 @@ local function buildSlots()
 		table.sort(here, function(a, b)
 			return a.theta < b.theta
 		end)
-		-- golden-ratio spread
 		local keyed = {}
-		for i, s in here do
-			keyed[i] = { s = s, key = (i * GOLDEN) % 1 }
+		if j == 0 then
+			-- the first aisle fills outward from HOME (the side the camera
+			-- starts on), so a small market is a cosy cluster in view, and
+			-- grows around the ring as it gets bigger
+			for i, s in here do
+				keyed[i] = { s = s, key = math.abs(delta(Layout.HOME, s.theta)) + (s.side > 0 and 0.01 or 0) }
+			end
+		else
+			-- later aisles: spread evenly around the circle (golden ratio)
+			for i, s in here do
+				keyed[i] = { s = s, key = (i * GOLDEN) % 1 }
+			end
 		end
 		table.sort(keyed, function(a, b)
 			return a.key < b.key
@@ -148,7 +159,12 @@ Layout.zone = function(p)
 end
 
 -- a random place to stand: somewhere in an aisle or the plaza
-function Layout.randomSpot(rng, aisles: number)
+function Layout.randomSpot(rng, aisles: number, near: number?)
+	-- a small market: stay among its stalls, within `near` radians of HOME
+	if near then
+		local r = Layout.aisleRadius(0) + rng:range(-2.5, 2.5)
+		return polar(r, Layout.HOME + rng:range(-near, near))
+	end
 	if rng:chance(0.12) then
 		local r = rng:range(Layout.FOUNTAIN_R + 3, Layout.PLAZA_R - 1)
 		return polar(r, rng:range(0, TAU))
