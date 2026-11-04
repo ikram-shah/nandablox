@@ -241,7 +241,7 @@ end
 
 -- The five beats (docs/market-design.md, "The demo"), plus the outside agent.
 local BEATS = {
-	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true },
+	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true, scam = true },
 	{ caption = "Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.", n = 300, monitor = "off", sig = true },
 	{ caption = "Monitor on: four rules settle the obvious. Only the gray zone reaches you.  (paragliding)", n = 300, monitor = "rules", sig = true },
 	{ caption = "Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.", n = 300, monitor = "rules", sig = false },
@@ -276,6 +276,14 @@ local function applyBeat(i: number)
 	end
 	setOutsideAgent(b.agent == true)
 	sim:mark(b.caption)
+	if b.scam then
+		-- a case on screen at once, for the presenter to decide
+		task.delay(3, function()
+			if room.beat == i then
+				sim:injectFraud("scam", { price = 0.45 })
+			end
+		end)
+	end
 end
 
 ------------------------------------------------------------------ commands
