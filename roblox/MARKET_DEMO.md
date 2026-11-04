@@ -64,7 +64,7 @@ The beats replayed headless (`seed 20261106`, a presenter who answers nothing), 
 
 In Studio the needle reads the last minute. After the jump to 300 it climbs
 (8 → 20 → 27 → 33 → 38 at 10/20/30/60/90 s), then sits in the 30s, matching
-the headless 37.
+the headless 38.
 
 **What counts as a case:** a *new* listing (a newcomer's stall, or a fraud's)
 and both stalls of a *twin*. A stall that restocks and reopens is not a case,
