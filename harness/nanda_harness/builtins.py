@@ -117,10 +117,26 @@ class GeminiSeller:
     held): no action, and the game's built-in seller carries on.
     """
 
-    def __init__(self, brain: MarketBrain):
+    def __init__(self, brain: MarketBrain, idle_s: float = 60.0, now=None):
         self.brain = brain
+        self.idle_s = idle_s
+        self.now = now or brain.now
+        self.seen: dict[str, float] = {}
+
+    def _evict_idle(self) -> None:
+        """A trader not asked about for `idle_s` gives its slot back, so the
+        `max_agents` seats follow the market that is running now rather than
+        the first traders the gateway ever saw."""
+        t = self.now()
+        with self.brain.lock:
+            for name in [n for n, at in self.seen.items() if t - at >= self.idle_s]:
+                a = self.brain.agents.get(name)
+                if a is None or not a.inflight:
+                    self.brain.agents.pop(name, None)
+                    self.seen.pop(name, None)
 
     def decide(self, req: dict) -> dict:
+        self._evict_idle()
         shared = {k: req.get(k) for k in ("t", "market", "lever", "server")}
         decisions = [d for d in (req.get("decisions") or []) if isinstance(d, dict) and d.get("role") == "seller"]
         by_name = {}
@@ -133,6 +149,11 @@ class GeminiSeller:
             by_name[name] = d
             agents.append({**d, "name": name, "role": "seller"})
         stances = self.brain.tick({**shared, "agents": agents})
+        t = self.now()
+        with self.brain.lock:
+            for name in by_name:
+                if name in self.brain.agents:
+                    self.seen[name] = t
         actions = []
         for s in stances:
             d = by_name.get(s.get("agent"))

@@ -11,7 +11,7 @@ Standard library only: nothing to install.
 harness/run.sh                      # http://127.0.0.1:8790, gemini-2.5-flash
 harness/run.sh --model gemini-3.5-flash
 harness/run.sh --no-llm             # serve the API, never call a model
-cd harness && python -m pytest -q   # 50 tests, no network
+cd harness && python -m pytest -q   # 51 tests, no network
 ```
 
 `GEMINI_API_KEY` is read from the environment or `~/.env`. It is never
@@ -168,8 +168,8 @@ curl -s -X POST $G/v1/tick -H "Authorization: Bearer $TOKEN" -H "X-Nanda-Server:
 9. **`gemini-seller` answers a tick late.** It never waits for the model: the
    first tick queues a decision and returns nothing, a later one carries the
    stance (`quote_pct` of the market), turned into `set_price` against the
-   market price *in that tick*. It drives at most 2 traders (the first two
-   it sees, until a restart), refreshing each every 12 s, on **its own
+   market price *in that tick*. It drives at most 2 traders at once (a trader
+   not sent for 60 s gives its seat back), refreshing each every 12 s, on **its own
    budget** (10 calls/min, 300/h, 1500/day, $0.50/day, $5 total) — separate
    from the town's, so the market can never use up the live seller's calls.
    Worst case for the key is the two ceilings added: $2.50/day.
