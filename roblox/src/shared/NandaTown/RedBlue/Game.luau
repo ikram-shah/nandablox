@@ -683,10 +683,10 @@ function Game:setBeat(i: number?)
 	end
 	self.beat = n
 	if b.oversight == false then
+		-- back to NANDA Town's defaults, as the demo found them
+		self.layers.auth = self.cfg.DEFAULT_LAYERS.auth
+		self.layers.registry = self.cfg.DEFAULT_LAYERS.registry
 		self:setOversight(false)
-		if self.layers.auth ~= self.cfg.DEFAULT_LAYERS.auth then
-			self:applySwap("auth", self.cfg.DEFAULT_LAYERS.auth)
-		end
 		return b
 	end
 	if b.oversight and not self.demo then
@@ -694,9 +694,9 @@ function Game:setBeat(i: number?)
 		if b.monitors ~= nil then
 			self.monitors = b.monitors
 		end
-		if b.auth and self.layers.auth ~= b.auth then
-			self.layers.auth = b.auth -- before the round starts: no swap to show
-		end
+		-- the demo starts from NANDA Town's defaults, whatever the council did
+		self.layers.auth = b.auth or self.layers.auth
+		self.layers.registry = b.registry or self.layers.registry
 		self:setOversight(true)
 		self.beat = n
 		return b

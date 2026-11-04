@@ -47,7 +47,7 @@ Oversight.__index = Oversight
 
 -- The demo's beats (B steps through them; DEMO.md has the words).
 Oversight.BEATS = {
-	{ id = "small", label = "a small town: the human keeps up", oversight = true, size = 5, monitors = false, auth = "hmac.v1" },
+	{ id = "small", label = "a small town: the human keeps up", oversight = true, size = 5, monitors = false, auth = "hmac.v1", registry = "index.v1" },
 	{ id = "grow25", label = "25 agents", size = 25 },
 	{ id = "grow100", label = "100 agents: the human drowns", size = 100 },
 	{ id = "monitors", label = "monitors on: the flood becomes a trickle", monitors = true },
@@ -533,10 +533,9 @@ end
 function Oversight:rate(list: { number }, now: number): number
 	local w = self.cfg.RATE_WINDOW or 30
 	local from = math.max(now - w, self.since)
-	local span = now - from
-	if span < 3 then
-		return 0
-	end
+	-- at least RATE_MIN_SPAN seconds in the denominator, so the first
+	-- seconds of a setting (a town opening its stalls) do not spike
+	local span = math.max(now - from, self.cfg.RATE_MIN_SPAN or 15)
 	local n = 0
 	for _, t in list do
 		if t >= from then

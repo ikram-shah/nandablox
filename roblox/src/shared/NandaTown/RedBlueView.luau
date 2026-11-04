@@ -1013,6 +1013,7 @@ function View:buildHud()
 
 	-- the council: right, under the legend
 	local council = panel(root, { Name = "Council", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 120), Size = UDim2.fromOffset(330, 196) })
+	self.councilPanel = council
 	Util.label(council, {
 		Text = "COUNCIL · the town's laws",
 		Size = UDim2.new(1, -20, 0, 24),
@@ -1072,6 +1073,7 @@ function View:buildHud()
 
 	-- who is scripted and who is model-driven: right, under the council
 	local agents = panel(root, { Name = "Agents", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 326), Size = UDim2.fromOffset(330, 150) })
+	self.agentsPanel = agents
 	Util.label(agents, {
 		Text = "AGENTS · who decides",
 		Size = UDim2.new(1, -20, 0, 24),
@@ -1149,11 +1151,12 @@ local function fmtInt(n: number): string
 	return (string.gsub(out, "^,", ""))
 end
 
--- The oversight demo's panel, left, where the role panel is (it takes its
--- place while the demo runs). Hidden otherwise.
+-- The oversight demo's panel. Hidden outside the demo.
 function View:buildOversight(root: Instance)
 	local W = 452
-	local ov = panel(root, { Name = "Oversight", Position = UDim2.fromOffset(14, 86), Size = UDim2.fromOffset(W, 470), Visible = false, BackgroundTransparency = 0 })
+	-- right, under the legend: the council and agents panels make way, so the
+	-- gate (where the guards walk) and the notice board stay in view
+	local ov = panel(root, { Name = "Oversight", AnchorPoint = Vector2.new(1, 0), Position = UDim2.new(1, -14, 0, 156), Size = UDim2.fromOffset(W, 470), Visible = false, BackgroundTransparency = 0 })
 	self.ovPanel = ov
 	local function lbl(y: number, h: number, props: { [string]: any }): TextLabel
 		local base: { [string]: any } = {
@@ -1260,6 +1263,13 @@ function View:refreshOversight(): boolean
 	local demo = workspace:GetAttribute("RB_Demo") == true
 	self.ovPanel.Visible = demo
 	self.ovStart.Visible = not demo
+	self.councilPanel.Visible = not demo
+	-- in the demo the agents panel shows only once L has made someone
+	-- model-driven, bottom right, clear of the oversight panel
+	local llmOn = (workspace:GetAttribute("RB_LlmAgents") or "") ~= ""
+	self.agentsPanel.Visible = not demo or llmOn
+	self.agentsPanel.AnchorPoint = demo and Vector2.new(1, 1) or Vector2.new(1, 0)
+	self.agentsPanel.Position = demo and UDim2.new(1, -14, 1, -96) or UDim2.new(1, -14, 0, 326)
 	if not demo then
 		return false
 	end

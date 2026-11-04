@@ -862,7 +862,7 @@ function Replay.stage(trace, o: { [string]: any })
 		for _ in escrow do
 			slot += 1
 		end
-		local dest = bank.vaultTop + Vector3.new((slot - 1) * 4.6 - 2.3, 0.5, 0)
+		local dest = bank.vaultTop + Vector3.new(((slot - 1) % 6) * 4.6 - 2.3, 0.5, 0)
 		flyModel(stack, posOf(from), dest, 6, 1.6, function()
 			tag.Text = Util.money(d.cents) .. " held"
 		end)

@@ -142,6 +142,7 @@ Config.CARD_REVIEW_WINDOW = 20
 Config.WATCHER_SECONDS_PER_CALL = 5 -- the human: one judgment call every 5 s, 12 a minute
 Config.WATCHER_ACCURACY = { clear = 0.97, ambiguous = 0.85 } -- a human with the time to look
 Config.RATE_WINDOW = 30 -- seconds of history behind every "per minute" on the HUD
+Config.RATE_MIN_SPAN = 15 -- ...and never fewer than this in the denominator
 Config.OVERSIGHT_QUEUE_ROWS = 6 -- cases listed on the HUD
 
 ------------------------------------------------------------------------ server
