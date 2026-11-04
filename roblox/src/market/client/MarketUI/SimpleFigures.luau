@@ -63,8 +63,7 @@ local function build()
 		m = m,
 		body = p({ Size = Vector3.new(1.8, 2.2, 1), Parent = m }),
 		head = p({ Shape = Enum.PartType.Ball, Size = Vector3.new(1.25, 1.25, 1.25), Parent = m }),
-		legL = p({ Size = Vector3.new(0.75, 2.5, 0.8), Parent = m }),
-		legR = p({ Size = Vector3.new(0.75, 2.5, 0.8), Parent = m }),
+		legs = p({ Size = Vector3.new(1.6, 2.5, 0.8), Parent = m }),
 		bag = p({ Size = Vector3.new(0.9, 0.9, 0.9), Transparency = 1, Parent = m }),
 	}
 	return f
@@ -76,11 +75,12 @@ function Simple.take(look: number, role: string)
 	f.body.Color = SHIRTS[look % #SHIRTS + 1]
 	f.head.Color = SKIN[(look // 7) % #SKIN + 1]
 	local pants = PANTS[(look // 3) % #PANTS + 1]
-	f.legL.Color, f.legR.Color = pants, pants
+	f.legs.Color = pants
 	if role == "seller" then
 		f.body.Color = f.body.Color:Lerp(Color3.fromRGB(240, 230, 210), 0.25)
 	end
 	f.bag.Transparency = 1
+	f.carrying = false
 	f.cf = CFrame.new(0, -100, 0)
 	f.phase = (look % 17) / 17
 	f.m.Parent = folder
@@ -111,6 +111,7 @@ function Simple.carry(f, good: string?)
 	else
 		f.bag.Transparency = 1
 	end
+	f.carrying = good ~= nil
 end
 
 function Simple.mood(f, mood: string?)
@@ -131,12 +132,12 @@ function Simple.place(f, cf: CFrame, moving: boolean, _state: string?, far: bool
 end
 
 
-local LEG_L = CFrame.new(-0.45, 2.5, 0)
-local LEG_R = CFrame.new(0.45, 2.5, 0)
-local LEG_DOWN = CFrame.new(0, -1.25, 0)
+local LEGS = CFrame.new(0, 1.25, 0)
 local HEAD = OFF.body * CFrame.new(0, 1.8, 0)
 local SLUMP = CFrame.Angles(math.rad(-14), 0, 0)
 
+-- Three parts a figure (body, head, legs), four while carrying something.
+-- Walking reads as a bob and a sway; anyone close enough to see legs is a rig.
 function Simple.flush(dt: number)
 	t += dt
 	local n = 0
@@ -146,32 +147,19 @@ function Simple.flush(dt: number)
 		f.queued = false
 		if live[f] and not f.hidden then
 			local cf = f.cf
-			local swing, up = 0, cf
-			if f.moving and not f.far then
+			local up = cf
+			if f.moving then
 				local s = math.sin((t + f.phase) * 11)
-				swing = s * 0.5
-				up = cf * CFrame.new(0, math.abs(s) * 0.15, 0)
+				up = cf * CFrame.new(0, math.abs(s) * 0.18, 0) * CFrame.Angles(0, 0, s * 0.06)
 			end
 			local body = f.mood == "cheated" and up * OFF.body * SLUMP or up * OFF.body
 			moveParts[n + 1], moveCFs[n + 1] = f.body, body
 			moveParts[n + 2], moveCFs[n + 2] = f.head, f.mood == "cheated" and body * CFrame.new(0, 1.8, 0) or up * HEAD
-			n += 2
-			-- legs: swing up close; far away they only need to follow, and only
-			-- when the figure actually moved
-			if swing ~= 0 then
-				moveParts[n + 1], moveCFs[n + 1] = f.legL, cf * LEG_L * CFrame.Angles(swing, 0, 0) * LEG_DOWN
-				moveParts[n + 2], moveCFs[n + 2] = f.legR, cf * LEG_R * CFrame.Angles(-swing, 0, 0) * LEG_DOWN
-				n += 2
-				f.legsSwung = true
-			elseif f.moving or f.legsSwung or f.legsAt ~= cf then
-				moveParts[n + 1], moveCFs[n + 1] = f.legL, cf * OFF.legL
-				moveParts[n + 2], moveCFs[n + 2] = f.legR, cf * OFF.legR
-				n += 2
-				f.legsSwung = false
-				f.legsAt = cf
-			end
-			-- the parcel only while carrying (it is invisible otherwise)
-			if f.bag.Transparency < 1 then
+			moveParts[n + 3], moveCFs[n + 3] = f.legs, up * LEGS
+			n += 3
+			if f.carrying or f.bagShown then
+				-- move the bag while carried, and once more to put it away
+				f.bagShown = f.carrying
 				moveParts[n + 1], moveCFs[n + 1] = f.bag, up * OFF.bag
 				n += 1
 			end

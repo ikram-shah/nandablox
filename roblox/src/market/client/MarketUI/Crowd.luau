@@ -25,7 +25,7 @@ local scratchBuyers: { any }
 
 Crowd.MAX_RIGS = 16 -- animated R15 rigs are dear (Animator + 15 parts each): only the closest few
 local NEAR, MID = 90, 200
-Crowd.BUDGET = 70 -- non-near figure placements per frame
+Crowd.BUDGET = 40 -- non-near figure placements per frame
 Crowd.RIG_RANGE = 110
 local RIG_EVERY = 0.4 -- seconds between re-choosing who is near
 
