@@ -321,6 +321,22 @@ bottom-right corner and the council banner hid under the scoreboard. The
 red-team stall has moved once more since (to the left of buyer-1, checked
 in Studio but not re-shot).
 
+### Oversight at scale (the workshop demo)
+
+A demo mode of the live town for a talk (NANDA workshop, Nov 2026), off by
+default: press **B** (or the gold `B · OVERSIGHT AT SCALE` button) and a
+fresh 15-minute round starts with an **OVERSIGHT** panel. **N** grows the
+town 5 → 25 → 100 agents while it runs (traffic and RedBot's attack rate
+grow with it), **H** turns on cheap rule monitors that catch or clear the
+clear cases and escalate only the ambiguous ones, and **B** steps through
+the talk's beats. The panel shows events, threats and **judgment calls per
+minute** against one modelled human's budget of 12, the queue awaiting a
+human, and catches, escapes and false alarms, with each escape attributed
+(missed by the monitors, waited too long, judged wrong). The script, the
+fallbacks and the numbers are in [`DEMO.md`](DEMO.md); the code in
+`RedBlue/Scale.luau` and `RedBlue/Oversight.luau`. Rehearse it without
+Studio: `tools/scale_demo.sh`.
+
 ### FlowBench telemetry
 
 Watcher behaviour is logged on the server as structured records, kept in
@@ -570,6 +586,7 @@ zsh -c 'source ~/.env; tools/publish.sh'     # bakes the secret into the build
 | `../harness/` | the harness itself: a stdlib-only Python service that asks Gemini and logs every prompt and decision |
 | `src/shared/NandaTown/RedBlue/Game.luau` | rounds, teams, tokens, flags, scoring, council, bots, telemetry; the only thing the server talks to |
 | `src/shared/NandaTown/RedBlue/{Council,Bots,Telemetry,Config,Rng}.luau` | majority voting; RedBot / BlueBot; FlowBench records; every constant; a seeded RNG |
+| `src/shared/NandaTown/RedBlue/{Scale,Oversight}.luau` | the oversight demo: town sizes, the crowd and the server's sampler; cases, rule monitors, the modelled human, the panel's numbers ([`DEMO.md`](DEMO.md)) |
 | `src/server/RedBlueServer.luau` | Teams, pads, watchtower, chamber, attack prompts, RemoteEvents (`NandaRedBlue.Events/Hello/Flag/Vote/Camera/Notice`), `RB_*` attributes, telemetry lines |
 | `src/shared/NandaTown/RedBlueView.luau` | the client: the live town via `Replay.stage`, cards, guards, padlock, flagging, the game HUD |
 | `src/shared/NandaTown/Replay.luau` | `Replay.stage(trace, opts)` builds the town and handlers; `Replay.run` plays a trace through it, `RedBlueView` a live stream (`opts.live`, with the events' `travel` / `origin` / `dest` / `copy` hints) |
