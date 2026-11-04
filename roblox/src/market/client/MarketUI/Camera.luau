@@ -86,6 +86,16 @@ end
 local function balcony(): (CFrame, number)
 	local b = Cam.balconyCF
 	if not b then
+		-- find it in the world (the watchers' balcony model) if nobody told us
+		local w = workspace:FindFirstChild("MarketWorld")
+		local m = w and w:FindFirstChild("Balcony", true)
+		if m and m:IsA("Model") then
+			local cf = m:GetBoundingBox()
+			b = CFrame.lookAt(cf.Position, Vector3.new(0, cf.Position.Y, 0)) * CFrame.new(0, 2, -8)
+			Cam.balconyCF = b
+		end
+	end
+	if not b then
 		return overview(300, 0)
 	end
 	-- a watcher's eye on the balcony, looking out over the square
