@@ -66,7 +66,7 @@ The beats replayed headless (`seed 20261106`, a presenter who answers nothing), 
 beat 1 needle 4 at 8 s (the seeded scam card is up), 6 at 40 s; beat 2 4 → 17 → 25 → 34 at 8/30/60/75 s,
 inbox 13 waiting; beat 3 10 at 30 s, 6 at 55 s; beat 4 18 at 30 s, 11 at 55 s (twins come in bursts; read
 the number while the ⚠ cards are up); beat 5 11 → 15 per watcher, two watchers; beat 6 8–9. No errors.
-Beat 5's balcony shot was re-shot after a fix (`207e7e4`). Screenshots: `screenshots/market-beat-{1-five-traders,2-overflow-300,3-rule-monitor,4-signatures-off,5-second-watcher,6-agent-slot-street}.jpg`.
+Beat 5 (balcony) and beat 6 were re-shot on `207e7e4`: beat 5 looks out from the watchers' balcony across the square to the clock tower; beat 6's street camera rises to 12 studs at 300 traders. Screenshots: `screenshots/market-beat-{1-five-traders,2-overflow-300,3-rule-monitor,4-signatures-off,5-second-watcher,6-agent-slot-street}.jpg`.
 
 In Studio the needle reads the last minute. After the jump to 300 it climbs
 (8 → 20 → 27 → 33 → 38 at 10/20/30/60/90 s), then sits in the 30s, matching
