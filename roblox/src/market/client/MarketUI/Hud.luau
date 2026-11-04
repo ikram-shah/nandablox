@@ -22,6 +22,8 @@ local order = {} -- case ids in arrival order
 local inboxList: Frame
 local inboxTitle: TextLabel
 local inboxMore: TextLabel
+local inboxPanel: Frame
+local inboxSub: TextLabel
 local MAX_CARDS = 6
 
 local meter: any = {}
@@ -284,6 +286,15 @@ function Hud.layout()
 		.. (#theirs > 0 and string.format("  <font size=\"15\" color=\"#A09A96\">+%d for other watchers</font>", #theirs) or "")
 	inboxMore.Text = total > MAX_CARDS and string.format("+ %d more waiting", total - MAX_CARDS) or (total == 0 and "nothing to decide" or "")
 	inboxMore.TextColor3 = total > MAX_CARDS and Theme.BAD or Theme.MUTED
+	-- the panel is as tall as its cards: a slim header when empty, full
+	-- height only when the inbox overflows
+	local shownN = math.min(total, MAX_CARDS)
+	local h = 56 + shownN * 112 + (total > MAX_CARDS and 34 or (total == 0 and 26 or 8)) + 28
+	inboxPanel.Size = UDim2.new(0, total == 0 and 300 or 420, 0, h)
+	inboxPanel.Position = UDim2.new(1, total == 0 and -316 or -436, 0, 16)
+	inboxSub.Visible = total > 0
+	inboxMore.Position = UDim2.new(0, 0, 1, -26)
+	inboxList.Size = UDim2.new(1, 0, 0, shownN * 112)
 end
 
 function Hud.tickCards(now: number)
@@ -542,10 +553,11 @@ function Hud.toast(text: string, color: Color3?)
 	end)
 end
 
+-- presenter view: the world, the inbox, the meter, the price bar and the
+-- caption; the control panel goes
 function Hud.presenter(on: boolean)
 	presenter = on
 	controls.Visible = not on
-	priceStrip.Visible = not on
 end
 
 function Hud.isPresenter(): boolean
@@ -566,16 +578,17 @@ function Hud.build(opts)
 		Parent = Players.LocalPlayer:WaitForChild("PlayerGui"),
 	})
 	-- the inbox, right
-	local inbox = panel({
+	inboxPanel = panel({
 		Name = "Inbox",
 		Size = UDim2.new(0, 420, 1, -32),
 		Position = UDim2.new(1, -436, 0, 16),
 		BackgroundTransparency = 0.18,
 		Parent = gui,
 	})
+	local inbox = inboxPanel
 	Theme.pad(14, 14).Parent = inbox
 	inboxTitle = label({ Text = "INBOX", RichText = true, Font = Theme.HEAVY, TextSize = 22, Size = UDim2.new(1, 0, 0, 26), Parent = inbox })
-	label({ Text = "Allow or Block before the first buyer arrives", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 28), Parent = inbox })
+	inboxSub = label({ Text = "Allow or Block before the first buyer arrives", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 28), Parent = inbox })
 	inboxList = new("Frame", { Size = UDim2.new(1, 0, 1, -90), Position = UDim2.new(0, 0, 0, 56), BackgroundTransparency = 1, Parent = inbox })
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = inboxList })
 	inboxMore = label({ Text = "", Font = Theme.HEAVY, TextSize = 18, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -26), TextXAlignment = Enum.TextXAlignment.Center, Parent = inbox })
@@ -635,6 +648,7 @@ function Hud.build(opts)
 	})
 	Theme.corner(10).Parent = toast
 	Theme.pad(6, 14).Parent = toast
+	Hud.layout()
 	return gui
 end
 

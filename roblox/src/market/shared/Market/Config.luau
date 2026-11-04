@@ -17,7 +17,7 @@ Config.GOODS = {
 -- Market size: N traders, of whom this share run stalls (the rest shop).
 Config.SIZES = { 5, 50, 300, 1000 }
 Config.SELLER_SHARE = 0.3
-Config.MIN_SELLERS = 2
+Config.MIN_SELLERS = 4 -- even five traders make a little market: four stalls in a cluster
 
 -- One watcher's budget: 12 judgment calls a minute (one every 5 s). An
 -- assumption, stated; measuring the real number is FlowBench's job.
