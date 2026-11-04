@@ -536,6 +536,35 @@ function World.setStall(s)
 	end
 	d.model.Parent = stallsFolder
 	bySeller[s.id] = slot
+	-- the agent slot: a stall run by an outside agent wears a badge
+	local external = s.policy == "external" and (s.state == "open" or s.state == "restock" or s.state == "setup")
+	if external and not d.badge then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "AgentBadge"
+		bb.Size = UDim2.new(0, 190, 0, 34)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, 13, 0)
+		bb.AlwaysOnTop = true
+		bb.LightInfluence = 0
+		bb.MaxDistance = 1000
+		bb.Adornee = d.board
+		local l = Instance.new("TextLabel")
+		l.Size = UDim2.fromScale(1, 1)
+		l.BackgroundColor3 = Theme.BLUE
+		l.TextColor3 = Theme.WHITE
+		l.Font = Theme.HEAVY
+		l.TextSize = 18
+		l.Parent = bb
+		local c = Instance.new("UICorner")
+		c.CornerRadius = UDim.new(0, 17)
+		c.Parent = l
+		bb.Parent = d.model
+		d.badge = bb
+		d.badgeLabel = l
+	end
+	if d.badge then
+		d.badge.Enabled = external
+		d.badgeLabel.Text = "run by " .. tostring(s.label or "an outside agent")
+	end
 	local key = s.id .. ":" .. s.state .. ":" .. (s.good or "")
 	d.nameLabel.Text = s.name
 	local price = Theme.money(s.price)
