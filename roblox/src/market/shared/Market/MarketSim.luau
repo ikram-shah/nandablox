@@ -1404,7 +1404,7 @@ function MarketSim:gatewayRequest(serverId: string?)
 		server = serverId or "local",
 		t = math.floor(self.now * 10 + 0.5) / 10,
 		-- which registered monitor to ask (gateway decision 4); none = every one, then its rules
-		monitor = self.monitorName ~= "external" and self.monitorName or cfg.GATEWAY_MONITOR,
+		monitor = (self.monitorName ~= "external" and self.monitorName ~= "gateway") and self.monitorName or cfg.GATEWAY_MONITOR,
 		market = self:prices(),
 		lever = { signatures = self.signatures },
 		-- the slot is off unless it is external: then no cases are sent at all
