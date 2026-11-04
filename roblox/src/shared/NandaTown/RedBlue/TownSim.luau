@@ -37,6 +37,7 @@ local function sibling(name: string): any
 end
 local Rng = sibling("Rng")
 local Policy = sibling("Policy")
+local Scale = sibling("Scale")
 
 local TownSim = {}
 TownSim.__index = TownSim
@@ -74,7 +75,8 @@ local KIND_LAYER = {
 TownSim.KIND_LAYER = KIND_LAYER
 
 -- opts = { config, layers?, seed?, counter? ({n} shared event counter),
---          policies? ({buyer, seller, impostor}) }
+--          policies? ({buyer, seller, impostor}), size? (agents; default 5,
+--          the original town. Larger towns add a crowd: RedBlue/Scale.luau) }
 function TownSim.new(opts)
 	local cfg = opts.config
 	local layers = {}
@@ -101,10 +103,31 @@ function TownSim.new(opts)
 		buyers = {},
 		threats = {},
 		orders = {}, -- buyer -> { order ids, newest last }
-		stats = { dealsSettled = 0, centsSettled = 0, forgeries = 0, spoofs = 0 },
+		stats = { dealsSettled = 0, centsSettled = 0, forgeries = 0, spoofs = 0, baits = 0 },
 		started = false,
+		-- who is in town: the five, plus a crowd at scale (joined grows as they arrive)
+		pop = Scale.population(cfg, opts.size),
+		sellerNames = {},
+		buyerNames = {},
+		joined = {},
+		crowdCount = 0,
+		lastPrune = 0,
+		baitCount = 0,
 	}, TownSim)
+	for _, s in cfg.SELLERS do
+		table.insert(self.sellerNames, s)
+		self.joined[s] = true
+	end
+	for _, b in cfg.BUYERS do
+		table.insert(self.buyerNames, b)
+		self.joined[b] = true
+	end
 	return self
+end
+
+-- agents in town now (sellers + buyers; red is not counted)
+function TownSim:size(): number
+	return #self.sellerNames + #self.buyerNames
 end
 
 ------------------------------------------------------------------------ plumbing
@@ -170,6 +193,27 @@ function TownSim:advance(t: number)
 		q.fn()
 	end
 	self.now = math.max(self.now, t)
+	if self.crowdCount > 0 and self.now - self.lastPrune >= 5 then
+		self:prune()
+	end
+end
+
+-- At scale: forget messages and deals that ended a while ago, so the scans
+-- over them stay short. (Never in the original five-agent town.)
+local DONE = { delivered = true, void = true, dropped = true, paid = true, blocked = true }
+function TownSim:prune()
+	self.lastPrune = self.now
+	local before = self.now - (self.cfg.PRUNE_SECONDS or 30)
+	for id, m in self.messages do
+		if DONE[m.state] and m.sentAt < before and not (m.threat and self.threats[m.threat] and self.threats[m.threat].state == "live") then
+			self.messages[id] = nil
+		end
+	end
+	for id, d in self.deals do
+		if (d.state == "settled" or d.state == "abandoned") and (d.endedAt or self.now) < before then
+			self.deals[id] = nil
+		end
+	end
 end
 
 function TownSim:hop(): number
@@ -212,6 +256,143 @@ function TownSim:start()
 		end)
 	end
 	self:emit("town", "participant_joined", cfg.ATTACKER, { role = "attacker" })
+	self:addCrowd(0)
+end
+
+------------------------------------------------------------------------ the crowd
+
+-- Grow the town to `size` agents while it runs (it never shrinks: a smaller
+-- town is a new round). Newcomers arrive CROWD_JOIN_STAGGER apart. Returns
+-- how many are on their way.
+function TownSim:grow(size: number): number
+	local pop = Scale.population(self.cfg, size)
+	if pop.size <= self.pop.size then
+		return 0
+	end
+	self.pop = pop
+	return self:addCrowd(self.cfg.CROWD_JOIN_STAGGER or 0)
+end
+
+-- Everyone in self.pop who has not joined yet joins: sellers open a stall and
+-- list a card (a quarter of them with an opening sale), buyers start trading.
+function TownSim:addCrowd(stagger: number): number
+	local cfg = self.cfg
+	local pop = self.pop
+	local list = {}
+	-- interleave sellers and buyers so the town fills evenly
+	local s, b = {}, {}
+	for _, n in pop.sellers do
+		if not self.joined[n] then
+			table.insert(s, n)
+		end
+	end
+	for _, n in pop.buyers do
+		if not self.joined[n] then
+			table.insert(b, n)
+		end
+	end
+	local i, j = 1, 1
+	while i <= #s or j <= #b do
+		if i <= #s and (j > #b or (i - 1) / math.max(#s, 1) <= (j - 1) / math.max(#b, 1)) then
+			table.insert(list, s[i])
+			i += 1
+		else
+			table.insert(list, b[j])
+			j += 1
+		end
+	end
+	for k, name in list do
+		self.joined[name] = true
+		local function arrive()
+			self:joinCrowd(name)
+		end
+		if stagger > 0 then
+			self:after(k * stagger, arrive)
+		else
+			arrive()
+		end
+	end
+	return #list
+end
+
+function TownSim:joinCrowd(name: string)
+	local cfg = self.cfg
+	local info = self.pop.crowd[name]
+	if not info then
+		return
+	end
+	self.crowdCount += 1
+	if info.role == "seller" then
+		table.insert(self.sellerNames, name)
+		self.balances[name] = 0
+		self.reputation[name] = 0
+		self:emit("town", "account_opened", name, { balance_cents = 0 })
+		self:emit("town", "participant_joined", name, { role = "seller", crowd = info.k })
+		local list = self.pop.price[name] or 2000
+		local price = list
+		if self.rng:chance(cfg.CROWD_SALE_RATE or 0) then
+			local u = self.rng:range(cfg.CROWD_SALE_UNDERCUT[1], cfg.CROWD_SALE_UNDERCUT[2])
+			price = math.floor(self:marketPrice() * (1 - u) / 5 + 0.5) * 5
+		end
+		self:publish(name, name, true, price)
+		self:scheduleReprice(name)
+	else
+		table.insert(self.buyerNames, name)
+		self.balances[name] = cfg.BUYER_BALANCE
+		self:emit("town", "account_opened", name, { balance_cents = cfg.BUYER_BALANCE })
+		self:emit("town", "participant_joined", name, { role = "buyer", crowd = info.k })
+		local loyal = self.rng:chance(cfg.CROWD_LOYAL_SHARE or 0.5)
+		self.buyers[name] = {
+			name = name,
+			deal = nil,
+			deals = 0,
+			knownOrders = {},
+			favorite = loyal and self.rng:pick(self.sellerNames) or nil,
+			hunter = not loyal,
+		}
+		self.orders[name] = {}
+		self:after(self.rng:range(cfg.BUYER_FIRST_DEAL[1], cfg.BUYER_FIRST_DEAL[2]), function()
+			self:startDeal(name)
+		end)
+	end
+end
+
+-- A crowd seller now and then lists again under its own name at a new price
+-- (a newer card, signed by the same key) and takes the old one down. Under
+-- plain.v1 that looks exactly like a spoofed card: two cards, one name.
+function TownSim:scheduleReprice(name: string)
+	local cfg = self.cfg
+	self:after(self.rng:range(cfg.CROWD_REPRICE[1], cfg.CROWD_REPRICE[2]), function()
+		local old = {}
+		for _, c in self.cards do
+			if c.name == name and c.publisher == name then
+				table.insert(old, c)
+			end
+		end
+		local list = self.pop.price[name] or 2000
+		local spread = cfg.CROWD_REPRICE_SPREAD or 0.06
+		local price = math.floor(list * (1 + self.rng:range(-spread, spread)) / 5 + 0.5) * 5
+		self:publish(name, name, true, price)
+		for _, c in old do
+			self:withdraw(c, "repriced")
+		end
+		self:scheduleReprice(name)
+	end)
+end
+
+-- The going rate: the median price of the honest listings.
+function TownSim:marketPrice(): number
+	local prices = {}
+	for _, c in self.cards do
+		if not c.threat then
+			table.insert(prices, c.price)
+		end
+	end
+	if #prices == 0 then
+		return 2000
+	end
+	table.sort(prices)
+	return prices[(#prices + 1) // 2]
 end
 
 -- an honest seller's card, or (publisher ~= name) a spoofed one
@@ -409,7 +590,7 @@ function TownSim:buyerView(b: string)
 		layers = self.layers,
 		listed = self:listedNames(),
 		knownOrders = self.buyers[b] and self.buyers[b].knownOrders or {},
-		favorite = self.cfg.BUYER_FAVORITE and self.cfg.BUYER_FAVORITE[b] or nil,
+		favorite = (self.cfg.BUYER_FAVORITE and self.cfg.BUYER_FAVORITE[b]) or (self.buyers[b] and self.buyers[b].favorite) or nil,
 	}
 end
 
@@ -459,6 +640,15 @@ function TownSim:startDeal(b: string)
 			if c.stallUntil <= self.now then
 				table.insert(cards, c)
 			end
+		end
+		if buyer.hunter and #cards > (self.cfg.CROWD_SHOP_AROUND or 4) then
+			-- a crowd bargain hunter compares a few listings, not the whole board
+			local pool = table.clone(cards)
+			local some = {}
+			for _ = 1, self.cfg.CROWD_SHOP_AROUND or 4 do
+				table.insert(some, table.remove(pool, self.rng:int(1, #pool)))
+			end
+			cards = some
 		end
 		local card = #cards > 0 and self.policy.buyer.chooseCard(self:buyerView(b), cards) or nil
 		if not card then
@@ -575,8 +765,9 @@ function TownSim:buyerPay(deal, msg)
 	self.balances[to] = (self.balances[to] or 0) + cents
 	self:emit("town", "escrow_released", deal.order_id, { to = to, cents = cents }, { _threat = deal.threat })
 	self:emit("town", "payment_settled", deal.order_id, { from = b, to = to, cents = cents, via = "escrow" }, { _threat = deal.threat })
-	local impostor = to ~= deal.seller
-	local good = not impostor -- an impostor's crate is empty
+	-- an impostor (a spoofed card) or a fly-by-night stall (bait) sends an empty crate
+	local impostor = to ~= deal.seller or deal.threat ~= nil
+	local good = not impostor
 	self.n.fact += 1
 	local fact = "fact-" .. self.n.fact
 	self:emit(b, "receipt_attested", deal.seller, { record_id = fact, claim = "trade.outcome", value = good and "good" or "bad" })
@@ -594,6 +785,7 @@ function TownSim:buyerPay(deal, msg)
 end
 
 function TownSim:finishDeal(deal, rest: number?)
+	deal.endedAt = self.now
 	local buyer = self.buyers[deal.buyer]
 	if buyer and buyer.deal == deal then
 		buyer.deal = nil
@@ -655,7 +847,7 @@ function TownSim:escape(threatId: string?, cents: number)
 	if not th then
 		return
 	end
-	if self:resolve(th, "escaped", cents) and th.kind == "spoof" then
+	if self:resolve(th, "escaped", cents) and (th.kind == "spoof" or th.kind == "bait") then
 		local card = self:cardById(th.cardId)
 		if card then
 			self:withdraw(card, "the impostor cashed out and left")
@@ -678,7 +870,7 @@ function TownSim:victimOf(claimed: string): string
 			best, bestT = d.buyer, d.orderedAt
 		end
 	end
-	return best or self.rng:pick(self.cfg.BUYERS)
+	return best or self.rng:pick(self.buyerNames)
 end
 
 -- Red forges an invoice signed as `claimed` (a real seller), redirecting a
@@ -686,7 +878,7 @@ end
 -- the gate. Returns the threat (state "blocked" under hmac.v1).
 function TownSim:forge(claimed: string?)
 	local cfg = self.cfg
-	local seller = claimed or self.rng:pick(cfg.SELLERS)
+	local seller = claimed or self.rng:pick(self.sellerNames)
 	local victim = self:victimOf(seller)
 	local orders = self.orders[victim] or {}
 	local ref = orders[#orders] or string.format("order-%s-%d", victim, 1)
@@ -736,7 +928,7 @@ end
 -- Red posts a card claiming a real seller's name and capability.
 function TownSim:spoof(claimed: string?)
 	local cfg = self.cfg
-	local name = claimed or self.rng:pick(cfg.SELLERS)
+	local name = claimed or self.rng:pick(self.sellerNames)
 	self.stats.spoofs += 1
 	local cheapest = math.huge
 	for _, c in self.cards do
@@ -762,6 +954,31 @@ function TownSim:spoof(claimed: string?)
 		verified = false
 	end
 	local card = self:publish(name, cfg.ATTACKER, verified, price, th.id)
+	th.cardId = card.id
+	return th
+end
+
+-- Red opens a fly-by-night stall: a NEW seller, under a name nobody owns, with
+-- its own key, listed `undercut` under the going rate. It passes every layer
+-- (its signature is good, it owns its name), so nothing but judgment can tell
+-- it from an honest newcomer with an opening sale. A buyer who bites pays
+-- into escrow and gets an empty crate: an escape.
+function TownSim:bait(undercut: number?)
+	local cfg = self.cfg
+	local names = cfg.BAIT_NAMES or { "widget-hut" }
+	self.baitCount += 1
+	local base = names[((self.baitCount - 1) % #names) + 1]
+	local round = (self.baitCount - 1) // #names
+	local name = round == 0 and base or string.format("%s-%d", base, round + 1)
+	local u = undercut or self.rng:range(cfg.BAIT_UNDERCUT[1], cfg.BAIT_UNDERCUT[2])
+	local price = math.floor(self:marketPrice() * (1 - u) / 5 + 0.5) * 5
+	self.stats.baits += 1
+	local th = self:newThreat("bait", { claimed = name, undercut = u })
+	self.balances[name] = 0
+	self.reputation[name] = 0
+	self:emit("town", "account_opened", name, { balance_cents = 0 }, { _threat = th.id })
+	self:emit("town", "participant_joined", name, { role = "seller" }, { _threat = th.id })
+	local card = self:publish(name, name, true, price, th.id)
 	th.cardId = card.id
 	return th
 end
@@ -796,7 +1013,7 @@ function TownSim:catch(threatId: string): boolean
 			m.state = "void"
 			self:emit("town", "delivery_failed", m.id, { to = m.to, kind = m.kind, reason = "flagged by the watchtower" })
 		end
-	elseif th.kind == "spoof" then
+	elseif th.kind == "spoof" or th.kind == "bait" then
 		local card = self:cardById(th.cardId)
 		if card then
 			self:withdraw(card, "flagged by the watchtower")
@@ -850,7 +1067,7 @@ function TownSim:threatTargets(th): { string }
 		if m and (m.state == "road" or m.state == "held") then
 			table.insert(ids, m.id)
 		end
-	elseif th.kind == "spoof" then
+	elseif th.kind == "spoof" or th.kind == "bait" then
 		if self:cardById(th.cardId) then
 			table.insert(ids, th.cardId)
 		end
@@ -922,14 +1139,22 @@ function TownSim:snapshotEvents(): { any }
 			self:emit("town", "account_opened", n, { balance_cents = (self.balances[n] or 0) + (held[n] or 0) })
 		end
 	end
-	all(cfg.SELLERS)
-	all(cfg.BUYERS)
+	all(self.sellerNames)
+	all(self.buyerNames)
 	all({ cfg.ATTACKER })
-	for _, s in cfg.SELLERS do
-		self:emit("town", "participant_joined", s, { role = "seller" })
+	for _, s in self.sellerNames do
+		local c = self.pop.crowd[s]
+		self:emit("town", "participant_joined", s, { role = "seller", crowd = c and c.k or nil })
 	end
-	for _, b in cfg.BUYERS do
-		self:emit("town", "participant_joined", b, { role = "buyer" })
+	for _, b in self.buyerNames do
+		local c = self.pop.crowd[b]
+		self:emit("town", "participant_joined", b, { role = "buyer", crowd = c and c.k or nil })
+	end
+	-- fly-by-night stalls still trading
+	for _, th in self.threats do
+		if th.kind == "bait" and th.state == "live" then
+			self:emit("town", "participant_joined", th.claimed, { role = "seller" })
+		end
 	end
 	self:emit("town", "participant_joined", cfg.ATTACKER, { role = "attacker" })
 	for _, c in self.cards do
@@ -942,7 +1167,7 @@ function TownSim:snapshotEvents(): { any }
 			self:emit("town", "escrow_held", d.order_id, { from = d.buyer, cents = d.escrow })
 		end
 	end
-	for _, s in cfg.SELLERS do
+	for _, s in self.sellerNames do
 		if (self.reputation[s] or 0) ~= 0 then
 			self:emit("town", "reputation_updated", s, { outcome = "snapshot", delta = 0, score = self.reputation[s] })
 		end

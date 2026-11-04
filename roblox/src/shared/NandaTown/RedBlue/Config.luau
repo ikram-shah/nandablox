@@ -106,6 +106,44 @@ Config.LLM_MODEL = "gemini-2.5-flash" -- expected; the nameplate shows what the 
 Config.LLM_AGENT_ROLE = { ["seller-b"] = "seller", ["buyer-3"] = "buyer" }
 Config.LLM_PRESETS = { {}, { "seller-b" }, { "seller-b", "buyer-3" } }
 
+------------------------------------------------- oversight at scale (the demo)
+
+-- Off by default: until someone asks for it (N, H or B, the HUD's OVERSIGHT
+-- button, or the SCALE board by the watchtower) the live mode is exactly the
+-- 5-agent game above. Turning it on starts a fresh, long round; see
+-- RedBlue/Scale.luau and RedBlue/Oversight.luau, and roblox/DEMO.md.
+Config.TOWN_SIZES = { 5, 25, 100 } -- agents: sellers + buyers (red is not counted)
+Config.TOWN_SELLER_SHARE = 0.4 -- 2 of 5, 10 of 25, 40 of 100
+Config.DEMO_ROUND_SECONDS = 900 -- one round for the whole demo, no intermission mid-talk
+Config.CROWD_JOIN_STAGGER = 0.04 -- seconds between newcomers when the town grows
+Config.CROWD_LOYAL_SHARE = 0.5 -- crowd buyers loyal to one seller; the rest hunt bargains
+Config.CROWD_SHOP_AROUND = 4 -- a bargain hunter compares this many listings
+Config.CROWD_PRICE = { 1895, 2195 } -- crowd sellers' list prices (cents)
+Config.CROWD_SALE_RATE = 0.25 -- a newcomer opens with a sale...
+Config.CROWD_SALE_UNDERCUT = { 0.14, 0.24 } -- ...this far under the market
+Config.CROWD_REPRICE = { 60, 120 } -- seconds between a crowd seller's reprices (a new card, same name)
+Config.CROWD_REPRICE_SPREAD = 0.06 -- a reprice moves the price by up to this fraction
+Config.CROWD_LIT = 12 -- crowd buyers whose deals are drawn in full; the rest are counted, not drawn
+Config.PRUNE_SECONDS = 30 -- at scale, settled messages older than this are forgotten
+
+-- Red at scale: the attack rate grows with the town (threats per agent stay
+-- constant), and red probes every seam instead of only the open ones.
+Config.SCALE_RED_FIRST = 6
+Config.SCALE_RED_MIX = { forge = 0.375, spoof = 0.375, bait = 0.25 }
+Config.BAIT_UNDERCUT = { 0.06, 0.32 } -- a fly-by-night stall lists this far under the market
+Config.BAIT_NAMES = { "widget-hut", "widgets4less", "best-widgets", "widget-depot", "cheap-widgets", "widgetco", "the-widget-shed", "widget-barn" }
+
+-- The delegated hierarchy. Tier 0 is the layers (guards, padlock); tier 1 is
+-- cheap rule monitors; the top is one human on a fixed attention budget.
+Config.MONITOR_DELAY = 0.6 -- seconds a rule monitor takes
+Config.MONITOR_SALE_THRESHOLD = 0.12 -- a new seller this far under the market is escalated
+Config.REVIEW_WINDOW = 12 -- seconds a case stays worth deciding (a forgery pays out at 12 s)
+Config.CARD_REVIEW_WINDOW = 20
+Config.WATCHER_SECONDS_PER_CALL = 5 -- the human: one judgment call every 5 s, 12 a minute
+Config.WATCHER_ACCURACY = { clear = 0.97, ambiguous = 0.85 } -- a human with the time to look
+Config.RATE_WINDOW = 30 -- seconds of history behind every "per minute" on the HUD
+Config.OVERSIGHT_QUEUE_ROWS = 6 -- cases listed on the HUD
+
 ------------------------------------------------------------------------ server
 
 Config.TICK_SECONDS = 0.1

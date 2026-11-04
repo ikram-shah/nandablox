@@ -29,6 +29,8 @@ local TownSim = sibling("TownSim")
 local Council = sibling("Council")
 local Telemetry = sibling("Telemetry")
 local Bots = sibling("Bots")
+local Oversight = sibling("Oversight")
+local Scale = sibling("Scale")
 
 local Game = {}
 Game.__index = Game
@@ -64,6 +66,12 @@ function Game.new(opts)
 		wins = { red = 0, blue = 0 },
 		lastTick = 0,
 		lastAttack = -math.huge,
+		-- the oversight demo (DEMO.md): off until someone asks for it
+		demo = false,
+		size = #cfg.SELLERS + #cfg.BUYERS,
+		monitors = false,
+		beat = 0,
+		oversight = nil,
 	}, Game)
 	self:resetScores()
 	return self
@@ -84,8 +92,12 @@ end
 
 function Game:pull()
 	if self.sim then
+		local ov = self.oversight
 		for _, e in self.sim:drain() do
 			table.insert(self.out, e)
+			if ov then
+				ov:observe(e, self:rt())
+			end
 		end
 	end
 end
@@ -157,7 +169,7 @@ end
 function Game:teamOf(id: any): string?
 	if id == Bots.RED_ID then
 		return "red"
-	elseif id == Bots.BLUE_ID then
+	elseif id == Bots.BLUE_ID or id == Bots.MONITOR_ID then
 		return "blue"
 	end
 	local p = self.players[id]
@@ -169,6 +181,8 @@ function Game:nameOf(id: any): string
 		return "RedBot"
 	elseif id == Bots.BLUE_ID then
 		return "BlueBot"
+	elseif id == Bots.MONITOR_ID then
+		return "Monitors"
 	end
 	local p = self.players[id]
 	return p and p.name or tostring(id)
@@ -227,7 +241,7 @@ function Game:startRound()
 	self.round += 1
 	self.phase = "play"
 	self.roundStart = self.t
-	self.phaseEnds = self.t + self.cfg.ROUND_SECONDS
+	self.phaseEnds = self.t + self:roundSeconds()
 	self.lastAttack = -math.huge
 	if self.cfg.RESET_LAYERS_EACH_ROUND then
 		for k, v in self.cfg.DEFAULT_LAYERS do
@@ -240,11 +254,24 @@ function Game:startRound()
 	self.sim = nil
 	self:emit("town", "round_started", "round-" .. self.round, {
 		round = self.round,
-		seconds = self.cfg.ROUND_SECONDS,
+		seconds = self:roundSeconds(),
 		layers = { auth = self.layers.auth, registry = self.layers.registry, transport = self.layers.transport },
 		tokens = self.tokens,
+		size = self.demo and self.size or nil,
 	})
-	self.sim = TownSim.new({ config = self.cfg, layers = self.layers, seed = self.seed * 1000 + self.round, counter = self.counter, policies = self.policies })
+	self.oversight = nil
+	if self.demo then
+		self.oversight = Oversight.new({ config = self.cfg, seed = self.seed * 1000 + self.round + 17, layers = self.layers, monitors = self.monitors })
+		self.oversight:mark(0, self:settingLabel())
+	end
+	self.sim = TownSim.new({
+		config = self.cfg,
+		layers = self.layers,
+		seed = self.seed * 1000 + self.round,
+		counter = self.counter,
+		policies = self.policies,
+		size = self.demo and self.size or nil,
+	})
 	self.sim:start()
 	self.telemetry:record(self.t, "round_started", { round = self.round, layers = { auth = self.layers.auth, registry = self.layers.registry } })
 	self:pull()
@@ -299,6 +326,9 @@ function Game:settle()
 		return
 	end
 	for _, th in self.sim:drainResolved() do
+		if self.oversight then
+			self.oversight:resolved(th, self:rt())
+		end
 		local after = math.floor((th.resolvedAt - th.createdAt) * 10 + 0.5) / 10
 		if th.state == "escaped" then
 			self.score.red += self.cfg.ESCAPE_POINTS
@@ -325,16 +355,28 @@ function Game:tick(t: number): { any }
 	self.t = t
 	if self.phase == "play" then
 		local rt = self:rt()
-		if self:botOn("red") then
-			self.redBot:tick(self, rt)
-		end
-		if self:botOn("blue") then
-			self.blueBot:tick(self, rt, dt)
+		if self.demo then
+			-- the oversight demo: red at the town's scale; blue's bot is the
+			-- attention-budgeted human in Oversight, not BlueBot's dice
+			if self:botOn("red") then
+				self.redBot:scaledTick(self, rt, Scale.factor(self.cfg, self.size))
+			end
+		else
+			if self:botOn("red") then
+				self.redBot:tick(self, rt)
+			end
+			if self:botOn("blue") then
+				self.blueBot:tick(self, rt, dt)
+			end
 		end
 		if self.sim then
-			self.sim:advance(math.min(rt, self.cfg.ROUND_SECONDS))
+			self.sim:advance(math.min(rt, self:roundSeconds()))
 		end
+		self:pull()
 		self:settle()
+		if self.oversight and self.sim then
+			self:tickOversight(rt)
+		end
 		if t >= self.phaseEnds then
 			self:finishRound()
 		end
@@ -355,27 +397,41 @@ function Game:attack(id: any, kind: string, claimed: string?): (boolean, string,
 	if self:teamOf(id) ~= "red" then
 		return false, "not_red", nil
 	end
-	if kind ~= "forge" and kind ~= "spoof" then
+	if kind ~= "forge" and kind ~= "spoof" and not (kind == "bait" and self.demo) then
 		return false, "bad_attack", nil
 	end
-	if self.tokens <= 0 then
+	-- at scale, RedBot attacks at the town's rate and spends no tokens
+	local scaledBot = self.demo and id == Bots.RED_ID
+	if self.tokens <= 0 and not scaledBot then
 		return false, "no_tokens", nil
 	end
-	if self.t - self.lastAttack < self.cfg.ATTACK_COOLDOWN then
+	if self.t - self.lastAttack < self.cfg.ATTACK_COOLDOWN and not scaledBot then
 		return false, "cooldown", nil
 	end
-	if claimed and not table.find(self.cfg.SELLERS, claimed) then
+	if claimed and not table.find(self.sim.sellerNames, claimed) then
 		claimed = nil
 	end
-	self.tokens -= 1
+	if not scaledBot then
+		self.tokens -= 1
+	end
 	if id ~= Bots.RED_ID then
 		self.humanAttacks += 1
 	end
 	self.lastAttack = self.t
 	self.sim:advance(self:rt()) -- bring the town up to now first
 	self:pull()
-	local th = kind == "forge" and self.sim:forge(claimed) or self.sim:spoof(claimed)
+	local th
+	if kind == "forge" then
+		th = self.sim:forge(claimed)
+	elseif kind == "bait" then
+		th = self.sim:bait()
+	else
+		th = self.sim:spoof(claimed)
+	end
 	self.owners[th.id] = id
+	if self.oversight then
+		self.oversight:threatAppeared(th, self:rt())
+	end
 	self.telemetry:record(self.t, "threat_appeared", {
 		threat = th.id,
 		attack = kind,
@@ -422,14 +478,23 @@ function Game:flag(id: any, target: string?, ctx: { [string]: any }?): string
 	end
 	self.sim:advance(self:rt())
 	self:pull()
+	if self.oversight and p then
+		self.oversight:humanFlagged(target)
+	end
 	local kind, obj, th = self.sim:target(target)
 	if not kind then
 		return click("miss")
 	end
 	if th then
 		local latency = math.floor((self.sim.now - th.createdAt) * 10 + 0.5) / 10
+		if self.demo then
+			self:settle() -- whatever else ended while the town caught up is scored first
+		end
 		self.sim:catch(th.id)
 		self.sim:drainResolved() -- a catch is scored here, not in settle()
+		if self.oversight then
+			self.oversight:caught(th.id, id == Bots.MONITOR_ID and "monitor" or "human")
+		end
 		self.score.blue += self.cfg.CATCH_POINTS
 		self.tally.catches += 1
 		self:emit("watchtower", "threat_caught", th.id, {
@@ -454,6 +519,9 @@ function Game:flag(id: any, target: string?, ctx: { [string]: any }?): string
 	self.sim:hold(target)
 	self.score.blue += self.cfg.FALSE_ALARM_POINTS
 	self.tally.false_alarms += 1
+	if self.oversight then
+		self.oversight:falseAlarm(target, self:nameOf(id))
+	end
 	self:emit("watchtower", "false_alarm", target, { by = self:nameOf(id), points = self.cfg.FALSE_ALARM_POINTS, stall = self.cfg.FALSE_ALARM_STALL, what = kind })
 	return click("false_alarm")
 end
@@ -492,21 +560,194 @@ function Game:checkCouncil()
 	for layer in self.cfg.LAYER_OPTIONS do
 		if self.council:passes(layer, present) then
 			local yes = self.council:count(layer)
-			local from, to = self.layers[layer], self:otherOption(layer)
 			self.council:clear(layer)
-			self.layers[layer] = to
-			if self.sim then
-				self.sim:advance(self:rt())
-				self:pull()
-			end
-			self:emit("council", "layer_swapped", layer, { from = from, to = to, yes = yes, present = present })
-			if self.sim then
-				self.sim:setLayer(layer, to)
-				self:settle()
-			end
-			self.telemetry:record(self.t, "layer_swapped", { layer = layer, from = from, to = to })
+			self:applySwap(layer, self:otherOption(layer), yes, present)
 		end
 	end
+end
+
+-- Swap a layer now (a carried vote, or the demo's presenter).
+function Game:applySwap(layer: string, to: string, yes: number?, present: number?)
+	local from = self.layers[layer]
+	if from == to then
+		return
+	end
+	self.layers[layer] = to
+	if self.sim then
+		self.sim:advance(self:rt())
+		self:pull()
+	end
+	self:emit("council", "layer_swapped", layer, { from = from, to = to, yes = yes or 0, present = present or self:humans().present })
+	if self.sim then
+		self.sim:setLayer(layer, to)
+		self:settle()
+	end
+	if self.oversight then
+		self.oversight:mark(self:rt(), self:settingLabel())
+	end
+	self.telemetry:record(self.t, "layer_swapped", { layer = layer, from = from, to = to })
+end
+
+----------------------------------------------------------- the oversight demo
+
+function Game:roundSeconds(): number
+	return self.demo and (self.cfg.DEMO_ROUND_SECONDS or 900) or self.cfg.ROUND_SECONDS
+end
+
+function Game:settingLabel(): string
+	return string.format("%d agents · monitors %s · auth %s · registry %s", self.size, self.monitors and "on" or "off", self.layers.auth, self.layers.registry)
+end
+
+-- A fresh round now (the intermission skipped): the demo's settings take
+-- effect from a clean town.
+function Game:restartRound()
+	if self.phase == "play" and self.sim then
+		self.sim:advance(self:rt())
+		self:pull()
+		self:settle()
+	end
+	self.sim = nil
+	self:startRound()
+end
+
+-- Oversight mode on or off. On: a fresh, long round at the current size.
+-- Off: back to the original five-agent game, monitors off, a fresh round.
+function Game:setOversight(on: boolean)
+	if on == self.demo then
+		return
+	end
+	self.demo = on
+	if not on then
+		self.size = #self.cfg.SELLERS + #self.cfg.BUYERS
+		self.monitors = false
+		self.beat = 0
+	end
+	self.telemetry:record(self.t, "oversight", { on = on, size = self.size, monitors = self.monitors })
+	self:restartRound()
+end
+
+-- The town grows while it runs; a smaller town is a fresh round.
+function Game:setSize(n: number)
+	if not table.find(self.cfg.TOWN_SIZES, n) then
+		return
+	end
+	if not self.demo then
+		self.size = n
+		self:setOversight(true)
+		return
+	end
+	if n == self.size then
+		return
+	end
+	local grow = n > self.size
+	self.size = n
+	self.telemetry:record(self.t, "town_size", { size = n })
+	if grow and self.sim and self.phase == "play" then
+		self.sim:advance(self:rt())
+		self:pull()
+		self.sim:grow(n)
+		self:emit("town", "town_grew", "town", { size = n })
+		if self.oversight then
+			self.oversight:mark(self:rt(), self:settingLabel())
+		end
+	else
+		self:restartRound()
+	end
+end
+
+function Game:setMonitors(on: boolean)
+	if not self.demo then
+		self.monitors = on
+		self:setOversight(true)
+		return
+	end
+	if on == self.monitors then
+		return
+	end
+	self.monitors = on
+	self.telemetry:record(self.t, "monitors", { on = on })
+	if self.oversight then
+		self.oversight:setMonitors(on, self:rt())
+		self.oversight:mark(self:rt(), self:settingLabel())
+	end
+	self:emit("town", "monitors_switched", "monitors", { on = on })
+end
+
+-- Step to beat i of Oversight.BEATS (default: the next one, wrapping).
+function Game:setBeat(i: number?)
+	local beats = Oversight.BEATS
+	local n = i or (self.beat % #beats) + 1
+	local b = beats[n]
+	if not b then
+		return nil
+	end
+	self.beat = n
+	if b.oversight == false then
+		self:setOversight(false)
+		if self.layers.auth ~= self.cfg.DEFAULT_LAYERS.auth then
+			self:applySwap("auth", self.cfg.DEFAULT_LAYERS.auth)
+		end
+		return b
+	end
+	if b.oversight and not self.demo then
+		self.size = b.size or self.size
+		if b.monitors ~= nil then
+			self.monitors = b.monitors
+		end
+		if b.auth and self.layers.auth ~= b.auth then
+			self.layers.auth = b.auth -- before the round starts: no swap to show
+		end
+		self:setOversight(true)
+		self.beat = n
+		return b
+	end
+	if b.size then
+		self:setSize(b.size)
+	end
+	if b.monitors ~= nil then
+		self:setMonitors(b.monitors)
+	end
+	if b.auth and self.layers.auth ~= b.auth then
+		self:applySwap("auth", b.auth)
+	end
+	self.beat = n
+	return b
+end
+
+function Game:tickOversight(rt: number)
+	local sim = self.sim
+	local watcher = self:botOn("blue")
+	self.oversight:tick(rt, {
+		watcher = watcher,
+		live = function(threatId: string): boolean
+			local th = sim.threats[threatId]
+			return th ~= nil and th.state == "live"
+		end,
+		flag = function(as: string, target: string)
+			return self:flag(as == "monitor" and Bots.MONITOR_ID or Bots.BLUE_ID, target, { camera = as })
+		end,
+	})
+end
+
+-- What the oversight HUD shows (nil when the demo is off).
+function Game:oversightMetrics()
+	if not self.oversight or not self.sim then
+		return nil
+	end
+	local sim = self.sim
+	return self.oversight:metrics(self:rt(), {
+		size = sim:size(),
+		target = self.size,
+		openThreats = #sim:liveThreats(),
+		auth = self.layers.auth,
+		registry = self.layers.registry,
+		beat = self.beat,
+		beats = #Oversight.BEATS,
+		beatLabel = Oversight.BEATS[self.beat] and Oversight.BEATS[self.beat].label or nil,
+		nextLabel = Oversight.BEATS[(self.beat % #Oversight.BEATS) + 1].label,
+		watcher = self:botOn("blue") and "BlueBot" or "you",
+		deals = sim.stats.dealsSettled,
+	})
 end
 
 ------------------------------------------------------------------------ for clients
@@ -565,6 +806,10 @@ function Game:status()
 		catches = self.tally.catches,
 		falseAlarms = self.tally.false_alarms,
 		blocked = self.tally.blocked,
+		demo = self.demo,
+		size = self.demo and self.size or (#self.cfg.SELLERS + #self.cfg.BUYERS),
+		monitors = self.monitors,
+		beat = self.beat,
 	}
 end
 

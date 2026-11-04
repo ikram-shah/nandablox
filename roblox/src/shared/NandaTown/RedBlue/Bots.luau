@@ -21,6 +21,7 @@ local Bots = {}
 
 Bots.RED_ID = "bot:red"
 Bots.BLUE_ID = "bot:blue"
+Bots.MONITOR_ID = "bot:monitor" -- the tier-1 rule monitors (Oversight.luau), on blue's side
 
 ------------------------------------------------------------------------ red
 
@@ -34,6 +35,7 @@ end
 
 function RedBot:reset()
 	self.nextAt = self.cfg.RED_BOT_FIRST
+	self.scaledNext = nil
 end
 
 function RedBot:choose(layers): string
@@ -50,6 +52,35 @@ function RedBot:choose(layers): string
 		end
 	end
 	return self.rng:pick({ "forge", "spoof" })
+end
+
+-- At scale (the oversight demo): attacks come `factor` times as often (one
+-- town of 100 is twenty towns of 5), red probes every seam in a fixed mix
+-- (Config.SCALE_RED_MIX), and the bot does not spend tokens.
+function RedBot:scaledTick(game, rt: number, factor: number): string?
+	if self.scaledNext == nil then
+		self.scaledNext = rt + (self.cfg.SCALE_RED_FIRST or 6)
+	end
+	if rt < self.scaledNext then
+		return nil
+	end
+	local iv = self.cfg.RED_BOT_INTERVAL
+	self.scaledNext = rt + self.rng:range(iv[1], iv[2]) / math.max(factor, 1)
+	local mix = self.cfg.SCALE_RED_MIX or { forge = 0.5, spoof = 0.5 }
+	local r = self.rng:next()
+	local kind = "spoof"
+	local acc = 0
+	for _, k in { "forge", "spoof", "bait" } do
+		acc += mix[k] or 0
+		if r < acc then
+			kind = k
+			break
+		end
+	end
+	local sellers = game.sim and game.sim.sellerNames or self.cfg.SELLERS
+	local claimed = self.rng:pick(sellers)
+	local ok = game:attack(Bots.RED_ID, kind, claimed)
+	return ok and kind or nil
 end
 
 -- rt: seconds into the round. Returns the attack it launched, or nil.
