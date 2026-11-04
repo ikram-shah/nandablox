@@ -525,6 +525,24 @@ def test_the_gemini_seller_speaks_decide_on_its_own_budget():
         f.close()
 
 
+def test_the_gemini_seller_gives_an_idle_trader_its_seat_back():
+    clock = [0.0]
+    call = fake_model({"quote_pct": 100, "floor_pct": 90, "reason": "steady"})
+    brain = MarketBrain(model_call=call, log_path=os.devnull, min_interval=0, metrics=Metrics(), max_agents=1, now=lambda: clock[0])
+    seller = GeminiSeller(brain, idle_s=60)
+    one = {"decisions": [dict(TICK["decisions"][0], agent="old-seller")]}
+    two = {"decisions": [dict(TICK["decisions"][0], agent="new-seller")]}
+    seller.decide(one)
+    settle(brain)
+    seller.decide(two)  # the only seat is taken
+    assert list(brain.agents) == ["old-seller"]
+    clock[0] += 61
+    seller.decide(two)  # old-seller has not been asked about for a minute
+    settle(brain)
+    assert list(brain.agents) == ["new-seller"]
+    assert seller.decide(two)["actions"][0]["agent"] == "new-seller"
+
+
 # -------------------------------------------------- backward compatibility
 
 
