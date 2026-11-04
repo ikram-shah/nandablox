@@ -15,6 +15,7 @@ local World = require(UI.World)
 local Crowd = require(UI.Crowd)
 local Hud = require(UI.Hud)
 local Figures = require(UI.SimpleFigures)
+local Rigs = require(UI.RigFigures)
 local Cam = require(UI.Camera)
 
 local net = ReplicatedStorage:WaitForChild("MarketNet")
@@ -44,7 +45,7 @@ local prices = hello.snapshot.prices
 local auto = false
 
 local world = World.build()
-Crowd.init(world, Figures)
+Crowd.init(world, Figures, Rigs)
 Hud.build({ send = send, you = me, sizes = hello.config.sizes })
 Cam.init()
 
@@ -175,8 +176,9 @@ RunService.RenderStepped:Connect(function(dt)
 		-- measured, for the fps report: frames per second, and the ms this script spends per frame
 		workspace:SetAttribute("MarketFps", math.floor(fpsN / fpsT + 0.5))
 		workspace:SetAttribute("MarketScriptMs", math.floor(cpu / fpsN * 1000 * 10 + 0.5) / 10)
-		local nb, ns = Crowd.count()
+		local nb, ns, nr = Crowd.count()
 		workspace:SetAttribute("MarketFigures", nb + ns)
+		workspace:SetAttribute("MarketRigs", nr)
 		fpsN, fpsT, cpu = 0, 0, 0
 	end
 	hudAt -= dt
