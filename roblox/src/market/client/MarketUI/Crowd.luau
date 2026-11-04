@@ -131,11 +131,19 @@ function Crowd.count(): (number, number)
 end
 
 -- place everyone for simulated time `now`; cam = the camera's position
+-- LOD by distance: near figures update every frame, middle ones every 2nd,
+-- far ones every 4th (staggered by `look`, so the work spreads evenly). A
+-- figure that is standing still is placed once and left alone.
+local NEAR, MID = 90, 200
+
 function Crowd.update(now: number, cam: Vector3, dt: number)
 	frame += 1
 	for _, b in buyers do
-		local far = (b.lastP and (b.lastP - cam).Magnitude > 220) or false
-		if not far or (frame + (b.look or 0)) % 3 == 0 then
+		local d = b.lastP and (b.lastP - cam).Magnitude or 0
+		local every = d < NEAR and 1 or (d < MID and 2 or 4)
+		local far = every > 1
+		local still = b.settled and b.settledT == b.t0
+		if not still and (every == 1 or (frame + (b.look or 0)) % every == 0) then
 			local p, d, moving = where(b, now)
 			b.lastP = p
 			local facing = b.facing
@@ -155,6 +163,9 @@ function Crowd.update(now: number, cam: Vector3, dt: number)
 			end
 			b.facing = facing or Vector3.new(0, 0, -1)
 			figures.place(b.fig, CFrame.lookAt(p, p + b.facing), moving, b.state, far)
+			-- standing (browsing, waiting, dealing): nothing changes until the next segment
+			b.settled = not moving and now >= b.t0
+			b.settledT = b.t0
 		end
 	end
 	for _, f in sellers do
