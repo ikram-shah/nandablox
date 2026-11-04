@@ -215,7 +215,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 		if lastState then
 			-- the beat's shot (V overrides it until the next beat)
-			local shot = workspace:GetAttribute("MarketCam") or lastState.cam
+			local shot = workspace:GetAttribute("MarketCam") or lastState.cam or "auto"
 			if shot ~= lastShot then
 				lastShot = shot
 				Cam.set(shot)
