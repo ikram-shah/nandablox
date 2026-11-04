@@ -13,6 +13,15 @@ from the environment:
   NANDA_PER_IP_PER_MINUTE, NANDA_PER_SERVER_PER_MINUTE, NANDA_GLOBAL_PER_MINUTE
   NANDA_HARNESS_AGENTS     comma-separated allowlist of agent names
 
+  the gateway (NANDA Market's slots; see README "The gateway"):
+  NANDA_GATEWAY            0 to switch it off (default on)
+  NANDA_REGISTRATION_TOKEN a second secret, good for /v1/monitors and /v1/agents only
+  NANDA_GATEWAY_REGISTRY   a JSON file to keep registrations in (default: memory only)
+  NANDA_GATEWAY_CALL_MS / _TICK_MS / _MAX_BYTES / _PER_REG_PER_MINUTE
+  NANDA_GATEWAY_MAX_PER_MINUTE/HOUR/DAY, NANDA_GATEWAY_MAX_USD_PER_DAY/TOTAL,
+  NANDA_GATEWAY_MAX_AGENTS, NANDA_GATEWAY_INTERVAL  the gemini-seller's own, smaller budget
+  NANDA_GATEWAY_ALLOW_LOCALHOST  1 lets registrations use http://localhost (local only)
+
 Neither the API key nor the token is ever printed, logged or put on a command
 line; the only thing said about either is whether there is one. Binding
 anywhere but loopback without a token is refused.
@@ -27,6 +36,8 @@ import sys
 
 from .app import serve
 from .brain import Brain, gemini_call
+from .builtins import GeminiSeller, MarketBrain, rules_decide
+from .gateway import Gateway, Registry
 from .limits import Budget, prices_for
 from .metrics import Metrics
 
@@ -92,6 +103,22 @@ def main(argv=None) -> int:
     r.add_argument("--agents", default=os.environ.get("NANDA_HARNESS_AGENTS", ""), help="comma-separated allowlist of agent names (default: any)")
     r.add_argument("--no-trust-proxy", action="store_true", help="take the peer address, not X-Forwarded-For")
     r.add_argument("--log-health", action="store_true", help="log /healthz too (the platform probes it often)")
+
+    g = ap.add_argument_group("gateway: NANDA Market's monitor and agent slots")
+    g.add_argument("--no-gateway", action="store_true", default=os.environ.get("NANDA_GATEWAY", "1") == "0")
+    g.add_argument("--registry", default=os.environ.get("NANDA_GATEWAY_REGISTRY", ""), help="JSON file for registrations (default: memory only)")
+    g.add_argument("--call-ms", type=int, default=_int("NANDA_GATEWAY_CALL_MS", 800), help="time limit for one monitor or agent")
+    g.add_argument("--tick-ms", type=int, default=_int("NANDA_GATEWAY_TICK_MS", 900), help="time limit for a whole tick")
+    g.add_argument("--max-bytes", type=int, default=_int("NANDA_GATEWAY_MAX_BYTES", 64 * 1024), help="largest answer accepted from outside code")
+    g.add_argument("--per-reg-per-minute", type=int, default=_int("NANDA_GATEWAY_PER_REG_PER_MINUTE", 60))
+    g.add_argument("--allow-localhost", action="store_true", default=os.environ.get("NANDA_GATEWAY_ALLOW_LOCALHOST", "") == "1", help="let registrations use http://localhost and private hosts (local play and tests only)")
+    g.add_argument("--gw-max-per-minute", type=int, default=_int("NANDA_GATEWAY_MAX_PER_MINUTE", 10))
+    g.add_argument("--gw-max-per-hour", type=int, default=_int("NANDA_GATEWAY_MAX_PER_HOUR", 300))
+    g.add_argument("--gw-max-per-day", type=int, default=_int("NANDA_GATEWAY_MAX_PER_DAY", 1500))
+    g.add_argument("--gw-max-usd-per-day", type=float, default=_float("NANDA_GATEWAY_MAX_USD_PER_DAY", 0.5))
+    g.add_argument("--gw-max-usd-total", type=float, default=_float("NANDA_GATEWAY_MAX_USD_TOTAL", 5.0))
+    g.add_argument("--gw-max-agents", type=int, default=_int("NANDA_GATEWAY_MAX_AGENTS", 2), help="traders the gemini-seller will drive at once")
+    g.add_argument("--gw-interval", type=float, default=_float("NANDA_GATEWAY_INTERVAL", 12.0), help="seconds between two model calls for one gemini-seller trader")
     args = ap.parse_args(argv)
 
     load_env_file(args.env_file)
@@ -104,6 +131,9 @@ def main(argv=None) -> int:
             "or pass --insecure if this really is a closed network." % args.host,
             file=sys.stderr,
         )
+        return 2
+    if public and args.allow_localhost and not args.insecure:
+        print("refusing --allow-localhost on a public bind: it would let a registration reach private addresses", file=sys.stderr)
         return 2
 
     key = os.environ.get("GEMINI_API_KEY") or ""
@@ -138,8 +168,42 @@ def main(argv=None) -> int:
         max_agents=args.max_agents,
         allow_agents=[a.strip() for a in args.agents.split(",") if a.strip()] or None,
     )
+    gateway = None
+    if not args.no_gateway:
+        # the gemini-seller has its own Brain and its own, smaller Budget, so
+        # the market can never spend the town's model calls: the live seller
+        # keeps every call it had. Worst case together: the two ceilings added.
+        gw_budget = Budget(
+            per_minute=args.gw_max_per_minute,
+            per_hour=args.gw_max_per_hour,
+            per_day=args.gw_max_per_day,
+            usd_per_day=args.gw_max_usd_per_day,
+            usd_total=args.gw_max_usd_total,
+            price_in=args.price_in or pin,
+            price_out=args.price_out or pout,
+        )
+        market_brain = MarketBrain(
+            model_call=call,
+            model_name=args.model,
+            log_path=None if not log_path else os.path.join(os.path.dirname(log_path), "market-decisions.jsonl"),
+            min_interval=args.gw_interval,
+            budget=gw_budget,
+            metrics=Metrics(),
+            max_agents=args.gw_max_agents,
+        )
+        seller = GeminiSeller(market_brain)
+        registry = Registry(
+            builtins={"rules": ("monitor", rules_decide, None), "gemini-seller": ("agent", seller.decide, ["seller"])},
+            path=args.registry or None,
+            per_minute=args.per_reg_per_minute,
+            allow_localhost=args.allow_localhost,
+        )
+        gateway = Gateway(registry, call_timeout_ms=args.call_ms, tick_deadline_ms=args.tick_ms, max_bytes=args.max_bytes)
+    reg_token = os.environ.get("NANDA_REGISTRATION_TOKEN") or None
     httpd = serve(
         brain,
+        gateway=gateway,
+        registration_token=reg_token,
         host=args.host,
         port=args.port,
         token=token,
@@ -165,6 +229,21 @@ def main(argv=None) -> int:
         )
     )
     print(f"decisions -> {log_path or 'stdout'}")
+    if gateway is not None:
+        print(
+            "gateway: %d ms per call, %d ms per tick, %d-byte answers, %d calls/min per registration; registry %s; "
+            "registration token %s; gemini-seller budget %d/min $%.2f/day"
+            % (
+                args.call_ms,
+                args.tick_ms,
+                args.max_bytes,
+                args.per_reg_per_minute,
+                args.registry or "in memory",
+                "set" if reg_token else "not set",
+                args.gw_max_per_minute,
+                args.gw_max_usd_per_day,
+            )
+        )
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

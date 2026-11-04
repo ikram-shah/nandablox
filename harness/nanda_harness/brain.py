@@ -250,14 +250,19 @@ class Brain:
         self.metrics.bump("actions_served", len(out))
         return out
 
-    def _decide(self, agent: Agent, a: dict, shared: dict) -> None:
-        prompt = PROMPT.format(
+    def prompt(self, agent: Agent, a: dict, shared: dict) -> str:
+        """The words the model is given. The gateway's market seller
+        (builtins.MarketBrain) overrides this and nothing else."""
+        return PROMPT.format(
             name=agent.name,
             role=agent.role,
             role_brief=BRIEF[agent.role],
             state=_fmt_state(a, shared),
             ticker="\n".join(f"- {line}" for line in (shared.get("ticker") or [])) or "- (nothing yet)",
         )
+
+    def _decide(self, agent: Agent, a: dict, shared: dict) -> None:
+        prompt = self.prompt(agent, a, shared)
         t0 = time.monotonic()
         record: dict[str, Any] = {
             "agent": agent.name,

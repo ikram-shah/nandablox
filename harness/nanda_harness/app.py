@@ -8,6 +8,17 @@
   GET  /v1/log?n=20          the last n decision records (prompt, answer, latency)
   POST /v1/reset             forget every agent's stance (a fresh round)
 
+The gateway (gateway.py; NANDA Market's monitor and agent slots):
+
+  POST /v1/tick              with `cases` or `decisions` in the body: a market
+                             tick, fanned out to the registered monitors and
+                             agents (the shape above is still the town's)
+  POST|GET /v1/monitors      register / list outside monitors
+  DELETE /v1/monitors/<name>
+  POST|GET /v1/agents        register / list outside agents
+  DELETE /v1/agents/<name>
+  POST /v1/builtin/<name>/decide   the gateway's own `rules` and `gemini-seller`
+
 Everything but `/healthz` and `/` needs the shared secret, as either
 
   Authorization: Bearer <token>        (what the Roblox server sends)
@@ -53,9 +64,30 @@ from .metrics import Metrics
 
 MAX_BODY = 256 * 1024
 SAFE_ID = re.compile(r"[^A-Za-z0-9._:-]")
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 PUBLIC = ("/healthz", "/", "/v1")
+REGISTRATION = ("/v1/monitors", "/v1/agents")
+KIND_OF = {"/v1/monitors": "monitor", "/v1/agents": "agent"}
+
+
+def is_market_tick(obs) -> bool:
+    """A market tick carries `cases` or `decisions`; the town's never does.
+
+    This is the whole of the backward compatibility on `/v1/tick`: the live
+    town (place version 13) sends `agents` and gets exactly what it got before.
+    """
+    return isinstance(obs, dict) and ("cases" in obs or "decisions" in obs)
+
+
+def _split(path: str) -> tuple[str, str | None]:
+    """`/v1/monitors/team-a` -> (`/v1/monitors`, `team-a`)."""
+    for base in REGISTRATION:
+        if path == base:
+            return base, None
+        if path.startswith(base + "/"):
+            return base, path[len(base) + 1 :]
+    return path, None
 
 
 def _safe_id(v: str | None, limit: int = 64) -> str | None:
@@ -70,6 +102,8 @@ class Handler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     brain = None  # set by serve()
     token = None
+    gateway = None  # gateway.Gateway, or None: then a market tick is a town tick
+    registration_token = None  # accepted on /v1/monitors and /v1/agents only
     metrics: Metrics = None  # type: ignore[assignment]
     ip_limit: RateLimiter = None  # type: ignore[assignment]
     server_limit: RateLimiter = None  # type: ignore[assignment]
@@ -136,7 +170,7 @@ class Handler(BaseHTTPRequestHandler):
         self._server = _safe_id(self.headers.get("x-nanda-server"))
         return self._server
 
-    def _authorized(self) -> bool:
+    def _authorized(self, path: str = "") -> bool:
         if not self.token:
             return True
         offered = ""
@@ -145,6 +179,23 @@ class Handler(BaseHTTPRequestHandler):
             offered = auth[7:].strip()
         if not offered:
             offered = (self.headers.get("x-nanda-token") or "").strip()
+        if not offered:
+            return False
+        if hmac.compare_digest(offered, self.token):
+            return True
+        # the registration token opens the registration routes and nothing
+        # else: a hackathon participant can sit in a slot without being able
+        # to tick the market or spend the model key
+        rt = self.registration_token
+        return bool(rt) and _split(path)[0] in REGISTRATION and hmac.compare_digest(offered, rt)
+
+    def _main_token(self) -> bool:
+        """Is the caller holding the operator's token (not the registration one)?"""
+        if not self.token:
+            return True
+        auth = self.headers.get("authorization") or ""
+        offered = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+        offered = offered or (self.headers.get("x-nanda-token") or "").strip()
         return bool(offered) and hmac.compare_digest(offered, self.token)
 
     def _read_json(self):
@@ -197,7 +248,7 @@ class Handler(BaseHTTPRequestHandler):
             self.metrics.bump("rate_limited_auth")
             self._send(429, {"error": "too many failed attempts from this address"}, {"Retry-After": retry})
             return False
-        if not self._authorized():
+        if not self._authorized(path):
             self._drain()
             self.metrics.bump("unauthorized")
             self.auth_limit.allow(self.client_ip)
@@ -259,7 +310,8 @@ class Handler(BaseHTTPRequestHandler):
                     "service": "nanda-harness",
                     "version": VERSION,
                     "auth": "Authorization: Bearer <token>",
-                    "routes": ["/healthz", "/metrics", "/v1/health", "/v1/tick", "/v1/log", "/v1/reset"],
+                    "routes": ["/healthz", "/metrics", "/v1/health", "/v1/tick", "/v1/log", "/v1/reset"]
+                    + (["/v1/monitors", "/v1/agents", "/v1/builtin/<name>/decide"] if self.gateway else []),
                 },
             )
         if path == "/metrics":
@@ -272,6 +324,8 @@ class Handler(BaseHTTPRequestHandler):
             m["model_errors"] = h["errors"]
             m["fallbacks"] = h["fallbacks"]
             m["ticks"] = h["ticks"]
+            if self.gateway is not None:
+                m["gateway"] = self.gateway.snapshot()
             m["limits"] = {
                 "ip": self.ip_limit.snapshot(),
                 "roblox_server": self.server_limit.snapshot(),
@@ -287,7 +341,58 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError:
                 n = 20
             return self._send(200, {"records": tail_log(self.brain.log_path, n)})
+        base, name = _split(path)
+        if self.gateway is not None and base in REGISTRATION and name is None:
+            kind = KIND_OF[base]
+            return self._send(200, {kind + "s": self.gateway.registry.listing(kind)})
         return self._send(404, {"error": "no such route"})
+
+    def do_DELETE(self):
+        self._t0 = time.monotonic()
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if not self._gate(path):
+            return
+        self._drain()
+        base, name = _split(path)
+        if self.gateway is None or base not in REGISTRATION or not name:
+            return self._send(404, {"error": "no such route"})
+        reg = self.gateway.registry.get(KIND_OF[base], name)
+        if reg is not None and reg.builtin is not None and not self._main_token():
+            return self._send(403, {"error": "only the operator may remove a built-in"})
+        if not self.gateway.registry.remove(KIND_OF[base], name):
+            return self._send(404, {"error": f"no {KIND_OF[base]} named {name[:32]!r}"})
+        return self._send(200, {"ok": True, "removed": name[:32]})
+
+    def _gateway_post(self, path: str) -> bool:
+        """The gateway's POST routes. True if this request was one of them."""
+        gw = self.gateway
+        if gw is None:
+            return False
+        base, name = _split(path)
+        if base in REGISTRATION:
+            if name is not None:
+                self._drain()
+                self._send(405, {"error": f"POST {base} with {{name, url, token}}; DELETE {base}/<name>"})
+                return True
+            body = self._read_json()
+            reg, why = gw.registry.add(KIND_OF[base], body)
+            if why:
+                self._send(400, {"error": why})
+            else:
+                self._send(201, {"registered": reg.public()})
+            return True
+        m = re.fullmatch(r"/v1/builtin/([A-Za-z0-9._-]+)/decide", path)
+        if m:
+            b = gw.registry.builtins.get(m.group(1))
+            body = self._read_json()
+            if b is None:
+                self._send(404, {"error": "no such built-in"})
+            elif not isinstance(body, dict):
+                self._send(400, {"error": "expected a JSON object"})
+            else:
+                self._send(200, b[1](body))
+            return True
+        return False
 
     def do_POST(self):
         self._t0 = time.monotonic()
@@ -299,6 +404,8 @@ class Handler(BaseHTTPRequestHandler):
             self._drain()
             self.brain.reset()
             return self._send(200, {"ok": True})
+        if self._gateway_post(path):
+            return
         if path != "/v1/tick":
             self._drain()
             return self._send(404, {"error": "no such route"})
@@ -306,6 +413,10 @@ class Handler(BaseHTTPRequestHandler):
         obs = self._read_json()
         if not isinstance(obs, dict):
             return self._send(400, {"error": "expected a JSON object"})
+        if self.gateway is not None and is_market_tick(obs):
+            out = self.gateway.tick(obs)
+            self.metrics.bump("market_ticks")
+            return self._send(200, out)
         actions = self.brain.tick(obs)
         now = time.time()
         for a in actions:
@@ -358,6 +469,8 @@ def serve(
     auth_failures_per_minute: int = 20,
     trust_proxy: bool = True,
     log_health: bool = False,
+    gateway=None,
+    registration_token: str | None = None,
 ):
     """A ThreadingHTTPServer with the gate, the limits and the counters on it."""
     metrics = metrics if metrics is not None else getattr(brain, "metrics", None) or Metrics()
@@ -375,6 +488,8 @@ def serve(
             "auth_limit": RateLimiter(auth_failures_per_minute, 60.0),
             "trust_proxy": trust_proxy,
             "log_health": log_health,
+            "gateway": gateway,
+            "registration_token": registration_token or None,
         },
     )
     httpd = ThreadingHTTPServer((host, port), handler)
