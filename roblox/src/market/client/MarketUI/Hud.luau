@@ -600,7 +600,8 @@ function Hud.build(opts)
 		Size = UDim2.new(0, 0, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.XY,
 		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, -210, 1, -18),
+		-- bottom centre, clear of the meter (bottom left, 416 px) and the inbox (right)
+		Position = UDim2.new(0.5, -10, 1, -18),
 		Visible = false,
 		Parent = gui,
 	})
@@ -615,7 +616,7 @@ function Hud.build(opts)
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = captionBox,
 	})
-	new("UISizeConstraint", { MaxSize = Vector2.new(820, 200), Parent = caption })
+	new("UISizeConstraint", { MaxSize = Vector2.new(560, 200), Parent = caption })
 	caption.TextWrapped = true
 	-- prices, top centre
 	priceStrip = panel({
