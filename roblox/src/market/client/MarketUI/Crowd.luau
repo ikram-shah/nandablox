@@ -22,8 +22,9 @@ local simple -- SimpleFigures
 local rigs -- RigFigures (optional)
 local frame = 0
 
-Crowd.MAX_RIGS = 70
+Crowd.MAX_RIGS = 16 -- animated R15 rigs are dear (Animator + 15 parts each): only the closest few
 local NEAR, MID = 90, 200
+Crowd.RIG_RANGE = 110
 local RIG_EVERY = 0.4 -- seconds between re-choosing who is near
 
 local WALKING = { walk = true, stroll = true, cheated = true }
@@ -208,7 +209,7 @@ local function chooseRigs(cam: Vector3)
 		dropRig(scratch[i])
 	end
 	for i = 1, cut do
-		if scratch[i].dist < NEAR * 1.6 then
+		if scratch[i].dist < Crowd.RIG_RANGE then
 			giveRig(scratch[i])
 		else
 			dropRig(scratch[i])
