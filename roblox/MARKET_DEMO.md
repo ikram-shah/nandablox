@@ -84,6 +84,7 @@ inflates it.
 | beat | what can fail | fallback |
 |---|---|---|
 | any | Studio freezes or the playtest dies | Stop, F5, press N up to the beat (each beat sets its full state, so you can jump). Worst case: the slides' screenshots in `roblox/screenshots/market-*`. |
+| prep | Rojo's live sync dropped (rojo log: `WebSocket error: Connection reset`), so Studio runs old scripts | Plugins → Rojo → Connect again, or reopen with `tools/open_in_studio.sh market studio-market` (it builds from the repo). |
 | 1 | the seeded scam card is missed or gone | Press the red **Scam stall** button (controls, H to show them): it creates a fraud listing at once. |
 | 2 | the needle climbs slowly | Keep talking: it needs about 30 s. Or point at the inbox's "+N more waiting" and the Escaped toasts, which come first. |
 | 3 | an escape still happens | Expected: the rules let a well-priced scam through. "Rules miss things; that's why the gray zone comes to me." |
