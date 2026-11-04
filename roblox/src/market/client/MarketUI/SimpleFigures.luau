@@ -5,6 +5,7 @@
 local Theme = require(script.Parent.Theme)
 
 local Simple = {}
+Simple.moved = 0 -- parts moved, summed (the client reports and resets it)
 
 local folder: Folder
 local pool = {}
@@ -168,6 +169,7 @@ function Simple.flush(dt: number)
 	for i = #moveParts, n + 1, -1 do
 		moveParts[i], moveCFs[i] = nil, nil
 	end
+	Simple.moved += n
 	if n > 0 then
 		workspace:BulkMoveTo(moveParts, moveCFs, Enum.BulkMoveMode.FireCFrameChanged)
 	end

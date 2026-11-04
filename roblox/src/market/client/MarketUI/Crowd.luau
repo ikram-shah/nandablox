@@ -175,6 +175,19 @@ local function where(b, now: number): (Vector3, Vector3?, boolean)
 	return Vector3.new(p.x, 0, p.z), nil, false
 end
 
+-- where a buyer is standing (for the deal effects)
+function Crowd.buyerPos(id: string): Vector3?
+	local b = buyers[id]
+	if not b then
+		return nil
+	end
+	if b.lastP then
+		return b.lastP
+	end
+	local p = b.to or b.from
+	return p and Vector3.new(p.x, 0, p.z)
+end
+
 function Crowd.count(): (number, number, number)
 	local nb, ns = 0, 0
 	for _ in buyers do
@@ -247,7 +260,7 @@ end
 
 -- place everyone for simulated time `now`; cam = the camera's position
 -- per-phase cost (seconds, summed; the client reports and resets it)
-Crowd.prof = { choose = 0, place = 0, simple = 0, rigs = 0, n = 0 }
+Crowd.prof = { choose = 0, place = 0, simple = 0, rigs = 0, n = 0, near = 0 }
 
 function Crowd.update(now: number, cam: Vector3, dt: number)
 	frame += 1
@@ -278,6 +291,8 @@ function Crowd.update(now: number, cam: Vector3, dt: number)
 			if due and (b.rig or d < NEAR or spent < Crowd.BUDGET) then
 				if not b.rig and d >= NEAR then
 					spent += 1
+				elseif not b.rig then
+					Crowd.prof.near += 1
 				end
 				b.lastF = frame
 				local p, dir, moving = where(b, now)

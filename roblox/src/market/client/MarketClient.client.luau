@@ -18,6 +18,7 @@ local Figures = require(UI.SimpleFigures)
 local Rigs = require(UI.RigFigures)
 local Cam = require(UI.Camera)
 local Landmarks = require(UI.Landmarks)
+local Effects = require(UI.Effects)
 
 local net = ReplicatedStorage:WaitForChild("MarketNet")
 local Batch = net:WaitForChild("Batch")
@@ -48,6 +49,7 @@ local lastPrices, prevPrices, lastPricesAt = nil, nil, 0
 
 local world = World.build()
 Landmarks.build(world)
+Effects.init(world)
 Crowd.init(world, Figures, Rigs)
 Hud.build({ send = send, you = me, sizes = hello.config.sizes })
 Cam.init()
@@ -85,6 +87,11 @@ local function onEvent(e, now: number)
 			end
 		end
 	elseif k == "deal" then
+		local slot = World.slotOf(e.seller)
+		if slot then
+			local stall = World.stallOf(e.seller)
+			Effects.deal(slot, Crowd.buyerPos(e.buyer), stall and stall.seller and stall.seller.good, e.ok)
+		end
 		if not e.ok then
 			local stall = World.stallOf(e.seller)
 			local name = stall and stall.seller and stall.seller.name or "a stall"
@@ -175,6 +182,7 @@ RunService.RenderStepped:Connect(function(dt)
 	crowdCpu += os.clock() - tc
 	Hud.tickCards(now)
 	Landmarks.clock(now)
+	Effects.update(cam.CFrame.Position)
 	fpsN += 1
 	fpsT += dt
 	cpu += os.clock() - t0
@@ -186,7 +194,10 @@ RunService.RenderStepped:Connect(function(dt)
 		local pr = Crowd.prof
 		if pr and pr.n > 0 then
 			local k = 1000 / pr.n
-			workspace:SetAttribute("MarketCrowdProfile", string.format("choose %.2f place %.2f simple %.2f rigs %.2f", pr.choose * k, pr.place * k, pr.simple * k, pr.rigs * k))
+			workspace:SetAttribute("MarketCrowdProfile", string.format("choose %.2f place %.2f simple %.2f rigs %.2f", pr.choose * k, pr.place * k, pr.simple * k, pr.rigs * k)
+				.. string.format(" | parts/frame %.0f, near/frame %.0f", Figures.moved / pr.n, (pr.near or 0) / pr.n))
+			Figures.moved = 0
+			pr.near = 0
 			pr.choose, pr.place, pr.simple, pr.rigs, pr.n = 0, 0, 0, 0, 0
 		end
 		local nb, ns, nr = Crowd.count()
