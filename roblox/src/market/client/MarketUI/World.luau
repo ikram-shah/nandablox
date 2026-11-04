@@ -259,11 +259,13 @@ function World.build()
 	lamps.Parent = root
 	for _, s in Layout.STREETS do
 		local c, sn = math.cos(s), math.sin(s)
-		for j = 0, Layout.AISLES do
-			local r = (j == 0) and (Layout.PLAZA_R + 3) or (Layout.aisleRadius(j - 1) + 15)
-			for _, side in { -1, 1 } do
-				lamp(lamps, r * c - sn * side * (Layout.STREET_HALF - 0.8), r * sn + c * side * (Layout.STREET_HALF - 0.8))
-			end
+		-- none at the plaza's edge: they would stand in the foreground of the close shots
+		for j = 1, Layout.AISLES do
+			local r = Layout.aisleRadius(j - 1) + 15
+			-- one lamp per crossing, alternating sides, kept short: they frame
+			-- the streets without walling off the view
+			local side = (j % 2 == 0) and 1 or -1
+			lamp(lamps, r * c - sn * side * (Layout.STREET_HALF - 0.8), r * sn + c * side * (Layout.STREET_HALF - 0.8), 8)
 		end
 	end
 	fountain(root)

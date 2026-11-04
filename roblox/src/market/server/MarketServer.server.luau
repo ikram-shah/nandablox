@@ -62,6 +62,15 @@ task.spawn(function()
 					p.Color = o.top
 				end
 			end
+			-- a face, so the nearest people read as people at eye level
+			local head = m:FindFirstChild("Head")
+			if head and not head:FindFirstChildOfClass("Decal") then
+				local face = Instance.new("Decal")
+				face.Name = "face"
+				face.Face = Enum.NormalId.Front
+				face.Texture = "rbxasset://textures/face.png"
+				face.Parent = head
+			end
 			local hum = m:FindFirstChildOfClass("Humanoid")
 			if hum then
 				hum:Destroy()
@@ -115,6 +124,7 @@ end
 local room = {
 	caption = nil :: string?,
 	beat = 0,
+	cam = nil :: string?,
 	votes = {} :: { [string]: boolean }, -- watcher id -> wants signatures on
 	auto = {} :: { [string]: boolean },
 	paused = false,
@@ -241,12 +251,12 @@ end
 
 -- The five beats (docs/market-design.md, "The demo"), plus the outside agent.
 local BEATS = {
-	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true, scam = true },
-	{ caption = "Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.", n = 300, monitor = "off", sig = true },
+	{ caption = "Five traders. You can decide every case, and you keep up.  (biking)", n = 5, monitor = "off", sig = true, scam = true, cam = "street" },
+	{ caption = "Now 300. The inbox overflows, the meter goes red, and frauds escape while their cases wait.", n = 300, monitor = "off", sig = true, cam = "street", thenCam = "overview" },
 	{ caption = "Monitor on: four rules settle the obvious. Only the gray zone reaches you.  (paragliding)", n = 300, monitor = "rules", sig = true },
 	{ caption = "Signatures off: trade speeds up, twins appear, the inbox floods again. The rule was doing oversight work.", n = 300, monitor = "rules", sig = false },
-	{ caption = "A second watcher joins, and the inbox splits between you.  (crewed sailing)", n = 300, monitor = "rules", sig = false, second = true },
-	{ caption = "An outside agent runs one stall through the agent slot: the seat your agents will fill.", n = 300, monitor = "rules", sig = true, agent = true },
+	{ caption = "A second watcher joins, and the inbox splits between you.  (crewed sailing)", n = 300, monitor = "rules", sig = false, second = true, cam = "balcony" },
+	{ caption = "An outside agent runs one stall through the agent slot: the seat your agents will fill.", n = 300, monitor = "rules", sig = true, agent = true, cam = "street" },
 }
 
 local SECOND = "helper"
@@ -259,6 +269,15 @@ local function applyBeat(i: number)
 	end
 	room.beat = i
 	room.caption = b.caption
+	-- the shot: some beats start close and cut wide after a few seconds
+	room.cam = b.cam or "overview"
+	if b.thenCam then
+		task.delay(10, function()
+			if room.beat == i then
+				room.cam = b.thenCam
+			end
+		end)
+	end
 	if sim.n ~= b.n then
 		sim:setSize(b.n)
 	end
@@ -377,6 +396,7 @@ local function state()
 		st = serverNow(),
 		caption = room.caption,
 		beat = room.beat,
+		cam = room.cam,
 		beats = #BEATS,
 		gateway = gateway:status(),
 		watchers = (function()

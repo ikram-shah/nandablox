@@ -45,10 +45,12 @@ local lastMeter = hello.meter
 local lastState = hello.state
 local prices = hello.snapshot.prices
 local auto = false
+local lastShot = nil
 local lastPrices, prevPrices, lastPricesAt = nil, nil, 0
 
 local world = World.build()
 Landmarks.build(world)
+Cam.balconyCF = Landmarks.balconyCF
 Effects.init(world)
 Crowd.init(world, Figures, Rigs)
 Hud.build({ send = send, you = me, sizes = hello.config.sizes })
@@ -212,6 +214,17 @@ RunService.RenderStepped:Connect(function(dt)
 			Hud.meter(lastMeter)
 		end
 		if lastState then
+			-- the beat's shot (V overrides it until the next beat)
+			local shot = workspace:GetAttribute("MarketCam") or lastState.cam
+			if shot ~= lastShot then
+				lastShot = shot
+				Cam.set(shot)
+			end
+			-- presenter view can be switched from outside too (tests, screenshots)
+			local pres = workspace:GetAttribute("MarketPresenter")
+			if pres ~= nil and pres ~= Hud.isPresenter() then
+				Hud.presenter(pres)
+			end
 			Hud.caption(lastState.caption, lastState.beat, lastState.beats)
 			Hud.status(lastState)
 		end
