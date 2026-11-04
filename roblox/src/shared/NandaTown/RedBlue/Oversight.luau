@@ -130,6 +130,7 @@ function Oversight:setMonitors(on: boolean, now: number)
 		self.queue = {}
 		for _, c in q do
 			c.deadline = math.max(c.deadline, now + (self.cfg.MONITOR_DELAY or 0.5) + 1)
+			c.handed = true -- already counted as a judgment call when it arrived
 			self:decideByMonitor(c, now)
 		end
 		for _, c in self.cases do
@@ -357,8 +358,14 @@ function Oversight:escalate(c, now: number)
 	c.state = "queued"
 	c.queuedAt = now
 	table.insert(self.queue, c)
-	self.totals.calls += 1
-	table.insert(self.callTimes, now)
+	if c.handed then
+		-- back from the monitors, still ambiguous: it stays in the queue, but
+		-- it was one judgment call when it arrived, not two
+		c.handed = nil
+	else
+		self.totals.calls += 1
+		table.insert(self.callTimes, now)
+	end
 	if c.threat then
 		local t = self.threats[c.threat] or {}
 		t.escalated = true
