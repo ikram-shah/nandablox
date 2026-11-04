@@ -161,13 +161,15 @@ end)
 ------------------------------------------------------------------ frame
 
 local hudAt = 0
-local fpsN, fpsT, cpu = 0, 0, 0
+local fpsN, fpsT, cpu, crowdCpu = 0, 0, 0, 0
 RunService.RenderStepped:Connect(function(dt)
 	local t0 = os.clock()
 	local now = simNow()
 	local cam = workspace.CurrentCamera
 	Cam.update(dt, lastMeter and lastMeter.n or 5)
+	local tc = os.clock()
 	Crowd.update(now, cam.CFrame.Position, dt)
+	crowdCpu += os.clock() - tc
 	Hud.tickCards(now)
 	fpsN += 1
 	fpsT += dt
@@ -176,10 +178,11 @@ RunService.RenderStepped:Connect(function(dt)
 		-- measured, for the fps report: frames per second, and the ms this script spends per frame
 		workspace:SetAttribute("MarketFps", math.floor(fpsN / fpsT + 0.5))
 		workspace:SetAttribute("MarketScriptMs", math.floor(cpu / fpsN * 1000 * 10 + 0.5) / 10)
+		workspace:SetAttribute("MarketCrowdMs", math.floor(crowdCpu / fpsN * 1000 * 10 + 0.5) / 10)
 		local nb, ns, nr = Crowd.count()
 		workspace:SetAttribute("MarketFigures", nb + ns)
 		workspace:SetAttribute("MarketRigs", nr)
-		fpsN, fpsT, cpu = 0, 0, 0
+		fpsN, fpsT, cpu, crowdCpu = 0, 0, 0, 0
 	end
 	hudAt -= dt
 	if hudAt <= 0 then
