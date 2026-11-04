@@ -274,7 +274,9 @@ class Gateway:
         with self.lock:
             busy = reg.inflight
             if not busy:
-                ok, _ = self.registry.limiter.allow(reg.name)
+                # built-ins cost nothing to call (the gemini-seller has its
+                # own budget); the limit is for outside hosts
+                ok = reg.builtin is not None or self.registry.limiter.allow(reg.name)[0]
                 if ok:
                     reg.inflight = True
                     reg.calls += 1

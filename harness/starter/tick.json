@@ -1,0 +1,26 @@
+{
+  "server": "local-test",
+  "t": 123.4,
+  "market": {"bread": 300, "cloth": 1200},
+  "lever": {"signatures": true},
+  "cases": [
+    {"id": "c-17", "stall": "Rosa's Bakery", "good": "bread", "price": 180,
+     "market": 300, "age_s": 4, "ratings": 0, "rating_avg": null,
+     "signature": "valid", "twin": false, "deadline_s": 11},
+    {"id": "c-18", "stall": "Cheap Cloth Co", "good": "cloth", "price": 500,
+     "market": 1200, "age_s": 3, "ratings": 0, "rating_avg": null,
+     "signature": "valid", "twin": false, "deadline_s": 12},
+    {"id": "c-19", "stall": "Old Mill", "good": "bread", "price": 200,
+     "market": 300, "age_s": 300, "ratings": 4, "rating_avg": 4.5,
+     "signature": "valid", "twin": false, "deadline_s": 9},
+    {"id": "c-20", "stall": "Lamp Man", "good": "cloth", "price": 1000,
+     "market": 1200, "age_s": 20, "ratings": 0, "rating_avg": null,
+     "signature": "valid", "twin": false, "deadline_s": 14}
+  ],
+  "decisions": [
+    {"agent": "seller-12", "role": "seller", "good": "bread", "stock": 7,
+     "price": 300, "market": 295, "sold_last_min": 0},
+    {"agent": "seller-13", "role": "seller", "good": "cloth", "stock": 2,
+     "price": 1200, "market": 1210, "sold_last_min": 4}
+  ]
+}
