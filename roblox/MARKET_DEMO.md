@@ -52,13 +52,13 @@ simulated minutes after a 1-minute warm-up, per minute.
 
 | setting | calls/min | per watcher | caught | escaped | false alarms | deals/min |
 |---|---|---|---|---|---|---|
-| 5 traders, monitor off | 2.2 | 2.2 | 2.3 | 0.3 | 0.1 | 7 |
-| 50 traders, monitor off | 7.8 | 7.8 | 1.7 | 0.2 | 0.4 | 65 |
-| **300 traders, monitor off** | **37.1** | **37.1** | 8.0 | 4.8 | 0.9 | 302 |
-| **300, rule monitor** | **11.1** | **11.1** | 11.0 | 1.4 | 4.1 | 320 |
-| 300, rules, signatures off | 26.1 | 26.1 | 7.7 | 6.9 | 4.0 | 365 |
-| 300, rules, sigs off, 2 watchers | 26.7 | 13.3 | 7.7 | 4.7 | 7.0 | 358 |
-| 1,000 traders, rule monitor | 37.2 | 37.2 | 35.7 | 10.0 | 13.0 | 826 |
+| 5 traders, monitor off | 4.1 | 4.1 | 3.2 | 0.4 | 0.3 | 6 |
+| 50 traders, monitor off | 7.7 | 7.7 | 2.3 | 0.0 | 0.8 | 63 |
+| **300 traders, monitor off** | **38.0** | **38.0** | 8.1 | 4.0 | 1.2 | 303 |
+| **300, rule monitor** | **10.2** | **10.2** | 13.3 | 0.8 | 5.4 | 322 |
+| 300, rules, signatures off | 21.6 | 21.6 | 6.6 | 4.8 | 6.0 | 358 |
+| 300, rules, sigs off, 2 watchers | 22.7 | 11.3 | 7.9 | 4.4 | 5.9 | 364 |
+| 1,000 traders, rule monitor | 34.0 | 34.0 | 33.2 | 9.3 | 14.6 | 832 |
 
 The beats replayed headless (`seed 20261106`, a presenter who answers nothing), needle per watcher at 15 s steps: beat 1 **0 2 3**; beat 2 **12 20 24 30 34**; beat 3 **12 12 11 9**; beat 4 **20 28 28 24**; beat 5 **16 18 15**.
 
