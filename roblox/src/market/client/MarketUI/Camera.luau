@@ -54,12 +54,14 @@ local function extent(n: number): number
 	return Layout.EDGE_R
 end
 
-local function street(): (CFrame, number)
+local function street(n: number): (CFrame, number)
 	-- stand in the first aisle a little before HOME and look along it; drift
-	-- slowly back and forth so the shot breathes
+	-- slowly back and forth so the shot breathes. In a crowded market lift a
+	-- little, over the shoppers' heads.
 	local A = Layout.aisleRadius(0)
 	local th = Layout.HOME - 0.42 + math.sin(t * 0.05) * 0.08
-	local eye = Vector3.new(A * math.cos(th), 7, A * math.sin(th))
+	local y = 7 + 5 * math.clamp((n - 5) / 295, 0, 1)
+	local eye = Vector3.new(A * math.cos(th), y, A * math.sin(th))
 	local ahead = th + 0.38
 	local look = Vector3.new((A - 1) * math.cos(ahead), 4.2, (A - 1) * math.sin(ahead))
 	return CFrame.lookAt(eye, look), 55
@@ -105,7 +107,7 @@ function Cam.update(dt: number, n: number)
 	end
 	local cf, fov
 	if m == "street" then
-		cf, fov = street()
+		cf, fov = street(n)
 		dist = extent(n)
 	elseif m == "balcony" then
 		cf, fov = balcony()
