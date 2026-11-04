@@ -106,7 +106,7 @@ function Rigs.take(look: number, role: string)
 	end
 	local pool = pools[outfit]
 	local r = pool and table.remove(pool) or build(outfit)
-	r.model.Parent = folder
+	r.model.Parent = folder -- stays parented while pooled (hidden far below); reparenting a rig is costly
 	r.anim = nil
 	r.mood = nil
 	r.speed = 1
@@ -124,7 +124,10 @@ function Rigs.give(r)
 		t:Stop(0)
 	end
 	r.anim = nil
-	r.model.Parent = nil
+	-- park it out of sight instead of unparenting
+	local n = #moveParts + 1
+	moveParts[n] = r.root
+	moveCFs[n] = CFrame.new(0, -400, 0)
 	pools[r.outfit] = pools[r.outfit] or {}
 	table.insert(pools[r.outfit], r)
 end
