@@ -245,13 +245,19 @@ local function placeOne(p, cf: CFrame, moving: boolean)
 end
 
 -- place everyone for simulated time `now`; cam = the camera's position
+-- per-phase cost (seconds, summed; the client reports and resets it)
+Crowd.prof = { choose = 0, place = 0, simple = 0, rigs = 0, n = 0 }
+
 function Crowd.update(now: number, cam: Vector3, dt: number)
 	frame += 1
+	local prof = Crowd.prof
+	local t0 = os.clock()
 	rigClock -= dt
 	if rigClock <= 0 then
 		rigClock = RIG_EVERY
 		chooseRigs(cam) -- also refreshes everyone's distance to the camera
 	end
+	local t1 = os.clock()
 	-- walkers: rigs and near figures every frame; everyone else shares a
 	-- budget of BUDGET placements per frame, round-robin (far figures that
 	-- move every 2nd-4th frame still read as smooth from the overview)
@@ -301,10 +307,18 @@ function Crowd.update(now: number, cam: Vector3, dt: number)
 			placeOne(f, f.cf, false)
 		end
 	end
+	local t2 = os.clock()
 	simple.flush(dt, cam)
+	local t3 = os.clock()
 	if rigs then
 		rigs.flush()
 	end
+	local t4 = os.clock()
+	prof.choose += t1 - t0
+	prof.place += t2 - t1
+	prof.simple += t3 - t2
+	prof.rigs += t4 - t3
+	prof.n += 1
 end
 
 return Crowd

@@ -183,6 +183,12 @@ RunService.RenderStepped:Connect(function(dt)
 		workspace:SetAttribute("MarketFps", math.floor(fpsN / fpsT + 0.5))
 		workspace:SetAttribute("MarketScriptMs", math.floor(cpu / fpsN * 1000 * 10 + 0.5) / 10)
 		workspace:SetAttribute("MarketCrowdMs", math.floor(crowdCpu / fpsN * 1000 * 10 + 0.5) / 10)
+		local pr = Crowd.prof
+		if pr and pr.n > 0 then
+			local k = 1000 / pr.n
+			workspace:SetAttribute("MarketCrowdProfile", string.format("choose %.2f place %.2f simple %.2f rigs %.2f", pr.choose * k, pr.place * k, pr.simple * k, pr.rigs * k))
+			pr.choose, pr.place, pr.simple, pr.rigs, pr.n = 0, 0, 0, 0, 0
+		end
 		local nb, ns, nr = Crowd.count()
 		workspace:SetAttribute("MarketFigures", nb + ns)
 		workspace:SetAttribute("MarketRigs", nr)
