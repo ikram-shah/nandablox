@@ -345,7 +345,7 @@ local function buildMeter(parent)
 		Parent = f,
 	}, { Theme.corner(8) })
 	meter.fill = new("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Theme.OK, BorderSizePixel = 0, Parent = track }, { Theme.corner(8) })
-	meter.line = new("Frame", { Size = UDim2.new(0, 3, 1, 8), Position = UDim2.new(0.25, -1, 0, -4), BackgroundColor3 = Theme.WHITE, BorderSizePixel = 0, Parent = f })
+	meter.line = new("Frame", { Size = UDim2.new(0, 3, 0, 24), Position = UDim2.new(0.25, -1, 0, -4), BackgroundColor3 = Theme.WHITE, BorderSizePixel = 0, Parent = f })
 	meter.line.Position = UDim2.new(0.25, -1, 0, 78)
 	label({ Text = "12", Font = Theme.BOLD, TextSize = 12, TextColor3 = Theme.WHITE, Size = UDim2.new(0, 30, 0, 14), Position = UDim2.new(0.25, -15, 0, 100), TextXAlignment = Enum.TextXAlignment.Center, Parent = f })
 	meter.scale = label({ Text = "48", TextSize = 12, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 40, 0, 14), Position = UDim2.new(1, -40, 0, 100), TextXAlignment = Enum.TextXAlignment.Right, Parent = f })
