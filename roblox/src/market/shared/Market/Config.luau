@@ -32,7 +32,9 @@ Config.STOCK = 8 -- units per opening; selling out means restocking and reopenin
 Config.RESTOCK_S = { 5, 9 }
 Config.DEAL_S = 2.0 -- walk up, coin, hand over
 Config.BOARDED_S = 25 -- a blocked or shuttered stall stays visible this long, then the slot frees
-Config.RETIRE_CHANCE = 0.12 -- an honest seller retires instead of reopening; a newcomer replaces them
+-- Turnover: each honest seller retires at this rate (per minute) and a
+-- newcomer takes the slot. Newcomers' listings, with the frauds, are the cases.
+Config.TURNOVER_PER_MIN = 0.4
 Config.NEWCOMER_DELAY = { 3, 12 }
 
 -- Buyers.
@@ -51,9 +53,9 @@ Config.MARKET_WINDOW = 60 -- the market price is the median of this many seconds
 -- Honest newcomers: most open at the going rate, some undercut to win their
 -- first customers, a few undercut deeply (and look like scams).
 Config.NEWCOMER_PRICE = {
-	{ p = 0.55, lo = 0.9, hi = 1.08 },
-	{ p = 0.33, lo = 0.55, hi = 0.84 },
-	{ p = 0.12, lo = 0.4, hi = 0.5 },
+	{ p = 0.7, lo = 0.88, hi = 1.08 },
+	{ p = 0.2, lo = 0.6, hi = 0.84 },
+	{ p = 0.1, lo = 0.4, hi = 0.5 },
 }
 
 -- The two frauds, injected by the scripted fraud agents at a steady rate that
@@ -62,7 +64,7 @@ Config.FRAUD_PER_TRADER_MIN = 0.04
 Config.FRAUD_MIN_PER_MIN = 2
 Config.IMPOSTOR_SHARE = 0.5
 Config.IMPOSTOR_PRICE = { 0.86, 0.96 } -- times the victim's price: just cheaper
-Config.SCAM_PRICE = { 0.35, 0.8 } -- times market: too good to be true
+Config.SCAM_PRICE = { 0.35, 0.72 } -- times market: too good to be true
 Config.FRAUD_LIFETIME = 120 -- a fraud nobody pays leaves after this
 
 -- The lever: signature checks. On: impostors are rejected before they are a

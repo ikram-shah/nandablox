@@ -174,7 +174,9 @@ end
 function MarketSim:meter()
 	local c = self.count
 	local elapsed = self.now - self.markAt
-	local window = math.min(self.cfg.METER_WINDOW, math.max(10, elapsed))
+	-- a rate over the last minute; in the first 30 s after a change, over
+	-- however long it has been (at least 15 s)
+	local window = math.min(self.cfg.METER_WINDOW, math.max(15, elapsed))
 	local watchers = #self.watchers
 	local calls = rate(self, "asked", window)
 	local minutes = math.max(elapsed, 1) / 60
@@ -336,7 +338,16 @@ end
 
 local caseFor, route -- forward
 
--- A stall opens for business: a listing. Every listing is a case.
+-- A restocked stall reopens: the same seller, already decided on. Not a case.
+local function reopen(self, s)
+	s.stock = self.cfg.STOCK
+	s.reserved = 0
+	s.openAt = self.now
+	setState(self, s, "open")
+end
+
+-- A NEW stall opens for business: a listing. Every new listing is a case
+-- (docs/market-design.md: "a listing that someone has to decide on").
 local function list(self, s)
 	local cfg = self.cfg
 	self.count.listings += 1
@@ -415,8 +426,9 @@ local function arrive(self, p)
 			s = addSeller(self, "honest", { good = good, price = newcomerPrice(self, good) })
 		end
 		if s then
-			if p.instant then
-				-- the market as it stands at the start: already open, no case
+			if p.established then
+				-- the market as it already is (at the start, or revealed as it
+				-- grows): sellers with a history, open for business, no case
 				s.stock = rng:int(2, self.cfg.STOCK)
 				s.openAt = self.now
 				setState(self, s, "open")
@@ -1192,20 +1204,21 @@ end
 
 ------------------------------------------------------------------ the tick
 
-local function stepSeller(self, s)
+local function stepSeller(self, s, dt: number)
 	local cfg = self.cfg
 	local st = s.state
+	-- turnover: honest sellers retire now and then; a newcomer takes the slot
+	if s.kind == "honest" and (st == "open" or st == "restock") and self.rng:chance(cfg.TURNOVER_PER_MIN / 60 * dt) then
+		remove(self, s, "retired")
+		return
+	end
 	if st == "setup" then
 		if self.now >= s.openAt then
 			setState(self, s, "open")
 		end
 	elseif st == "restock" then
 		if self.now >= s.stateUntil then
-			if s.kind == "honest" and self.rng:chance(cfg.RETIRE_CHANCE) then
-				remove(self, s, "retired")
-			else
-				list(self, s)
-			end
+			reopen(self, s)
 		end
 	elseif st == "blocked" or st == "shuttered" or st == "rejected" then
 		if self.now >= s.stateUntil then
@@ -1257,7 +1270,7 @@ function MarketSim:step(dt: number)
 
 	for _, s in self.sellers do
 		if s.state ~= "gone" then
-			stepSeller(self, s)
+			stepSeller(self, s, dt)
 		end
 	end
 

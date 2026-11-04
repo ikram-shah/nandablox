@@ -71,13 +71,44 @@ return function(t)
 		end
 	end)
 
-	t.case("growing the market: newcomers walk in, stalls open as listings", function(A)
+	t.case("growing the market reveals established stalls (no burst of cases); newcomers and frauds are the cases", function(A)
 		local sim = MarketSim.new({ seed = 2, n = 5 })
 		run(sim, 10)
 		sim:setSize(300)
 		local evs = run(sim, 30)
 		A.eq(#sim.buyers, 300 - MarketSim.sellersFor(300))
-		A.ok(count(evs, "case") >= 80, "every opening stall is a case (monitor off)")
+		local cases = count(evs, "case")
+		A.ok(cases < 40, "no burst when the market grows: " .. cases .. " cases in 30 s")
+		local evs2 = run(sim, 60)
+		local listings, restocks = 0, 0
+		for _, e in evs2 do
+			if e.k == "case" then
+				listings += 1
+				local s = sim.byId[e.c.seller]
+				A.ok(not s or s.kind ~= "honest" or s.createdAt > sim.now - 120, "a case is a new stall, never an old one restocking")
+			end
+		end
+		A.ok(listings > 20, "steady flow of new listings: " .. listings)
+	end)
+
+	t.case("a restocked stall reopens without a case", function(A)
+		local sim = MarketSim.new({ seed = 3, n = 300 })
+		local evs = run(sim, 120)
+		local reopened = 0
+		local wasRestock = {}
+		for _, e in evs do
+			if e.k == "stall" then
+				if e.s.state == "restock" then
+					wasRestock[e.s.id] = true
+				elseif e.s.state == "open" and wasRestock[e.s.id] then
+					reopened += 1
+					wasRestock[e.s.id] = nil
+				elseif e.s.state == "setup" and wasRestock[e.s.id] then
+					A.ok(false, "a restock became a listing")
+				end
+			end
+		end
+		A.ok(reopened > 20, "restocks: " .. reopened)
 	end)
 
 	t.case("the market price emerges from sales and stays near the base value", function(A)
@@ -207,6 +238,7 @@ return function(t)
 		sim:setMonitor("external", "team-a")
 		sim:addWatcher("me")
 		run(sim, 20)
+		local before = sim:meter().caughtBy.monitor
 		local scam = sim:injectFraud("scam", { good = "lamp", price = 0.7 })
 		local req = sim:gatewayRequest("job-1")
 		local found
@@ -220,7 +252,7 @@ return function(t)
 		A.eq(found.signature, "valid")
 		sim:applyGateway({ verdicts = { { case = scam.case, verdict = "block", monitor = "team-a", reason = "too cheap" } } })
 		A.eq(scam.state, "blocked")
-		A.eq(sim:meter().caughtBy.monitor, 1)
+		A.eq(sim:meter().caughtBy.monitor - before, 1)
 		-- nobody answers for the rest: after MONITOR_WAIT_S the rules decide
 		run(sim, Config.MONITOR_WAIT_S + 0.5)
 		local waiting = 0
