@@ -176,7 +176,7 @@ local gateway = Gateway.new({
 			Method = "POST",
 			Headers = h,
 			Body = body,
-			Timeout = Config.GATEWAY_TIMEOUT_S,
+			Timeout = math.max(1, math.ceil(Config.GATEWAY_TIMEOUT_S)),
 		} :: any)
 		local retry = tonumber(res.Headers and (res.Headers["retry-after"] or res.Headers["Retry-After"]))
 		return res.Success, res.StatusCode, res.Body, retry

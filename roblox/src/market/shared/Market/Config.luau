@@ -103,7 +103,7 @@ Config.GATEWAY_EVERY_S = 2.0
 -- market ticks share the harness's 45/min per-server limit with the old town;
 -- a tick every 2 s is 30
 Config.GATEWAY_MAX_PER_MINUTE = 30
-Config.GATEWAY_TIMEOUT_S = 2.5 -- the gateway takes up to ~900 ms
+Config.GATEWAY_TIMEOUT_S = 3 -- whole seconds (RequestAsync wants an integer); the gateway takes up to ~900 ms
 Config.GATEWAY_SECRET = "nanda_harness_token"
 Config.GATEWAY_MAX_CASES = 200 -- the gateway takes at most 500
 Config.GATEWAY_MAX_DECISIONS = 40
