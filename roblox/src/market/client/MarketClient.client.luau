@@ -73,11 +73,23 @@ Hud.build({
 		Cam.set(m)
 		Hud.toast("Camera: " .. m, Theme.BLUE)
 	end,
+	onRole = function(r)
+		Cam.setRole(r)
+		if r == "red" then
+			Hud.toast("Role: RED SCAMMER (red shirt · click Scam stall / Impersonate)", Theme.BAD)
+		else
+			Hud.toast("Role: BLUE WATCHER (blue shirt · defending the Inbox)", Theme.BLUE)
+		end
+	end,
 })
 Cam.onModeChange = function(m)
 	Hud.setCameraMode(m)
 end
 Cam.init()
+if lastState and lastState.players then
+	Cam.syncPlayers(lastState.players, me)
+	Hud.status(lastState)
+end
 
 local function onStall(s)
 	World.setStall(s)
@@ -179,6 +191,9 @@ Batch.OnClientEvent:Connect(function(b)
 	end
 	if b.s then
 		lastState = b.s
+		if lastState.players then
+			Cam.syncPlayers(lastState.players, me)
+		end
 	end
 end)
 
@@ -223,6 +238,16 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		Hud.toast("Signature checks: " .. (not cur and "ON" or "OFF"), Theme.BLUE)
 	elseif kc == Enum.KeyCode.K or kc == Enum.KeyCode.Slash then
 		Hud.toggleShortcuts()
+	elseif kc == Enum.KeyCode.T then
+		local nextRole = Cam.role() == "blue" and "red" or "blue"
+		Cam.setRole(nextRole)
+		Hud.setRole(nextRole)
+		send({ op = "role", role = nextRole })
+		if nextRole == "red" then
+			Hud.toast("Role: RED SCAMMER (red shirt · click Scam stall / Impersonate)", Theme.BAD)
+		else
+			Hud.toast("Role: BLUE WATCHER (blue shirt · defending the Inbox)", Theme.BLUE)
+		end
 	elseif kc == Enum.KeyCode.L then
 		local nextAgent = not (lastState and lastState.agentOn == true)
 		send({ op = "agent", on = nextAgent })
@@ -245,6 +270,7 @@ end)
 ------------------------------------------------------------------ frame
 
 local hudAt = 0
+local poseAt = 0
 local fpsN, fpsT, cpu, crowdCpu = 0, 0, 0, 0
 RunService.RenderStepped:Connect(function(dt)
 	local t0 = os.clock()
@@ -260,6 +286,12 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 	Cam.update(dt, lastMeter and lastMeter.n or 5)
+	poseAt -= dt
+	if poseAt <= 0 then
+		poseAt = 0.15
+		local p = Cam.pose()
+		send({ op = "pose", x = p.x, z = p.z, yaw = p.yaw, moving = p.moving })
+	end
 	local tc = os.clock()
 	Crowd.update(now, cam.CFrame.Position, dt)
 	crowdCpu += os.clock() - tc

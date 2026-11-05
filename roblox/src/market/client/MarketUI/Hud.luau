@@ -38,6 +38,7 @@ local presenter = false
 local onFocus: ((any) -> ())?
 local onVisit: ((any) -> ())?
 local onCamera: ((string) -> ())?
+local onRole: ((string) -> ())?
 local showControlsBtn: TextButton? = nil
 local shortcutsBox: Frame? = nil
 local topCard: any = nil
@@ -500,6 +501,10 @@ function Hud.setCameraMode(m: string)
 	pick("cam", m)
 end
 
+function Hud.setRole(r: string)
+	pick("role", r)
+end
+
 function Hud.toggleShortcuts(on: boolean?)
 	if not shortcutsBox then
 		return
@@ -522,6 +527,16 @@ local function buildControls(parent, sizes)
 	Theme.pad(12, 14).Parent = controls
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = controls })
 	label({ Text = "NANDA MARKET", Font = Theme.HEAVY, TextSize = 20, Size = UDim2.new(1, 0, 0, 22), Parent = controls })
+	segmented(controls, "MY ROLE (T)", "role", {
+		{ text = "Blue Watcher", value = "blue" },
+		{ text = "Red Scammer", value = "red" },
+	}, function(v)
+		send({ op = "role", role = v })
+		if onRole then
+			onRole(v)
+		end
+	end)
+	pick("role", "blue")
 	local opts = {}
 	for _, n in sizes do
 		table.insert(opts, { text = tostring(n), value = n })
@@ -593,11 +608,27 @@ function Hud.status(s)
 	if s then
 		pick("agent", s.agentOn == true)
 		pick("second", s.secondOn == true)
+		if s.players then
+			for _, p in s.players do
+				if p.id == you and (p.role == "blue" or p.role == "red") then
+					pick("role", p.role)
+				end
+			end
+		end
 	end
 	if not status then
 		return
 	end
 	local bits = {}
+	if s.players and #s.players > 0 then
+		local pnames = {}
+		for _, p in s.players do
+			local who = p.id == you and "you" or ("Player " .. tostring(p.num or 2))
+			local rtag = (p.role == "red") and "RED" or "BLUE"
+			table.insert(pnames, who .. " (" .. rtag .. ")")
+		end
+		table.insert(bits, "players: " .. table.concat(pnames, ", "))
+	end
 	if s.gateway and s.gateway.enabled then
 		table.insert(bits, string.format("gateway: %s (%d ok, %d errors)", s.gateway.health, s.gateway.ok, s.gateway.errors))
 	end
@@ -675,6 +706,7 @@ function Hud.build(opts)
 	onFocus = opts.onFocus
 	onVisit = opts.onVisit
 	onCamera = opts.onCamera
+	onRole = opts.onRole
 	gui = new("ScreenGui", {
 		Name = "MarketHud",
 		ResetOnSpawn = false,
@@ -787,6 +819,7 @@ function Hud.build(opts)
 		Parent = shortcutsBox,
 	})
 	local rows = {
+		{ "T", "Switch your role: Blue Watcher (blue shirt) / Red Scammer (red shirt)" },
 		{ "Z  /  X", "Allow / Block the top case in your Inbox" },
 		{ "Click a case card", "Teleport 3rd-person avatar to inspect that stall" },
 		{ "V", "Cycle camera: follow top case → walk 3P → overview → balcony" },

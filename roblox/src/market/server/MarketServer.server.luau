@@ -268,6 +268,8 @@ local BEATS = {
 
 local SECOND = "helper"
 local leadWatcher: string? = nil
+local playerRole: { [Player]: string } = {}
+local playerPose: { [Player]: { x: number, z: number, yaw: number, moving: boolean } } = {}
 
 local function syncWatchers()
 	local plist = Players:GetPlayers()
@@ -278,22 +280,46 @@ local function syncWatchers()
 	if not leadWatcher or not present[leadWatcher] then
 		leadWatcher = plist[1] and watcherId(plist[1]) or nil
 	end
+	-- Assign default roles for new players: first human = Blue Watcher, second human = Red Scammer
+	local hasBlue = false
+	for _, p in plist do
+		if playerRole[p] == "blue" then
+			hasBlue = true
+		end
+	end
+	for _, p in plist do
+		if not playerRole[p] then
+			if not hasBlue then
+				playerRole[p] = "blue"
+				hasBlue = true
+			else
+				playerRole[p] = room.crew and "blue" or "red"
+			end
+		end
+	end
 	if not room.crew then
-		-- 1-watcher mode (L1 / L2): only leadWatcher receives Inbox queue;
-		-- any second human player in the server acts as Red Team / Council / Observer
+		-- 1-watcher mode (L1 / L2): Blue Watchers receive the Inbox queue;
+		-- Red Scammers act as Red Team / Council and do not pull cases from Blue's Inbox
 		sim:removeWatcher(SECOND)
+		local addedAny = false
 		for _, p in plist do
 			local wid = watcherId(p)
-			if wid == leadWatcher then
+			if playerRole[p] == "blue" then
 				sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
+				addedAny = true
 			else
 				sim:removeWatcher(wid)
 			end
 		end
+		if not addedAny and plist[1] then
+			local wid = watcherId(plist[1])
+			sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
+		end
 	else
-		-- 2-watcher crew mode (L3): if 2+ humans are in the server, split the
-		-- Inbox across the real humans; if solo, add the modelled helper watcher
+		-- 2-watcher crew mode (L3): if 2+ humans are in the server, both become Blue Watchers
+		-- and split the Inbox 50/50; if solo, add the modelled helper watcher
 		for _, p in plist do
+			playerRole[p] = "blue"
 			local wid = watcherId(p)
 			sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
 		end
@@ -392,6 +418,16 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 			end
 		end
 		return
+	elseif op == "pose" then
+		if type(msg.x) == "number" and type(msg.z) == "number" and type(msg.yaw) == "number" then
+			playerPose[player] = {
+				x = math.clamp(msg.x, -260, 260),
+				z = math.clamp(msg.z, -260, 260),
+				yaw = msg.yaw,
+				moving = msg.moving == true,
+			}
+		end
+		return
 	end
 	-- everything else is a setting: at most a few a second per player
 	local t = os.clock()
@@ -439,9 +475,21 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		applyBeat(math.floor(msg.i))
 	elseif op == "agent" and type(msg.on) == "boolean" then
 		setOutsideAgent(msg.on)
+	elseif op == "role" and (msg.role == "blue" or msg.role == "red") then
+		playerRole[player] = msg.role
+		if msg.role == "red" then
+			room.crew = false
+		end
+		syncWatchers()
 	elseif op == "second" and type(msg.on) == "boolean" then
 		if not msg.on then
 			leadWatcher = id
+			playerRole[player] = "blue"
+			for _, p in Players:GetPlayers() do
+				if p ~= player then
+					playerRole[p] = "red"
+				end
+			end
 		end
 		room.crew = msg.on
 		syncWatchers()
@@ -490,6 +538,24 @@ local function state()
 			end
 			return w
 		end)(),
+		players = (function()
+			local out = {}
+			for idx, p in Players:GetPlayers() do
+				local wid = watcherId(p)
+				local r = playerRole[p] or "blue"
+				local pose = playerPose[p] or { x = (idx - 1) * 6, z = 34, yaw = 0, moving = false }
+				table.insert(out, {
+					id = wid,
+					num = idx,
+					role = r,
+					x = pose.x,
+					z = pose.z,
+					yaw = pose.yaw,
+					moving = pose.moving,
+				})
+			end
+			return out
+		end)(),
 	}
 end
 
@@ -519,6 +585,8 @@ Players.PlayerRemoving:Connect(function(p)
 	sim:removeWatcher(watcherId(p))
 	room.votes[watcherId(p)] = nil
 	lastCmd[p] = nil
+	playerRole[p] = nil
+	playerPose[p] = nil
 	syncWatchers()
 end)
 
