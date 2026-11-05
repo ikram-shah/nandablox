@@ -220,6 +220,7 @@ RunService.RenderStepped:Connect(function(dt)
 				lastShot = shot
 				Cam.set(shot)
 			end
+			Cam.focusSlot = lastState.agentSlot
 			-- presenter view can be switched from outside too (tests, screenshots)
 			local pres = workspace:GetAttribute("MarketPresenter")
 			if pres ~= nil and pres ~= Hud.isPresenter() then

@@ -544,7 +544,7 @@ function World.setStall(s)
 		local bb = Instance.new("BillboardGui")
 		bb.Name = "AgentBadge"
 		bb.Size = UDim2.new(0, 190, 0, 34)
-		bb.StudsOffsetWorldSpace = Vector3.new(0, 13, 0)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, -3.2, 0) -- just under the sign, in the street shot
 		bb.AlwaysOnTop = true
 		bb.LightInfluence = 0
 		bb.MaxDistance = 1000

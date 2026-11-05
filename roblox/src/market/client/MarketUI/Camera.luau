@@ -54,7 +54,26 @@ local function extent(n: number): number
 	return Layout.EDGE_R
 end
 
+-- a stall to frame instead of the default aisle view (beat 6: the stall the
+-- outside agent runs)
+Cam.focusSlot = nil :: number?
+
+local function atStall(slot: number): (CFrame, number)
+	-- stand in the aisle a few studs from the counter, a little to one side,
+	-- at eye level: the sign, the badge and the seller in frame
+	local L = Layout.SLOTS[slot]
+	local f = Vector3.new(L.facing.x, 0, L.facing.z)
+	local side = Vector3.new(-f.Z, 0, f.X)
+	local counter = Vector3.new(L.pos.x, 0, L.pos.z)
+	local sway = math.sin(t * 0.08) * 1.5
+	local eye = counter + f * 15 + side * (5 + sway) + Vector3.new(0, 8, 0)
+	return CFrame.lookAt(eye, counter + Vector3.new(0, 7, 0)), 60
+end
+
 local function street(n: number): (CFrame, number)
+	if Cam.focusSlot and Layout.SLOTS[Cam.focusSlot] then
+		return atStall(Cam.focusSlot)
+	end
 	-- stand in the first aisle a little before HOME and look along it; drift
 	-- slowly back and forth so the shot breathes. In a crowded market lift a
 	-- little, over the shoppers' heads.
