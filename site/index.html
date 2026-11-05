@@ -4,14 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>NANDA Town, replayed in Roblox</title>
-<meta name="description" content="One real run of NANDA Town, an open-source simulator for networks of AI agents, replayed as a town square in Roblox.">
-<!-- link previews (WhatsApp, Slack, iMessage) -->
-<meta property="og:title" content="NANDA Town, replayed in Roblox">
-<meta property="og:description" content="One real run of an agent-network simulator, played back as a town square.">
-<meta property="og:image" content="https://klutometis.github.io/nandablox/media/og.jpg">
-<meta property="og:image:width" content="1200">
-<meta property="og:image:height" content="675">
+<title>NANDA Market &amp; Town — Human–Agent Loop (HAL) in Roblox</title>
+<meta name="description" content="A live marketplace of 5 to 1,000 AI agents in Roblox where the scarce resource is human judgment calls per minute (HAL: L1 Biking, L2 Paragliding, L3 Crewed Sailing).">
+<meta property="og:title" content="NANDA Market — Who Watches the Swarm?">
+<meta property="og:description" content="A live marketplace of 5 to 1,000 AI agents in Roblox where the scarce resource is human judgment calls per minute.">
+<meta property="og:image" content="https://klutometis.github.io/nandablox/media/market-300-street.jpg">
+<meta property="og:image:width" content="1600">
+<meta property="og:image:height" content="876">
 <meta property="og:url" content="https://klutometis.github.io/nandablox/">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary_large_image">
@@ -21,30 +20,58 @@
     --muted: #6f6a61;
     --rule: #e6e1d6;
     --paper: #fbfaf6;
-    --accent: #fabe3c;        /* the replay's gold: progress bar, coins */
+    --card: #f4f1ea;
+    --accent: #fabe3c;
     --accent-ink: #9a6b00;
+    --ok: #2b7a4b;
+    --bad: #c0392b;
     --serif: "Iowan Old Style", Charter, "Bitstream Charter", "Sitka Text", "Palatino Linotype", Palatino, Georgia, serif;
     --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   }
   * { box-sizing: border-box; }
-  html { background: var(--paper); color: var(--ink); }
-  body { margin: 0; font: 19px/1.6 var(--serif); -webkit-font-smoothing: antialiased; }
-  main { padding: 0 22px 64px; }
-  .col { max-width: 680px; margin: 0 auto; }
+  html { background: var(--paper); color: var(--ink); scroll-behavior: smooth; }
+  body { margin: 0; font: 18.5px/1.6 var(--serif); -webkit-font-smoothing: antialiased; }
+  main { padding: 0 22px 80px; }
+  .col { max-width: 720px; margin: 0 auto; }
   .wide { max-width: 1040px; margin: 0 auto; }
-  header { padding: 64px 0 26px; }
-  h1 { font-weight: 600; font-size: 34px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 6px; }
-  .dek { color: var(--muted); margin: 0; font-size: 19px; }
-  h2 { font-weight: 600; font-size: 21px; margin: 64px 0 6px; }
-  h2.first { margin-top: 22px; }
-  p { margin: 0 0 1em; }
+  header { padding: 48px 0 22px; }
+  h1 { font-weight: 600; font-size: 34px; line-height: 1.2; letter-spacing: -0.01em; margin: 0 0 8px; }
+  .dek { color: var(--muted); margin: 0 0 18px; font-size: 19px; }
+  nav.top { font: 13.5px/1.5 var(--sans); padding: 10px 14px; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+  nav.top a { text-decoration: none; font-weight: 500; color: var(--ink); }
+  nav.top a:hover { color: var(--accent-ink); text-decoration: underline; }
+  nav.top .sep { color: var(--muted); }
+  h2 { font-weight: 600; font-size: 22px; margin: 48px 0 10px; border-bottom: 1px solid var(--rule); padding-bottom: 6px; }
+  h3 { font: 600 16px/1.4 var(--sans); margin: 26px 0 6px; color: var(--ink); }
+  p { margin: 0 0 0.9em; }
+  ul, ol { margin: 0 0 1em; padding-left: 1.25em; }
+  li { margin-bottom: 5px; }
   a { color: inherit; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 3px; }
   a:hover { color: var(--accent-ink); }
-  code { font: 0.84em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; background: #f1eee6; padding: 1px 4px; border-radius: 3px; }
-  figure { margin: 0; }
-  .movie video, .movie iframe { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; background: #111; border-radius: 4px; border: 0; }
-  figcaption, .note { font: 14px/1.5 var(--sans); color: var(--muted); margin-top: 10px; }
+  code, kbd { font: 0.82em/1 var(--mono); background: #efeae0; padding: 2px 5px; border-radius: 4px; }
+  kbd { border: 1px solid #d5cfc2; box-shadow: 0 1px 0 #d5cfc2; font-weight: 600; }
+  pre { font: 13px/1.45 var(--mono); background: #1c1b18; color: #f4f0e8; padding: 14px 16px; border-radius: 6px; overflow-x: auto; margin: 12px 0 18px; }
+  pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+  figure { margin: 18px 0 24px; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--rule); }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 18px 0 24px; }
+  .grid2 figure { margin: 0; }
+  .movie video, .movie iframe { display: block; width: 100%; aspect-ratio: 16 / 9; height: auto; background: #111; border-radius: 6px; border: 0; }
+  figcaption, .note { font: 13.5px/1.5 var(--sans); color: var(--muted); margin-top: 8px; }
   .hint { font: 15px/1.5 var(--sans); color: var(--muted); }
+  .callout { background: var(--card); border-left: 4px solid var(--accent); padding: 14px 18px; border-radius: 0 6px 6px 0; margin: 18px 0; font: 15.5px/1.55 var(--sans); }
+  .callout strong { color: var(--ink); }
+
+  table { border-collapse: collapse; width: 100%; font: 13.5px/1.45 var(--sans); margin: 16px 0 24px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 2px solid var(--rule); padding: 6px 10px 6px 0; }
+  td { padding: 7px 10px 7px 0; border-bottom: 1px solid #f0ece3; vertical-align: top; }
+  td.n, th.n { text-align: right; font-variant-numeric: tabular-nums; }
+  td.kinds { color: var(--muted); }
+  td:first-child { white-space: nowrap; }
+  .badge-ok { color: var(--ok); font-weight: 600; }
+  .badge-bad { color: var(--bad); font-weight: 600; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
 
   #trace-chart { position: relative; margin-top: 14px; font: 12px var(--sans); }
   #trace-chart svg { display: block; overflow: visible; }
@@ -71,22 +98,13 @@
   #trace-tip .k { display: block; color: var(--muted); font-size: 11.5px; }
   #trace-tip .d { display: block; margin: 2px 0; }
 
-  table { border-collapse: collapse; width: 100%; font: 13.5px/1.45 var(--sans); margin-top: 26px; }
-  th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--rule); padding: 0 10px 6px 0; }
-  td { padding: 5px 10px 5px 0; border-bottom: 1px solid #f0ece3; vertical-align: top; }
-  td.n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
-  td.kinds { color: var(--muted); }
-  td:first-child { white-space: nowrap; }
-  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 7px; vertical-align: 0; }
-
   .pipeline { margin: 18px 0 8px; }
-  .pipeline img { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; }
-  ul.next { padding-left: 1.1em; margin: 0 0 1em; }
-  ul.next li { margin-bottom: 2px; }
-  @media (max-width: 640px) {
-    body { font-size: 17.5px; }
-    header { padding-top: 36px; }
+  .pipeline img { display: block; width: 100%; max-width: 600px; height: auto; margin: 0 auto; border: 0; }
+  @media (max-width: 680px) {
+    body { font-size: 17px; }
+    header { padding-top: 28px; }
     h1 { font-size: 27px; }
+    .grid2 { grid-template-columns: 1fr; }
     #trace-chart { overflow-x: auto; }
   }
 </style>
@@ -95,23 +113,268 @@
 <main>
 
 <header class="col">
-  <h1>NANDA Town, replayed in Roblox</h1>
-  <p class="dek">One real run of an agent-network simulator, played back as a town square.</p>
+  <h1>NANDA Market — Who Watches the Swarm?</h1>
+  <p class="dek">A live marketplace of 5 to 1,000 AI agents in Roblox where the scarce resource is human judgment calls per minute.</p>
+  <nav class="top">
+    <a href="#overview">1. What It Is</a>
+    <a href="#clues">2. Honest vs. Scam Clues</a>
+    <a href="#controls">3. Controls &amp; Shortcuts</a>
+    <a href="#beats">4. 6-Beat Demo Script</a>
+    <a href="#levels">5. HAL &amp; E-Levels</a>
+    <a href="#gateway">6. BYO Agent / Monitor API</a>
+    <a href="#replay">7. Original 65-Event Replay</a>
+    <span class="sep">|</span>
+    <a href="https://klutometis.github.io/talks/nanda-ieee/">Slides ↗</a>
+    <a href="https://docs.google.com/document/d/1Goy-TmNY9lFoImm2osotpct_ySlavpeg8Fo_dD7mHhU/edit">White Paper ↗</a>
+    <a href="https://www.roblox.com/games/74139499982225">Roblox Place ↗</a>
+  </nav>
 </header>
 
+<figure class="wide">
+  <img src="media/market-300-street.jpg" alt="NANDA Market at 300 traders: bustling stalls, overflowing inbox on the right, judgment-calls-per-minute meter in red on the bottom left.">
+  <figcaption>NANDA Market at 300 AI traders (monitor off): 145 deals/min in the square, 18 cases backed up in the watcher’s Inbox, and judgment calls/min in the red against one human’s budget of 12/min.</figcaption>
+</figure>
+
+<!-- ======================================================= 1. WHAT IT IS -->
+<section class="col" id="overview">
+  <h2 class="first">1. What NANDA Market Is (In Plain English)</h2>
+  <p><strong>Think of it as a live fraud-desk drill for an eBay where every buyer and seller is an AI agent.</strong> As you scale the market from <code>5</code> to <code>50</code>, <code>300</code>, or <code>1,000</code> traders, agents don’t run out of bandwidth—<strong>you</strong> run out of attention. What binds is <strong>human judgment calls per minute</strong> (modeled at a budget of <strong>12 calls/min</strong>, or one decision every 5 seconds).</p>
+
+  <div class="callout">
+    <strong>Core thesis:</strong> At 5 agents, one person can judge every new listing (<strong class="badge-ok">L1 · Biking</strong>). At 300 agents, raw oversight demands <strong>38 calls/min</strong> and scammers slip through while their cases wait in your queue. A 4-line rule monitor filters the obvious cases and brings the human load down to <strong>10.2 calls/min</strong> (<strong class="badge-ok">L2 · Paragliding</strong>)—until the council turns off protocol signature checks (<strong>21.6 calls/min</strong>) or the market scales to 1,000 agents (<strong>34.0 calls/min</strong>), where a single operator drowns and oversight requires a crew sharing the inbox and governing the protocol (<strong class="badge-ok">L3 · Crewed Sailing</strong>).
+  </div>
+
+  <h3>The 7 Sine Qua Non Pieces</h3>
+  <ol>
+    <li><strong>Adjustable Agent Population (<kbd>1</kbd>–<kbd>4</kbd>):</strong> <code>5</code>, <code>50</code>, <code>300</code>, or <code>1,000</code> NPC agents (~30% sellers behind stalls, ~70% buyers walking the aisles). Each NPC wears a tag showing its role and state (e.g., <code>buyer b-2 · seeking bread</code>, <code>seller s-4 · scripted agent</code>). Market prices for the four goods (<code>bread</code>, <code>cloth</code>, <code>lamp</code>, <code>spice</code>) emerge naturally as the rolling median of the last minute’s actual sales.</li>
+    <li><strong>Two Frauds (Red Team):</strong>
+      <ul>
+        <li><strong>Impostor Twin (<code>Impersonate</code>):</strong> Opens a second stall cloning a high-rated honest seller’s name. Blocked automatically at the gate when protocol signature checks are <code>on</code>; floods the inbox as <code>TWO STALLS, ONE NAME</code> when signature checks are <code>off</code>.</li>
+        <li><strong>Scam Storefront (<code>Scam stall</code>):</strong> A brand-new unvouched seller pricing well below market (<code>30–65% off</code>) with an empty, crateless counter. If a buyer reaches the counter before you click <strong>Block</strong>, the scammer takes their coin, delivers nothing (red <code>✕</code>), and shutters the stall (an <strong>escape</strong>).</li>
+      </ul>
+    </li>
+    <li><strong>The Watcher’s Inbox (<kbd>Z</kbd> = Allow, <kbd>X</kbd> = Block):</strong> Each new listing card has a ~15-second deadline bar (the time until the first buyer walks up to that counter). Clicking <strong>Allow</strong> or <strong>Block</strong> spends 1 judgment call. Blocking a fraud = <strong>caught</strong>; blocking an honest seller = <strong>false alarm</strong> (they pack up and leave).</li>
+    <li><strong>The Judgment-Calls-Per-Minute Meter (Bottom-Left):</strong> Shows your live load against the <strong>12 calls/min</strong> human budget, plus <code>caught</code>, <code>escaped</code>, <code>false alarms</code>, and <code>deals / min</code>.</li>
+    <li><strong>The Monitor Slot (<kbd>M</kbd> — <code>off</code> · <code>rules</code> · <code>yours</code>):</strong> A fast heuristic sitting between the market and your Inbox. The built-in 4-line rule monitor only checks price and ratings:
+      <ul>
+        <li><code>&lt; 15% below market</code> or <code>≥ 5 ratings</code> → auto-<strong>Allow</strong></li>
+        <li><code>&gt; 50% below market</code> and brand-new → auto-<strong>Block</strong> <em>(catches blatant scams, but causes some false alarms on deep-clearance newcomers)</em></li>
+        <li><strong><code>15%–50% below market</code> (the gray zone)</strong> or unsigned twins → <strong>escalates to your Inbox</strong>.</li>
+      </ul>
+    </li>
+    <li><strong>The Governance Lever (<kbd>G</kbd> — Signature Checks <code>on</code> / <code>off</code>):</strong> When <code>on</code>, the protocol verifies seller signatures at a small throughput cost (~10% fewer deals/min) and blocks impostors automatically. When voted <code>off</code>, trade speeds up, but twin impostors flood in and blind the rule monitor.</li>
+    <li><strong>The Outside Agent Slot (<kbd>L</kbd> — <code>scripted</code> / <code>Gemini</code>):</strong> Hands a seller stall over to live <strong>Gemini 2.5 Flash</strong> (or any custom webhook agent registered on the Railway gateway).</li>
+  </ol>
+</section>
+
+<!-- ============================================ 2. HONEST VS SCAM CLUES -->
+<section class="col" id="clues">
+  <h2>2. Solving the Gray Zone: How to Tell Honest Newcomers from Scams</h2>
+  <p>Why does a human beat the 4-line rule monitor in the <code>15%–50% below market</code> gray zone? Because the rule monitor only looks at <code>price / market</code> and <code>ratings</code>, whereas a human can inspect <strong>two concrete signals</strong>—both on the Inbox card and physically at the 3D stall:</p>
+</section>
+
+<div class="wide grid2">
+  <figure>
+    <img src="media/market-walk-3p.jpg" alt="3rd-person watcher standing in front of Mina's Spices: bare counter, no crates, unvouched card in Inbox.">
+    <figcaption><strong>Scam Storefront:</strong> The Inbox card says <code class="badge-bad">⚠ unvouched · no crates</code>, and in 3D the counter is completely bare with no stock crates behind the seller.</figcaption>
+  </figure>
+  <figure>
+    <img src="media/market-inspect-crates.jpg" alt="Stocked honest stalls on the left with goods on counter and crates in back, next to a bare scam stall on the right.">
+    <figcaption><strong>Honest Newcomer vs. Scam:</strong> Honest discount newcomers show <code class="badge-ok">✓ vouched: &lt;Seller ★4.8&gt; · stocked</code> on their card and have goods on the counter + wooden crates stacked in back.</figcaption>
+  </figure>
+</div>
+
+<section class="col">
+  <div class="callout">
+    <strong>What clicking <code>Scam stall</code> or <code>Impersonate</code> does:</strong> In NANDA Market, you are the watcher/governor, not a shopkeeper standing behind a counter. Clicking <strong><code>Scam stall</code></strong> or <strong><code>Impersonate</code></strong> acts as the Red Team: it <strong>spawns a scammer NPC agent at an empty stall in the square</strong>, highlights that stall in gold, and swings your camera straight to it so you can see the bare counter and its card in the Inbox. (If you click <code>Impersonate</code> while Signature Checks are <code>on</code>, a green toast shows the protocol blocking the impostor at the gate—turn Signature Checks <code>off</code> first to let twin impostors into the market.)
+  </div>
+</section>
+
+<!-- ========================================= 3. CONTROLS & SHORTCUTS -->
+<section class="col" id="controls">
+  <h2>3. Controls, Camera Modes &amp; Keyboard Shortcuts</h2>
+
+  <figure>
+    <img src="media/market-shortcuts.jpg" alt="Follow camera mode and on-screen Keyboard Shortcuts reference card.">
+    <figcaption>Press <kbd>K</kbd> (or click <code>? Keyboard Shortcuts (K)</code> at the bottom of the top-left panel) anytime in-game to toggle this overlay.</figcaption>
+  </figure>
+
+  <h3>Camera Modes (<kbd>V</kbd> or the <code>CAMERA (V)</code> row on the top-left panel)</h3>
+  <table>
+    <thead>
+      <tr><th>Mode</th><th>How It Works</th><th>When to Use It</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>follow</code> <em>(default)</em></td><td>Automatically swings the camera to face the stall of the <strong>top card in your Inbox</strong> and outlines it in gold. As soon as you Allow (<kbd>Z</kbd>) or Block (<kbd>X</kbd>) that card, the camera glides to the next case’s stall.</td><td>Best for playing Blue Team and judging cases rapidly without clicking around.</td></tr>
+      <tr><td><code>walk 3P</code></td><td>Spawns your 3rd-person <code>watcher · you</code> character in the street. Walk with <kbd>WASD</kbd> / <kbd>Arrow</kbd> keys (hold <kbd>Shift</kbd> to jog, right-drag or <kbd>Q</kbd>/<kbd>E</kbd> to turn). <strong>Clicking the left side of any Inbox card teleports your character right in front of that stall.</strong></td><td>Best for walking the aisles among the agent NPCs and inspecting counters up close.</td></tr>
+      <tr><td><code>overview</code></td><td>High angle over the whole market square; rises automatically as trader count grows from 5 to 1,000.</td><td>Best for showing the 300–1,000 agent crowd at scale (Beats 2–4).</td></tr>
+      <tr><td><code>balcony</code></td><td>Frames <strong>THE WATCHERS</strong> balcony and clock tower overlooking the square.</td><td>Used in Beat 5 (L3 Crewed Sailing, second watcher).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Keyboard Shortcuts</h3>
+  <table>
+    <thead>
+      <tr><th>Key</th><th>Action</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><kbd>Z</kbd> / <kbd>X</kbd></td><td><strong>Allow</strong> (<kbd>Z</kbd>) or <strong>Block</strong> (<kbd>X</kbd>) the top case in your Inbox</td></tr>
+      <tr><td><strong>Click a case card</strong></td><td>Teleport 3rd-person character (or camera) to inspect that stall in 3D</td></tr>
+      <tr><td><kbd>V</kbd></td><td>Cycle camera mode (<code>follow</code> → <code>walk 3P</code> → <code>overview</code> → <code>balcony</code>)</td></tr>
+      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>Arrows</kbd></td><td>Walk the street in 3rd-person (auto-enters <code>walk 3P</code> mode)</td></tr>
+      <tr><td><kbd>1</kbd> · <kbd>2</kbd> · <kbd>3</kbd> · <kbd>4</kbd></td><td>Set market size independently: <code>5</code> · <code>50</code> · <code>300</code> · <code>1000</code> traders</td></tr>
+      <tr><td><kbd>M</kbd></td><td>Cycle monitor mode (<code>off</code> → <code>rules</code> → <code>yours</code>)</td></tr>
+      <tr><td><kbd>G</kbd></td><td>Toggle protocol signature checks (<code>on</code> / <code>off</code>)</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Toggle Outside Agent on a stall (<code>scripted</code> / live <code>Gemini 2.5 Flash</code>)</td></tr>
+      <tr><td><kbd>A</kbd></td><td>Toggle simulated auto-watcher (answers cases at the 12/min human pace)</td></tr>
+      <tr><td><kbd>N</kbd> / <kbd>B</kbd></td><td>Step forward (<kbd>N</kbd>) or backward (<kbd>B</kbd>) through the 6 scripted Demo Beats</td></tr>
+      <tr><td><kbd>H</kbd></td><td>Toggle Presenter View (hides/shows the top-left control panel)</td></tr>
+      <tr><td><kbd>K</kbd> or <kbd>/</kbd></td><td>Toggle the on-screen Keyboard Shortcuts reference card</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================ 4. 6-BEAT DEMO SCRIPT -->
+<section class="col" id="beats">
+  <h2>4. The 6-Beat Live Demo Script (<kbd>N</kbd> / <kbd>B</kbd> Keys)</h2>
+  <p>You can drive every variable independently from the top-left panel, or press <kbd>N</kbd> (next) and <kbd>B</kbd> (back) to step through the 6 pre-choreographed talk beats (~5 minutes total):</p>
+</section>
+
+<figure class="wide">
+  <img src="media/market-beats-sheet.jpg" alt="Six demo beats of NANDA Market: 1. Five traders (biking), 2. 300 traders overflow, 3. Rule monitor on (paragliding), 4. Signatures off, 5. Second watcher (crewed sailing), 6. Outside agent.">
+  <figcaption>The 6 scripted demo beats (<kbd>N</kbd> advances, <kbd>B</kbd> goes back, <kbd>H</kbd> hides the control panel for a clean stage view).</figcaption>
+</figure>
+
+<section class="col">
+  <table>
+    <thead>
+      <tr><th>Beat</th><th>Setting</th><th class="n">Calls/Min</th><th>What Happens &amp; What to Say</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>1. Biking (L1)</strong><br><kbd>N</kbd></td>
+        <td><code>5 traders</code><br>monitor <code>off</code><br>signatures <code>on</code></td>
+        <td class="n"><strong class="badge-ok">~4</strong><br><em>(≤ 12)</em></td>
+        <td><strong>On screen:</strong> Eye-level street shot. A seeded scam card appears with a 30s deadline (<code>unvouched · no crates</code>). Press <kbd>X</kbd> (Block) to catch it.<br><strong>Say:</strong> <em>“At five agents, one person can inspect every new stall, see that the counter has no crates, and block the scam. That’s L1—riding a bicycle.”</em></td>
+      </tr>
+      <tr>
+        <td><strong>2. The Flood</strong><br><kbd>N</kbd></td>
+        <td><code>300 traders</code><br>monitor <code>off</code><br>signatures <code>on</code></td>
+        <td class="n"><strong class="badge-bad">~38</strong><br><em>(3× budget)</em></td>
+        <td><strong>On screen:</strong> Camera rises to overview as 300 agents fill the square. The Inbox backs up (<code>+10 more waiting</code>), the meter turns red, and scams expire before anyone reaches them.<br><strong>Say:</strong> <em>“At 300 agents, the raw feed demands 38 judgment calls a minute—three times one person’s budget. Fraudsters don’t need clever tricks; they win because their cases expire in your queue.”</em></td>
+      </tr>
+      <tr>
+        <td><strong>3. Paragliding (L2)</strong><br><kbd>N</kbd></td>
+        <td><code>300 traders</code><br>monitor <code>rules</code><br>signatures <code>on</code></td>
+        <td class="n"><strong class="badge-ok">~10</strong><br><em>(≤ 12)</em></td>
+        <td><strong>On screen:</strong> The 4-line rule heuristic clears the obvious honest listings and blatant scams; only gray-zone cards (<code>15%–50% off</code>) reach your Inbox, where you check vouchers and crates.<br><strong>Say:</strong> <em>“Turn on a 4-line rule monitor. It handles the obvious cases at some false-alarm cost and escalates only the gray zone—bringing human load from 38 down to 10 calls a minute. That’s L2—paragliding.”</em></td>
+      </tr>
+      <tr>
+        <td><strong>4. Protocol Lever</strong><br><kbd>N</kbd></td>
+        <td><code>300 traders</code><br>monitor <code>rules</code><br>signatures <code>off</code></td>
+        <td class="n"><strong class="badge-bad">~22</strong><br><em>(over budget)</em></td>
+        <td><strong>On screen:</strong> Signatures turn off. Trade speeds up (+11% deals/min), but a burst of twin impostor stalls (<code>TWO STALLS, ONE NAME</code>) floods the Inbox because the rule monitor can’t tell which twin is real.<br><strong>Say:</strong> <em>“Now the council votes signature checks off to speed up trade. Deals rise, but twin impostors flood in and blind the rule monitor—spiking human calls back to 22 a minute. The protocol layer was doing oversight work.”</em></td>
+      </tr>
+      <tr>
+        <td><strong>5. Crewed Sailing (L3)</strong><br><kbd>N</kbd></td>
+        <td><code>300 traders</code><br><code>2 watchers</code><br>signatures <code>off</code></td>
+        <td class="n"><strong class="badge-ok">~11 each</strong><br><em>(split)</em></td>
+        <td><strong>On screen:</strong> Camera cuts to the Watchers’ Balcony. A second watcher joins and splits the Inbox (~11 calls/min each); restoring signatures brings it to ~5.<br><strong>Say:</strong> <em>“When monitors and rules aren’t enough—or at 1,000 agents where even rules leave 34 calls/min—you need L3: a crew sharing the inbox and governing the protocol lever together.”</em></td>
+      </tr>
+      <tr>
+        <td><strong>6. Outside Agent</strong><br><kbd>N</kbd></td>
+        <td><code>50 traders</code><br><code>Gemini</code> seller</td>
+        <td class="n"><strong class="badge-ok">~6</strong></td>
+        <td><strong>On screen:</strong> Camera zooms to the stall badged <code>run by Gemini 2.5 Flash</code>, pricing live over HTTP through the Railway gateway.<br><strong>Say:</strong> <em>“And every stall and monitor sits behind an open webhook slot—here one stall is driven live by Gemini 2.5 Flash. In the hackathon, this is where participants plug in their own agents and monitors.”</em></td>
+      </tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================ 5. HAL & E-LEVELS -->
+<section class="col" id="levels">
+  <h2>5. HAL Levels (L1–L3), Emergence Levels (E0–E4) &amp; Measured Table</h2>
+
+  <h3>Measured Market Numbers (Mean of 3 Seeds, Budget = 12 Calls/Min per Watcher)</h3>
+  <table>
+    <thead>
+      <tr><th>Level &amp; Setting</th><th class="n">Total Calls/Min</th><th class="n">Per Watcher</th><th class="n">Caught/Min</th><th class="n">Escaped/Min</th><th class="n">False Alarms</th><th class="n">Deals/Min</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>L1 · Biking:</strong> 5 traders, monitor off</td><td class="n">4.1</td><td class="n"><strong class="badge-ok">4.1</strong></td><td class="n">3.2</td><td class="n">0.4</td><td class="n">0.3</td><td class="n">6</td></tr>
+      <tr><td>50 traders, monitor off</td><td class="n">7.7</td><td class="n"><strong class="badge-ok">7.7</strong></td><td class="n">2.3</td><td class="n">0.0</td><td class="n">0.8</td><td class="n">63</td></tr>
+      <tr><td><strong>Flood:</strong> 300 traders, monitor off</td><td class="n">38.0</td><td class="n"><strong class="badge-bad">38.0</strong></td><td class="n">8.1</td><td class="n">4.0</td><td class="n">1.2</td><td class="n">303</td></tr>
+      <tr><td><strong>L2 · Paragliding:</strong> 300 traders, <code>rules</code> monitor</td><td class="n">10.2</td><td class="n"><strong class="badge-ok">10.2</strong></td><td class="n">13.3</td><td class="n">0.8</td><td class="n">5.4</td><td class="n">322</td></tr>
+      <tr><td><strong>Protocol Off:</strong> 300, <code>rules</code>, signatures <code>off</code></td><td class="n">21.6</td><td class="n"><strong class="badge-bad">21.6</strong></td><td class="n">6.6</td><td class="n">4.8</td><td class="n">6.0</td><td class="n">358</td></tr>
+      <tr><td><strong>L3 · Crewed Sailing:</strong> 300, <code>rules</code>, sigs <code>off</code>, 2 watchers</td><td class="n">22.7</td><td class="n"><strong class="badge-ok">11.3</strong></td><td class="n">7.9</td><td class="n">4.4</td><td class="n">5.9</td><td class="n">364</td></tr>
+      <tr><td><strong>Scale Limit:</strong> 1,000 traders, <code>rules</code> monitor (1 watcher)</td><td class="n">34.0</td><td class="n"><strong class="badge-bad">34.0</strong></td><td class="n">33.2</td><td class="n">9.3</td><td class="n">14.6</td><td class="n">832</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Emergence Levels (E0 → E4) Across the Hackathon Series</h3>
+  <table>
+    <thead>
+      <tr><th>Level</th><th>Kind of Phenomenon</th><th>In NANDA Market</th><th>How It Is Scored</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>E0</strong></td><td>Scripted / Injected Faults</td><td>Impostor twin stalls &amp; unvouched scam storefronts (today’s baseline).</td><td>Exact ground truth in simulator (`caught`, `escaped`, `false alarms`).</td></tr>
+      <tr><td><strong>E1</strong></td><td>Aggregate / Statistical</td><td>Emergent market price drift; congestion collapse when retries saturate scarce escrow/lookup capacity.</td><td>Capacity &amp; regime thresholds; paired-seed counterfactual runs.</td></tr>
+      <tr><td><strong>E2</strong></td><td>Structural / Network</td><td>Sybil vouching rings (colluding newcomers vouching for each other to spoof provenance).</td><td>Graph ground truth (controller identity of Sybil ring).</td></tr>
+      <tr><td><strong>E3</strong></td><td>Strategic / Game-Theoretic</td><td>Tacit price cartels; reputation farming (5 honest sales followed by a high-value rug-pull).</td><td>Fork-and-probe counterfactuals (force a defection in a cloned state and measure punishment).</td></tr>
+      <tr><td><strong>E4</strong></td><td>Semantic / Open-Ended</td><td>Unanticipated collusion or steganographic signaling in natural-language agent messages.</td><td>Open discovery ledger judged by the human crew + post-round audit.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ============================================ 6. GATEWAY API -->
+<section class="col" id="gateway">
+  <h2>6. How to Program &amp; Register Your Own Agent or Monitor</h2>
+  <p>The live gateway runs on Railway at <code>https://nanda-harness-production.up.railway.app</code>. A zero-dependency Python starter kit lives in <code>harness/starter/</code> (<code>monitor.py</code> and <code>agent.py</code>). Every ~2 seconds, the Roblox server sends one batched tick to the gateway, which fans out to all registered webhooks in parallel (800 ms timeout; anything slow or broken falls back cleanly to the built-in rules).</p>
+
+  <h3>Blue Team: Register a Custom Monitor (<code>/v1/monitors</code>)</h3>
+  <p>Your webhook receives <code>POST /decide</code> with <code>{"cases": [...]}</code> (including <code>price</code>, <code>market</code>, <code>ratings</code>, <code>signature</code>, <code>twin</code>, <code>vouchedBy</code>, <code>hasStock</code>) and returns <code>{"verdicts": [{"id": "c-1", "verdict": "allow"|"block"|"escalate", "reason": "..."}]}</code>:</p>
+<pre><code># 1. Start the starter monitor locally (port 8801) and expose via Cloudflare Quick Tunnel:
+python3 harness/starter/monitor.py --port 8801
+cloudflared tunnel --url http://localhost:8801
+
+# 2. Register your monitor with the live gateway:
+curl -sS -X POST https://nanda-harness-production.up.railway.app/v1/monitors \
+  -H "Authorization: Bearer $NANDA_HARNESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-monitor","url":"https://&lt;your-tunnel&gt;.trycloudflare.com","token":"dev-secret"}'
+
+# 3. In the Roblox NANDA MARKET panel, click MONITOR → "yours" (or press M).</code></pre>
+
+  <h3>Red / Trader Team: Register a Custom Seller Agent (<code>/v1/agents</code>)</h3>
+  <p>Your webhook receives <code>POST /decide</code> with the market prices and your seller’s state, and returns <code>{"actions": [{"agent": "s-1", "set_price": 240}]}</code>:</p>
+<pre><code># 1. Start the starter agent locally (port 8802) and expose via Cloudflare Quick Tunnel:
+python3 harness/starter/agent.py --port 8802
+cloudflared tunnel --url http://localhost:8802
+
+# 2. Register your agent with the live gateway:
+curl -sS -X POST https://nanda-harness-production.up.railway.app/v1/agents \
+  -H "Authorization: Bearer $NANDA_HARNESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-agent","url":"https://&lt;your-tunnel&gt;.trycloudflare.com","token":"dev-secret","roles":["seller"]}'
+
+# 3. In the Roblox NANDA MARKET panel, click OUTSIDE AGENT (L) → "Gemini" (or press L).</code></pre>
+</section>
+
+<!-- ============================================ 7. ORIGINAL REPLAY -->
+<section class="col" id="replay">
+  <h2>7. Earlier Prototype: The 65-Event NANDA Town Replay</h2>
+  <p class="hint">Our first spike replayed a single 65-event Lab trace from MIT Media Lab’s <a href="https://github.com/projnanda/nandatown/tree/09317903cd7e33ec2a79b88af447b5403c6d2054">NANDA Town</a> as a 3D town square where each of the 12 protocol layers is a building. Play the video below and watch the D3 event timeline track it; click any arrow to seek the movie.</p>
+</section>
+
 <figure class="movie wide">
-  <!-- Movie: the local 1080p file, so it is always crisp and the chart below seeks it exactly.
-       YouTube's embed picks its own quality from the player's size (vq=, setPlaybackQuality are
-       ignored). To use YouTube anyway, swap the <video> for this; trace.js drives either:
-       <iframe id="movie" src="https://www.youtube-nocookie.com/embed/1WyNucUqWjg?rel=0&amp;enablejsapi=1&amp;origin=https://klutometis.github.io" title="NANDA Town, replayed in Roblox" allow="fullscreen; picture-in-picture" allowfullscreen></iframe> -->
   <video id="movie" controls playsinline preload="metadata" poster="media/nanda-town-replay-sober-poster.png" src="media/nanda-town-replay-sober.mp4"></video>
-  <figcaption>About a minute, silent. The marketplace scenario, seed 42: 65 events, replayed in the order they were logged. Also on <a href="https://youtu.be/1WyNucUqWjg">YouTube</a>; playable <a href="https://www.roblox.com/games/74139499982225">in Roblox</a>.</figcaption>
+  <figcaption>The 65-event NANDA Town marketplace trace (seed 42), replayed in Roblox. Also on <a href="https://youtu.be/1WyNucUqWjg">YouTube</a>; playable in the <a href="https://www.roblox.com/games/74139499982225">NANDA Town Roblox place</a>.</figcaption>
 </figure>
 
 <section class="wide" id="trace">
   <div class="col" style="margin-left:auto;margin-right:auto">
-    <h2 class="first">The run, event by event</h2>
-    <p class="hint">Each arrow is a message or a transfer, coloured by protocol layer. The playhead follows the movie; hover over an event for what happened, click it to jump there.</p>
+    <h3>The 65-event trace, event by event</h3>
+    <p class="hint">Each arrow is a message or transfer, colored by protocol layer. Hover for details; click to seek the video above.</p>
   </div>
   <div id="trace-chart"><div id="trace-tip"></div></div>
   <div class="col" style="margin-left:auto;margin-right:auto">
@@ -119,29 +382,12 @@
       <thead><tr><th>layer</th><th>in the replay</th><th class="n">events</th><th>kinds in this run</th></tr></thead>
       <tbody></tbody>
     </table>
-    <p class="note">Privacy and coordination are not drawn: this scenario doesn’t use coordination, and privacy only redacts the buyer’s budget from the exported record.</p>
   </div>
 </section>
 
 <section class="col">
-  <h2>What this is</h2>
-  <p><a href="https://github.com/projnanda/nandatown/tree/09317903cd7e33ec2a79b88af447b5403c6d2054">NANDA Town</a> is an open-source simulator from MIT Media Lab’s Project NANDA, a “test track” for networks of AI agents. In its Lab mode, a seeded population of scripted agents goes about its business through twelve swappable protocol layers: transport, communication, identity, registry, auth, trust, payments, coordination, negotiation, memory, privacy and data facts. Faults are injected on purpose. Every step is written to a log of events, and at the end an evaluator checks the log against the scenario’s rules and gives a verdict.</p>
-  <p>This is a small hack on top of it: one real Lab run, the marketplace scenario with seed 42 and 65 events, replayed in Roblox. Nothing is simulated in Roblox. The event log becomes a Luau module, and Roblox plays it back, stretching 4.3 logical seconds to about a minute. A buyer asks two sellers for quotes, haggles with the cheaper one, and pays into escrow. The network delivers the crate twice, which is the injected fault. The buyer rates the seller and comes back for a second round, and all eight checks pass.</p>
-  <p>Why buildings? Most pictures of agent networks are graphs, with nodes and moving dots. A graph leaves out the town’s state: who holds the money, who is trusted, which rule was checked. So each protocol layer that acts here gets a place. Messages travel on roads, haggling happens at market stalls, money waits in a bank vault, receipts go up on a review wall, and the verdict is read at the courthouse.</p>
-</section>
-
-<section class="col">
-  <h2>How it’s made</h2>
+  <h3>How the replay pipeline works</h3>
   <figure class="pipeline"><img src="pipeline.svg" alt="Pipeline: NANDA Town Lab run, events.jsonl, trace_to_luau.py, Luau trace module; then rojo build, Roblox, ffmpeg, MP4." width="713" height="172"></figure>
-  <p>The place is built by <a href="https://rojo.space">Rojo</a> from a repository that holds everything: the code, the trace and the project files. Nothing is uploaded to Roblox. Every building, coin and courier is made of parts by code at runtime. The built place is published to Roblox, where anyone with access can walk around the town while the run replays. Press M and a cinema mode hides Roblox’s own interface, takes the fixed overview camera and adds the title and captions. The movie is that mode, recorded from the Roblox client at native 1080p: ffmpeg grabs the screen and cuts the take at marks the movie draws into its first frames.</p>
-  <p>To reproduce: run <code>nandatown run marketplace --seed 42</code> in NANDA Town, convert the bundle with <code>trace_to_luau.py</code>, then <code>rojo build</code> and press Play.</p>
-  <p>What could come next:</p>
-  <ul class="next">
-    <li>A layout of its own for each of the eleven Lab scenarios (the place already plays all eleven, on the marketplace square).</li>
-    <li>Thousands of synthetic agents, with distant districts shown as heat maps.</li>
-    <li>Live: the place streams a run from a NANDA Town server instead of replaying a file.</li>
-    <li>Swap a layer (send the gate guards home with <code>auth=plain.v1</code>), rerun, and play the before and after side by side.</li>
-  </ul>
 </section>
 
 </main>
