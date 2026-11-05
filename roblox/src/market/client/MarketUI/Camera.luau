@@ -31,6 +31,22 @@ local walkPitch = math.rad(-12)
 local dragging = false
 local lastMouse = Vector2.zero
 local avatarRig: any = nil
+local myRole = "blue"
+local lastMoving = false
+local peers: { [string]: { id: string, num: number, role: string, x: number, z: number, tx: number, tz: number, yaw: number, moving: boolean, rig: any } } = {}
+
+local BLUE_SHIRT = Color3.fromRGB(48, 114, 214)
+local RED_SHIRT = Color3.fromRGB(214, 56, 52)
+
+local function stylePlayerRig(rig: any, role: string, who: string)
+	if not rig then
+		return
+	end
+	local isRed = role == "red"
+	Rigs.setShirtColor(rig, isRed and RED_SHIRT or BLUE_SHIRT)
+	local title = (isRed and "RED SCAMMER · " or "BLUE WATCHER · ") .. who
+	Rigs.label(rig, title, isRed and "red" or "blue")
+end
 
 local function hideAvatar()
 	if avatarRig then
@@ -41,12 +57,101 @@ end
 
 local function ensureAvatar()
 	if not avatarRig and Rigs.ready then
-		avatarRig = Rigs.take(1, "buyer")
-		if avatarRig then
-			Rigs.label(avatarRig, "watcher · you")
-		end
+		avatarRig = Rigs.take(myRole == "red" and 10 or 1, "buyer")
+	end
+	if avatarRig then
+		stylePlayerRig(avatarRig, myRole, "you")
 	end
 	return avatarRig
+end
+
+function Cam.setRole(role: string)
+	if role ~= "blue" and role ~= "red" then
+		return
+	end
+	myRole = role
+	if avatarRig then
+		stylePlayerRig(avatarRig, myRole, "you")
+	end
+end
+
+function Cam.role(): string
+	return myRole
+end
+
+function Cam.pose()
+	return { x = walkPos.X, z = walkPos.Z, yaw = avatarYaw, moving = lastMoving }
+end
+
+function Cam.syncPlayers(list: { any }?, myId: string?)
+	if type(list) ~= "table" then
+		return
+	end
+	local seen = {}
+	for _, p in list do
+		if type(p) == "table" and type(p.id) == "string" then
+			if p.id == myId then
+				if (p.role == "blue" or p.role == "red") and p.role ~= myRole then
+					Cam.setRole(p.role)
+				end
+			else
+				seen[p.id] = true
+				local e = peers[p.id]
+				if not e then
+					e = {
+						id = p.id,
+						num = p.num or 2,
+						role = p.role or "red",
+						x = p.x or 0,
+						z = p.z or 34,
+						tx = p.x or 0,
+						tz = p.z or 34,
+						yaw = p.yaw or 0,
+						moving = p.moving == true,
+						rig = nil,
+					}
+					peers[p.id] = e
+				else
+					e.num = p.num or e.num
+					e.role = p.role or e.role
+					e.tx = p.x or e.tx
+					e.tz = p.z or e.tz
+					e.yaw = p.yaw or e.yaw
+					e.moving = p.moving == true
+				end
+			end
+		end
+	end
+	for id, e in peers do
+		if not seen[id] then
+			if e.rig then
+				Rigs.give(e.rig)
+			end
+			peers[id] = nil
+		end
+	end
+end
+
+local function stepPeers(dt: number)
+	if not Rigs.ready then
+		return
+	end
+	local a = math.min(1, dt * 10)
+	for _, e in peers do
+		if not e.rig then
+			e.rig = Rigs.take(e.role == "red" and 10 or 1, "buyer")
+		end
+		if e.rig then
+			stylePlayerRig(e.rig, e.role, "Player " .. tostring(e.num or 2))
+			local dx = e.tx - e.x
+			local dz = e.tz - e.z
+			local distSq = dx * dx + dz * dz
+			e.x += dx * a
+			e.z += dz * a
+			local footCF = CFrame.new(e.x, 0, e.z) * CFrame.Angles(0, e.yaw, 0)
+			Rigs.place(e.rig, footCF, e.moving or distSq > 0.25)
+		end
+	end
 end
 
 function Cam.init()
@@ -270,6 +375,7 @@ local function walkStep(dt: number): (CFrame, number)
 	local rot = CFrame.Angles(0, walkYaw, 0)
 	local move = (rot.LookVector * fwd + rot.RightVector * strafe)
 	local moving = move.Magnitude > 0.01
+	lastMoving = moving
 	if moving then
 		local dir = move.Unit
 		move = dir * speed * dt
@@ -297,6 +403,7 @@ function Cam.update(dt: number, n: number)
 		return
 	end
 	t += dt
+	stepPeers(dt)
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
 	-- pressing WASD / Arrow keys enters 3rd-person walk mode automatically
@@ -317,8 +424,19 @@ function Cam.update(dt: number, n: number)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
 		return
 	elseif m == "follow" then
+		lastMoving = false
 		local slot = Cam.inspectSlot or Cam.topSlot
 		if slot and Layout.SLOTS[slot] then
+			-- Also move our logical position in front of this stall so other players
+			-- see our avatar standing at the stall we are inspecting!
+			local L = Layout.SLOTS[slot]
+			local f = Vector3.new(L.facing.x, 0, L.facing.z)
+			local side = Vector3.new(-f.Z, 0, f.X)
+			local counter = Vector3.new(L.pos.x, 0, L.pos.z)
+			local stand = counter + f * 7.2 - side * 2.2
+			local toStall = counter - stand
+			walkPos = Vector3.new(stand.X, 0, stand.Z)
+			avatarYaw = math.atan2(-toStall.X, -toStall.Z)
 			cf, fov = atStall(slot)
 			local a = math.min(1, dt * 5.0)
 			cam.CFrame = cam.CFrame:Lerp(cf, a)
@@ -327,11 +445,14 @@ function Cam.update(dt: number, n: number)
 		end
 		cf, fov = (n <= 50) and street(n) or overview(n, dt)
 	elseif m == "street" then
+		lastMoving = false
 		cf, fov = street(n)
 		dist = extent(n)
 	elseif m == "balcony" then
+		lastMoving = false
 		cf, fov = balcony()
 	else
+		lastMoving = false
 		cf, fov = overview(n, dt)
 	end
 	local a = math.min(1, dt * 2.2)

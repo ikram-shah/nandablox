@@ -123,13 +123,52 @@ local function build(outfit: number)
 	return r
 end
 
-function Rigs.label(r, text: string?)
+function Rigs.label(r, text: string?, team: string?)
 	if r and r.tag and r.tagLabel then
 		if text and text ~= "" then
 			r.tagLabel.Text = text
+			if team == "blue" then
+				r.tagLabel.BackgroundColor3 = Color3.fromRGB(28, 92, 196)
+				r.tagLabel.BackgroundTransparency = 0.06
+				r.tagLabel.TextSize = 13
+				r.tag.Size = UDim2.new(0, 188, 0, 26)
+				r.tag.MaxDistance = 240
+				r.tag.AlwaysOnTop = true
+			elseif team == "red" then
+				r.tagLabel.BackgroundColor3 = Color3.fromRGB(196, 48, 48)
+				r.tagLabel.BackgroundTransparency = 0.06
+				r.tagLabel.TextSize = 13
+				r.tag.Size = UDim2.new(0, 188, 0, 26)
+				r.tag.MaxDistance = 240
+				r.tag.AlwaysOnTop = true
+			else
+				r.tagLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+				r.tagLabel.BackgroundTransparency = 0.22
+				r.tagLabel.TextSize = 12
+				r.tag.Size = UDim2.new(0, 148, 0, 22)
+				r.tag.MaxDistance = 65
+				r.tag.AlwaysOnTop = false
+			end
 			r.tag.Enabled = true
 		else
 			r.tag.Enabled = false
+		end
+	end
+end
+
+local TOP_PARTS = { "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm" }
+function Rigs.setShirtColor(r, col: Color3)
+	if not r or not r.model then
+		return
+	end
+	local bc = r.model:FindFirstChildOfClass("BodyColors")
+	if bc then
+		bc.TorsoColor3 = col
+	end
+	for _, pname in TOP_PARTS do
+		local p = r.model:FindFirstChild(pname)
+		if p and p:IsA("BasePart") then
+			p.Color = col
 		end
 	end
 end
