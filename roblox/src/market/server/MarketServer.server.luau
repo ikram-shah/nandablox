@@ -379,6 +379,8 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		local opts = {}
 		if msg.kind == "scam" and type(msg.price) == "number" then
 			opts.price = math.clamp(msg.price, 0.2, 1)
+		elseif msg.kind == "scam" and sim.monitor == "rules" then
+			opts.price = 0.58
 		end
 		if type(msg.good) == "string" and sim.goods[msg.good] then
 			opts.good = msg.good
@@ -386,7 +388,18 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		if type(msg.victim) == "string" then
 			opts.victim = msg.victim
 		end
-		sim:injectFraud(msg.kind, opts)
+		local s = sim:injectFraud(msg.kind, opts)
+		if s then
+			sim:emit({
+				k = "manualFraud",
+				kind = msg.kind,
+				seller = s.id,
+				slot = s.slot,
+				stall = s.name,
+				state = s.state,
+				signatures = sim.signatures,
+			})
+		end
 	elseif op == "beat" and type(msg.i) == "number" then
 		applyBeat(math.floor(msg.i))
 	elseif op == "agent" and type(msg.on) == "boolean" then

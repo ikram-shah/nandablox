@@ -100,7 +100,11 @@ local function onEvent(e, now: number)
 	elseif k == "caseEnd" then
 		local c = cases[e.id]
 		cases[e.id] = nil
-		if c and (c.slot == World.focusedSlot() or (c.seller and World.slotOf(c.seller) == World.focusedSlot())) then
+		local cSlot = c and (c.slot or (c.seller and World.slotOf(c.seller)))
+		if cSlot and cSlot == Cam.inspectSlot then
+			Cam.inspectSlot = nil
+		end
+		if cSlot and cSlot == World.focusedSlot() then
 			World.highlightSlot(nil)
 		end
 		Hud.removeCase(e.id, e.verdict == "expired" and "expired" or nil)
@@ -127,6 +131,20 @@ local function onEvent(e, now: number)
 		end
 	elseif k == "prices" then
 		prices = e.p
+	elseif k == "manualFraud" then
+		if e.kind == "impostor" and e.signatures then
+			Hud.toast("Blocked at the gate! Signature check rejected impostor '" .. tostring(e.stall) .. "' (turn signatures OFF to let twins in)", Theme.OK)
+		elseif e.slot then
+			World.highlightSlot(e.slot)
+			Cam.inspectSlot = e.slot
+			if Cam.mode() == "walk" then
+				Cam.visitStall(e.slot)
+			end
+			local msg = e.kind == "impostor"
+				and ("Red Team: spawned twin impostor NPC cloning '" .. tostring(e.stall) .. "'")
+				or ("Red Team: spawned scammer NPC at '" .. tostring(e.stall) .. "' (bare counter, no crates)")
+			Hud.toast(msg, Theme.BAD)
+		end
 	end
 end
 
@@ -235,8 +253,11 @@ RunService.RenderStepped:Connect(function(dt)
 	local topC = Hud.topCase()
 	local topSlot = topC and (topC.slot or (topC.seller and World.slotOf(topC.seller))) or nil
 	Cam.topSlot = topSlot
-	if Cam.mode() == "follow" and topSlot then
-		World.highlightSlot(topSlot)
+	if Cam.mode() == "follow" then
+		local focus = Cam.inspectSlot or topSlot
+		if focus then
+			World.highlightSlot(focus)
+		end
 	end
 	Cam.update(dt, lastMeter and lastMeter.n or 5)
 	local tc = os.clock()
