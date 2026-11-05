@@ -225,6 +225,9 @@ local function setOutsideAgent(on: boolean)
 		if s.policy == "external" then
 			sim:setPolicy(s.id, "scripted")
 		end
+		-- re-entering the beat starts the badge over: "waiting" until the next real price
+		s.labelled = nil
+		s.extCount = nil
 	end
 	if on then
 		local best

@@ -1257,7 +1257,8 @@ local function stepSeller(self, s, dt: number)
 	local cfg = self.cfg
 	local st = s.state
 	-- turnover: honest sellers retire now and then; a newcomer takes the slot
-	if s.kind == "honest" and (st == "open" or st == "restock") and self.rng:chance(cfg.TURNOVER_PER_MIN / 60 * dt) then
+	-- (a stall an outside agent runs stays: the demo is watching it)
+	if s.kind == "honest" and s.policy ~= "external" and (st == "open" or st == "restock") and self.rng:chance(cfg.TURNOVER_PER_MIN / 60 * dt) then
 		remove(self, s, "retired")
 		return
 	end
