@@ -26,13 +26,16 @@
 set -euo pipefail
 here="$(cd "$(dirname "$0")/.." && pwd)"
 mode="publish"
-case "${1:-}" in
-  --check) mode=check ;;
-  --dry-run) mode=dry ;;
-  "") ;;
-  -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
-  *) echo "usage: tools/publish.sh [--check | --dry-run]" >&2; exit 2 ;;
-esac
+proj="market"
+for arg in "$@"; do
+  case "$arg" in
+    --check) mode=check ;;
+    --dry-run) mode=dry ;;
+    market|play) proj="$arg" ;;
+    -h|--help) sed -n '2,20p' "$0"; exit 0 ;;
+    *) echo "usage: tools/publish.sh [market|play] [--check | --dry-run]" >&2; exit 2 ;;
+  esac
+done
 
 place_json="${PLACE_JSON:-$here/place.json}"   # PLACE_JSON: for testing only
 universe="$(jq -r '.universeId // empty' "$place_json")"
@@ -108,8 +111,8 @@ mkdir -p "$here/build"
 # the hosted harness's shared secret, into the build only (never the repo);
 # a no-op without NANDA_HARNESS_TOKEN, and the place still builds
 "$here/tools/secret.sh" >&2
-"$here/tools/rojo.sh" build play.project.json -o build/play.rbxl >&2
-file="$here/build/play.rbxl"
+"$here/tools/rojo.sh" build "$proj.project.json" -o "build/$proj.rbxl" >&2
+file="$here/build/$proj.rbxl"
 url="https://apis.roblox.com/universes/v1/$universe/places/$place/versions?versionType=Published"
 echo "built $file ($(stat -c%s "$file") bytes)"
 

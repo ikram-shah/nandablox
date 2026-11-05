@@ -267,6 +267,44 @@ local BEATS = {
 }
 
 local SECOND = "helper"
+local leadWatcher: string? = nil
+
+local function syncWatchers()
+	local plist = Players:GetPlayers()
+	local present = {}
+	for _, p in plist do
+		present[watcherId(p)] = p
+	end
+	if not leadWatcher or not present[leadWatcher] then
+		leadWatcher = plist[1] and watcherId(plist[1]) or nil
+	end
+	if not room.crew then
+		-- 1-watcher mode (L1 / L2): only leadWatcher receives Inbox queue;
+		-- any second human player in the server acts as Red Team / Council / Observer
+		sim:removeWatcher(SECOND)
+		for _, p in plist do
+			local wid = watcherId(p)
+			if wid == leadWatcher then
+				sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
+			else
+				sim:removeWatcher(wid)
+			end
+		end
+	else
+		-- 2-watcher crew mode (L3): if 2+ humans are in the server, split the
+		-- Inbox across the real humans; if solo, add the modelled helper watcher
+		for _, p in plist do
+			local wid = watcherId(p)
+			sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
+		end
+		if #plist >= 2 then
+			sim:removeWatcher(SECOND)
+		else
+			sim:addWatcher(SECOND, { auto = true, label = "second watcher" })
+		end
+	end
+end
+
 local function applyBeat(i: number)
 	local b = BEATS[i]
 	if not b then
@@ -295,11 +333,8 @@ local function applyBeat(i: number)
 		sim:setSignatures(b.sig)
 	end
 	room.votes = {}
-	if b.second then
-		sim:addWatcher(SECOND, { auto = true, label = "second watcher" })
-	else
-		sim:removeWatcher(SECOND)
-	end
+	room.crew = b.second == true
+	syncWatchers()
 	setOutsideAgent(b.agent == true)
 	-- beat 1 is the presenter's: the scripted fraud agents rest, so the only
 	-- fraud is the one seeded case, which no buyer reaches for 30 s
@@ -405,11 +440,11 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 	elseif op == "agent" and type(msg.on) == "boolean" then
 		setOutsideAgent(msg.on)
 	elseif op == "second" and type(msg.on) == "boolean" then
-		if msg.on then
-			sim:addWatcher(SECOND, { auto = true, label = "second watcher" })
-		else
-			sim:removeWatcher(SECOND)
+		if not msg.on then
+			leadWatcher = id
 		end
+		room.crew = msg.on
+		syncWatchers()
 		sim:mark(msg.on and "2 watchers" or "1 watcher")
 	elseif op == "reset" then
 		sim:mark("reset")
@@ -445,14 +480,7 @@ local function state()
 		-- the stall the outside agent runs (the beat-6 camera looks at it)
 		agentSlot = agentSeller and sim.byId[agentSeller] and sim.byId[agentSeller].slot or nil,
 		agentOn = agentSeller ~= nil,
-		secondOn = (function()
-			for _, x in sim.watchers do
-				if x.id == SECOND then
-					return true
-				end
-			end
-			return false
-		end)(),
+		secondOn = room.crew == true or #sim.watchers >= 2,
 		beats = #BEATS,
 		gateway = gateway:status(),
 		watchers = (function()
@@ -483,16 +511,15 @@ hello.OnServerInvoke = function(player: Player)
 	}
 end
 
-Players.PlayerAdded:Connect(function(p)
-	sim:addWatcher(watcherId(p), { label = "watcher" })
+Players.PlayerAdded:Connect(function(_p)
+	syncWatchers()
 end)
-for _, p in Players:GetPlayers() do
-	sim:addWatcher(watcherId(p), { label = "watcher" })
-end
+syncWatchers()
 Players.PlayerRemoving:Connect(function(p)
 	sim:removeWatcher(watcherId(p))
 	room.votes[watcherId(p)] = nil
 	lastCmd[p] = nil
+	syncWatchers()
 end)
 
 ------------------------------------------------------------------ the loop
