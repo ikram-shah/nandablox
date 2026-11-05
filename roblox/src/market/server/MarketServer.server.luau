@@ -391,6 +391,13 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		applyBeat(math.floor(msg.i))
 	elseif op == "agent" and type(msg.on) == "boolean" then
 		setOutsideAgent(msg.on)
+	elseif op == "second" and type(msg.on) == "boolean" then
+		if msg.on then
+			sim:addWatcher(SECOND, { auto = true, label = "second watcher" })
+		else
+			sim:removeWatcher(SECOND)
+		end
+		sim:mark(msg.on and "2 watchers" or "1 watcher")
 	elseif op == "reset" then
 		sim:mark("reset")
 	end
@@ -424,6 +431,15 @@ local function state()
 		cam = room.cam,
 		-- the stall the outside agent runs (the beat-6 camera looks at it)
 		agentSlot = agentSeller and sim.byId[agentSeller] and sim.byId[agentSeller].slot or nil,
+		agentOn = agentSeller ~= nil,
+		secondOn = (function()
+			for _, x in sim.watchers do
+				if x.id == SECOND then
+					return true
+				end
+			end
+			return false
+		end)(),
 		beats = #BEATS,
 		gateway = gateway:status(),
 		watchers = (function()

@@ -71,6 +71,9 @@ local function giveRig(p)
 	p.rig = r
 	simple.show(p.fig, false)
 	rigs.carry(r, p.carry and Theme.GOODS[p.carry] and Theme.GOODS[p.carry].color or nil)
+	if rigs.label then
+		rigs.label(r, p.tagText)
+	end
 	p.dirty = true
 	p.settled = false
 end
@@ -100,6 +103,15 @@ function Crowd.buyer(e)
 		buyers[e.id] = b
 	end
 	b.from, b.to, b.t0, b.t1, b.state, b.target = e.from, e.to, e.t0, e.t1, e.state, e.target
+	b.want = e.want or b.want
+	local action = e.state == "cheated" and "cheated!"
+		or (e.carry and ("bought " .. e.carry))
+		or (b.want and ("seeking " .. b.want))
+		or "browsing"
+	b.tagText = string.format("buyer %s · %s", tostring(e.id), action)
+	if b.rig and rigs.label then
+		rigs.label(b.rig, b.tagText)
+	end
 	if b.carry ~= e.carry then
 		b.carry = e.carry
 		simple.carry(b.fig, e.carry)
@@ -137,6 +149,11 @@ function Crowd.seller(s)
 	if not f then
 		f = newPerson(s.look or 1, "seller")
 		sellers[s.id] = f
+	end
+	local pol = s.policy == "external" and "Gemini agent" or "scripted agent"
+	f.tagText = string.format("seller %s · %s", tostring(s.id), pol)
+	if f.rig and rigs.label then
+		rigs.label(f.rig, f.tagText)
 	end
 	-- a blocked or shuttered seller turns their back on the square
 	local L = Layout.SLOTS[s.slot]

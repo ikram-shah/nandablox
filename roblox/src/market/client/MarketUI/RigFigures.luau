@@ -93,7 +93,45 @@ local function build(outfit: number)
 		parcel.Parent = m
 		r.parcel = parcel
 	end
+	local head = m:FindFirstChild("Head")
+	if head then
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "AgentTag"
+		bb.Size = UDim2.new(0, 148, 0, 22)
+		bb.StudsOffsetWorldSpace = Vector3.new(0, 2.3, 0)
+		bb.AlwaysOnTop = false
+		bb.LightInfluence = 0
+		bb.MaxDistance = 55
+		bb.Enabled = false
+		bb.Adornee = head
+		local tl = Instance.new("TextLabel")
+		tl.Size = UDim2.fromScale(1, 1)
+		tl.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+		tl.BackgroundTransparency = 0.22
+		tl.TextColor3 = Color3.fromRGB(244, 240, 232)
+		tl.Font = Enum.Font.GothamMedium
+		tl.TextSize = 12
+		tl.Text = ""
+		tl.Parent = bb
+		local cr = Instance.new("UICorner")
+		cr.CornerRadius = UDim.new(0, 6)
+		cr.Parent = tl
+		bb.Parent = m
+		r.tag = bb
+		r.tagLabel = tl
+	end
 	return r
+end
+
+function Rigs.label(r, text: string?)
+	if r and r.tag and r.tagLabel then
+		if text and text ~= "" then
+			r.tagLabel.Text = text
+			r.tag.Enabled = true
+		else
+			r.tag.Enabled = false
+		end
+	end
 end
 
 function Rigs.take(look: number, role: string)
@@ -120,6 +158,9 @@ function Rigs.give(r)
 		return
 	end
 	live[r] = nil
+	if r.tag then
+		r.tag.Enabled = false
+	end
 	for _, t in r.tracks do
 		t:Stop(0)
 	end

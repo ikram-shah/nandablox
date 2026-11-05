@@ -53,7 +53,23 @@ Landmarks.build(world)
 Cam.balconyCF = Landmarks.balconyCF
 Effects.init(world)
 Crowd.init(world, Figures, Rigs)
-Hud.build({ send = send, you = me, sizes = hello.config.sizes })
+Hud.build({
+	send = send,
+	you = me,
+	sizes = hello.config.sizes,
+	onFocus = function(c)
+		local slot = c and (c.slot or (c.seller and World.slotOf(c.seller)))
+		World.highlightSlot(slot)
+	end,
+	onVisit = function(c)
+		local slot = c and (c.slot or (c.seller and World.slotOf(c.seller)))
+		if slot then
+			World.highlightSlot(slot)
+			Cam.visitStall(slot)
+			Hud.toast("Inspecting " .. tostring(c.stall) .. " (WASD / Arrows to walk, V to change camera)", Theme.BLUE)
+		end
+	end,
+})
 Cam.init()
 
 local function onStall(s)
@@ -77,6 +93,9 @@ local function onEvent(e, now: number)
 	elseif k == "caseEnd" then
 		local c = cases[e.id]
 		cases[e.id] = nil
+		if c and (c.slot == World.focusedSlot() or (c.seller and World.slotOf(c.seller) == World.focusedSlot())) then
+			World.highlightSlot(nil)
+		end
 		Hud.removeCase(e.id, e.verdict == "expired" and "expired" or nil)
 		-- tell the watcher what their call did, once it is decided
 		if c and e.by == "watcher" and e.who == me then
@@ -147,14 +166,21 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	local kc = input.KeyCode
 	local beat = lastState and lastState.beat or 0
 	local beats = lastState and lastState.beats or 6
-	if kc == Enum.KeyCode.N or kc == Enum.KeyCode.Right then
+	if kc == Enum.KeyCode.N then
 		send({ op = "beat", i = math.min(beats, beat + 1) })
-	elseif kc == Enum.KeyCode.B or kc == Enum.KeyCode.Left then
+	elseif kc == Enum.KeyCode.B then
 		send({ op = "beat", i = math.max(1, beat - 1) })
 	elseif kc == Enum.KeyCode.H then
-		Hud.presenter(not Hud.isPresenter())
+		local nextPres = not Hud.isPresenter()
+		workspace:SetAttribute("MarketPresenter", nil)
+		Hud.presenter(nextPres)
 	elseif kc == Enum.KeyCode.V then
-		Cam.toggle()
+		local m = Cam.toggle()
+		Hud.toast("Camera: " .. m .. (m == "walk" and " (WASD / Arrows)" or ""), Theme.BLUE)
+	elseif kc == Enum.KeyCode.L then
+		local nextAgent = not (lastState and lastState.agentOn == true)
+		send({ op = "agent", on = nextAgent })
+		Hud.toast(nextAgent and "Outside agent (Gemini) ON" or "Outside agent OFF (scripted)", Theme.BLUE)
 	elseif kc == Enum.KeyCode.A then
 		auto = not auto
 		send({ op = "auto", on = auto })
@@ -223,8 +249,11 @@ RunService.RenderStepped:Connect(function(dt)
 			Cam.focusSlot = lastState.agentSlot
 			-- presenter view can be switched from outside too (tests, screenshots)
 			local pres = workspace:GetAttribute("MarketPresenter")
-			if pres ~= nil and pres ~= Hud.isPresenter() then
-				Hud.presenter(pres)
+			if pres ~= nil then
+				workspace:SetAttribute("MarketPresenter", nil)
+				if pres ~= Hud.isPresenter() then
+					Hud.presenter(pres)
+				end
 			end
 			Hud.caption(lastState.caption, lastState.beat, lastState.beats)
 			Hud.status(lastState)

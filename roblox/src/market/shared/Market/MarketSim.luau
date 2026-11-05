@@ -275,6 +275,8 @@ function MarketSim:publicSeller(s)
 		extCount = s.extCount,
 		extBy = s.extBy,
 		look = s.look,
+		vouchedBy = s.vouchedBy,
+		hasStock = s.hasStock,
 		-- ground truth only once it no longer matters (the aftermath)
 		truth = (s.state == "shuttered" or s.state == "blocked" or s.state == "gone") and s.kind or nil,
 		reason = s.reason,
@@ -301,6 +303,29 @@ local function addSeller(self, kind: string, opts)
 	local cfg = self.cfg
 	local good = opts.good or rng:pick(self.goodList).id
 	local market = marketOf(self, good)
+	local vouchedBy: string? = nil
+	local hasStock = true
+	if kind == "scam" then
+		hasStock = false
+		vouchedBy = nil
+	elseif kind == "impostor" then
+		hasStock = false
+		vouchedBy = nil
+	elseif (opts.ratings or 0) == 0 then
+		-- Honest newcomers have a voucher from an established trader (without advancing self.rng)
+		local vName: string? = nil
+		local vAvg = 4.8
+		local idx = (self.nextSeller * 7) % math.max(1, #self.sellers) + 1
+		for k = 0, #self.sellers - 1 do
+			local o = self.sellers[(idx + k - 1) % #self.sellers + 1]
+			if o and o.kind == "honest" and o.state == "open" and o.ratings >= 5 then
+				vName = o.name
+				vAvg = math.floor((o.ratingSum / o.ratings) * 10 + 0.5) / 10
+				break
+			end
+		end
+		vouchedBy = vName and string.format("%s ★%.1f", vName, vAvg) or "Guild intro ★4.8"
+	end
 	local s = {
 		id = "s-" .. self.nextSeller,
 		kind = kind,
@@ -320,6 +345,8 @@ local function addSeller(self, kind: string, opts)
 		policy = "scripted",
 		victim = opts.victim,
 		look = rng:int(1, 1000),
+		vouchedBy = vouchedBy,
+		hasStock = hasStock,
 		createdAt = self.now,
 	}
 	self.nextSeller += 1
@@ -566,6 +593,8 @@ function caseFor(self, s, kind: string)
 		rating_avg = shown.ratings > 0 and math.floor(shown.ratingSum / shown.ratings * 10 + 0.5) / 10 or nil,
 		signature = signature,
 		twin = twin,
+		vouchedBy = s.vouchedBy,
+		hasStock = s.hasStock,
 		created = self.now,
 		deadline_at = s.openAt,
 		truth = s.kind, -- ground truth: never sent to a monitor or a watcher
@@ -592,6 +621,8 @@ function MarketSim:publicCase(c)
 		rating_avg = c.rating_avg,
 		signature = c.signature,
 		twin = c.twin,
+		vouchedBy = c.vouchedBy,
+		hasStock = c.hasStock,
 		deadline_s = math.max(0, math.floor((c.deadline_at - self.now) * 10 + 0.5) / 10),
 		-- for the inbox card (not in the contract's fields, harmless)
 		kind = c.kind,
@@ -888,6 +919,7 @@ local function emitBuyer(self, b)
 		t1 = b.t1,
 		state = b.state,
 		carry = b.carry,
+		want = b.want,
 		look = b.look,
 		target = b.target,
 	})
@@ -1402,6 +1434,7 @@ function MarketSim:snapshot()
 			t1 = b.t1,
 			state = b.state,
 			carry = b.carry,
+			want = b.want,
 			look = b.look,
 			target = b.target,
 		})
