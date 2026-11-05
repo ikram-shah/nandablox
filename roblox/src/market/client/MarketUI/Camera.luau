@@ -317,8 +317,9 @@ function Cam.update(dt: number, n: number)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
 		return
 	elseif m == "follow" then
-		if Cam.topSlot and Layout.SLOTS[Cam.topSlot] then
-			cf, fov = atStall(Cam.topSlot)
+		local slot = Cam.inspectSlot or Cam.topSlot
+		if slot and Layout.SLOTS[slot] then
+			cf, fov = atStall(slot)
 			local a = math.min(1, dt * 5.0)
 			cam.CFrame = cam.CFrame:Lerp(cf, a)
 			cam.FieldOfView += (fov - cam.FieldOfView) * a
