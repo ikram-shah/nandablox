@@ -66,10 +66,17 @@ Hud.build({
 		if slot then
 			World.highlightSlot(slot)
 			Cam.visitStall(slot)
-			Hud.toast("Inspecting " .. tostring(c.stall) .. " (WASD / Arrows to walk, V to change camera)", Theme.BLUE)
+			Hud.toast("3rd-person walk at " .. tostring(c.stall) .. " (WASD / Arrows to walk, V to change camera)", Theme.BLUE)
 		end
 	end,
+	onCamera = function(m)
+		Cam.set(m)
+		Hud.toast("Camera: " .. m, Theme.BLUE)
+	end,
 })
+Cam.onModeChange = function(m)
+	Hud.setCameraMode(m)
+end
 Cam.init()
 
 local function onStall(s)
@@ -176,7 +183,28 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		Hud.presenter(nextPres)
 	elseif kc == Enum.KeyCode.V then
 		local m = Cam.toggle()
-		Hud.toast("Camera: " .. m .. (m == "walk" and " (WASD / Arrows)" or ""), Theme.BLUE)
+		Hud.toast("Camera: " .. m .. (m == "walk" and " (3rd-person · WASD / Arrows)" or (m == "follow" and " (follows top inbox case)" or "")), Theme.BLUE)
+	elseif kc == Enum.KeyCode.Z then
+		local c = Hud.decideTop("allow")
+		if c then
+			Hud.toast("Allowed top case: " .. tostring(c.stall), Theme.OK)
+		end
+	elseif kc == Enum.KeyCode.X then
+		local c = Hud.decideTop("block")
+		if c then
+			Hud.toast("Blocked top case: " .. tostring(c.stall), Theme.BAD)
+		end
+	elseif kc == Enum.KeyCode.M then
+		local cur = lastMeter and lastMeter.monitor or "off"
+		local nextMon = cur == "off" and "rules" or (cur == "rules" and "external" or "off")
+		send({ op = "monitor", mode = nextMon })
+		Hud.toast("Monitor: " .. nextMon, Theme.BLUE)
+	elseif kc == Enum.KeyCode.G then
+		local cur = not (lastMeter and lastMeter.signatures == false)
+		send({ op = "vote", on = not cur })
+		Hud.toast("Signature checks: " .. (not cur and "ON" or "OFF"), Theme.BLUE)
+	elseif kc == Enum.KeyCode.K or kc == Enum.KeyCode.Slash then
+		Hud.toggleShortcuts()
 	elseif kc == Enum.KeyCode.L then
 		local nextAgent = not (lastState and lastState.agentOn == true)
 		send({ op = "agent", on = nextAgent })
@@ -204,6 +232,12 @@ RunService.RenderStepped:Connect(function(dt)
 	local t0 = os.clock()
 	local now = simNow()
 	local cam = workspace.CurrentCamera
+	local topC = Hud.topCase()
+	local topSlot = topC and (topC.slot or (topC.seller and World.slotOf(topC.seller))) or nil
+	Cam.topSlot = topSlot
+	if Cam.mode() == "follow" and topSlot then
+		World.highlightSlot(topSlot)
+	end
 	Cam.update(dt, lastMeter and lastMeter.n or 5)
 	local tc = os.clock()
 	Crowd.update(now, cam.CFrame.Position, dt)
@@ -240,8 +274,13 @@ RunService.RenderStepped:Connect(function(dt)
 			Hud.meter(lastMeter)
 		end
 		if lastState then
-			-- the beat's shot (V overrides it until the next beat)
-			local shot = workspace:GetAttribute("MarketCam") or lastState.cam or "auto"
+			local extCam = workspace:GetAttribute("MarketCam")
+			if extCam ~= nil then
+				workspace:SetAttribute("MarketCam", nil)
+				Cam.set(extCam)
+			end
+			-- the beat's shot (V or panel overrides it until the next beat)
+			local shot = lastState.cam or "follow"
 			if shot ~= lastShot then
 				lastShot = shot
 				Cam.set(shot)

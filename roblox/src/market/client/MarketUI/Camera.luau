@@ -1,33 +1,53 @@
--- The camera. Four modes:
---   * "street": eye level (7 studs), standing in the first aisle near where
---     the market starts (Layout.HOME), looking along the aisle at the stalls,
---     so the nearest people are dressed R15 rigs at a counter.
---   * "overview": above and to one side, looking at the plaza. Low and close
---     for a small market, pulling up as N grows; the wide shot for 300+.
---   * "balcony": from the watchers' balcony over the south gate, looking out
---     over the square (beat 5).
---   * "walk": free exploration! WASD / Arrow keys walk along the aisles,
---     Q / E or PageUp / PageDown lift or lower, and right-drag or Q/E turns.
---     Clicking a case card teleports you right in front of that stall.
--- "auto" picks street for a small market and overview for a big one.
+-- The camera. Modes:
+--   * "follow": automatically frames the stall of the TOP case in your Inbox
+--     (no clicking needed — as you Allow/Block the top card, the camera glides
+--     to the next top case's stall; when the inbox is empty, shows street/overview).
+--   * "walk": 3rd-person street walk! Your watcher avatar walks the aisles with
+--     WASD / Arrow keys (right-drag or Left/Right turns); clicking a case card
+--     teleports your avatar right in front of that stall.
+--   * "overview": high wide angle over the plaza.
+--   * "balcony": from the watchers' balcony over the south gate (beat 5).
+--   * "street": 1st-person eye-level aisle shot.
 
 local UserInputService = game:GetService("UserInputService")
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
 local Layout = require(Market.Layout)
+local Rigs = require(script.Parent.RigFigures)
 
 local Cam = {}
 
-local mode = "auto"
+local mode = "follow"
 local t = 0
 local dist = 60
 local scripted = true
 Cam.balconyCF = nil :: CFrame? -- set from Landmarks
 Cam.inspectSlot = nil :: number?
-local walkPos = Vector3.new(Layout.aisleRadius(0) * math.cos(Layout.HOME - 0.32), 6.8, Layout.aisleRadius(0) * math.sin(Layout.HOME - 0.32))
+Cam.topSlot = nil :: number?
+Cam.onModeChange = nil :: ((string) -> ())?
+local walkPos = Vector3.new(Layout.aisleRadius(0) * math.cos(Layout.HOME - 0.32), 0, Layout.aisleRadius(0) * math.sin(Layout.HOME - 0.32))
 local walkYaw = -Layout.HOME + math.rad(15)
-local walkPitch = math.rad(-6)
+local avatarYaw = walkYaw
+local walkPitch = math.rad(-12)
 local dragging = false
 local lastMouse = Vector2.zero
+local avatarRig: any = nil
+
+local function hideAvatar()
+	if avatarRig then
+		Rigs.give(avatarRig)
+		avatarRig = nil
+	end
+end
+
+local function ensureAvatar()
+	if not avatarRig and Rigs.ready then
+		avatarRig = Rigs.take(1, "buyer")
+		if avatarRig then
+			Rigs.label(avatarRig, "watcher · you")
+		end
+	end
+	return avatarRig
+end
 
 function Cam.init()
 	local cam = workspace.CurrentCamera
@@ -61,8 +81,8 @@ function Cam.init()
 	end)
 end
 
--- V cycles: auto -> walk -> street -> overview -> balcony -> auto
-local ORDER = { "auto", "walk", "street", "overview", "balcony" }
+-- V cycles: follow -> walk -> overview -> balcony -> street -> follow
+local ORDER = { "follow", "walk", "overview", "balcony", "street" }
 function Cam.toggle(): string
 	local i = table.find(ORDER, mode) or 1
 	local nextMode = ORDER[i % #ORDER + 1]
@@ -74,20 +94,50 @@ function Cam.mode(): string
 	return mode
 end
 
--- the beat's shot; nil = auto
+-- the beat's shot; nil = follow
 function Cam.set(m: string?)
+	if m == "auto" or m == nil then
+		m = "follow"
+	end
 	if m == "walk" and mode ~= "walk" then
-		local cam = workspace.CurrentCamera
-		if cam then
-			walkPos = Vector3.new(cam.CFrame.Position.X, math.clamp(cam.CFrame.Position.Y, 6.2, 40), cam.CFrame.Position.Z)
-			local look = cam.CFrame.LookVector
-			walkYaw = math.atan2(-look.X, -look.Z)
-			walkPitch = math.clamp(math.asin(math.clamp(look.Y, -0.9, 0.9)), math.rad(-45), math.rad(35))
+		local slot = Cam.inspectSlot or Cam.topSlot
+		if slot and Layout.SLOTS[slot] then
+			local L = Layout.SLOTS[slot]
+			local f = Vector3.new(L.facing.x, 0, L.facing.z)
+			local side = Vector3.new(-f.Z, 0, f.X)
+			local counter = Vector3.new(L.pos.x, 0, L.pos.z)
+			local stand = counter + f * 6.2 + side * 1.0
+			local toStall = (counter - stand)
+			local yaw = math.atan2(-toStall.X, -toStall.Z)
+			walkPos = Vector3.new(stand.X, 0, stand.Z)
+			walkYaw = yaw
+			avatarYaw = yaw
+			walkPitch = math.rad(-14)
+		else
+			local cam = workspace.CurrentCamera
+			if cam then
+				local look = cam.CFrame.LookVector
+				walkYaw = math.atan2(-look.X, -look.Z)
+				avatarYaw = walkYaw
+				walkPitch = math.rad(-14)
+				local ground = Vector3.new(cam.CFrame.Position.X, 0, cam.CFrame.Position.Z) + Vector3.new(look.X, 0, look.Z) * 3.0
+				walkPos = Vector3.new(
+					math.clamp(ground.X, -Layout.EDGE_R, Layout.EDGE_R),
+					0,
+					math.clamp(ground.Z, -Layout.EDGE_R, Layout.EDGE_R)
+				)
+			end
 		end
 	end
-	mode = (m == "walk" or m == "street" or m == "overview" or m == "balcony") and m or "auto"
+	mode = (m == "follow" or m == "walk" or m == "street" or m == "overview" or m == "balcony") and m or "follow"
+	if mode ~= "walk" then
+		hideAvatar()
+	end
 	if mode ~= "street" then
 		Cam.inspectSlot = nil
+	end
+	if Cam.onModeChange then
+		Cam.onModeChange(mode)
 	end
 end
 
@@ -99,15 +149,16 @@ function Cam.visitStall(slot: number)
 	local f = Vector3.new(L.facing.x, 0, L.facing.z)
 	local side = Vector3.new(-f.Z, 0, f.X)
 	local counter = Vector3.new(L.pos.x, 0, L.pos.z)
-	local eye = counter + f * 13 + side * 2.5 + Vector3.new(0, 6.8, 0)
-	local target = counter + Vector3.new(0, 5.2, 0)
-	local cf = CFrame.lookAt(eye, target)
-	local look = cf.LookVector
-	walkPos = eye
-	walkYaw = math.atan2(-look.X, -look.Z)
-	walkPitch = math.clamp(math.asin(math.clamp(look.Y, -0.9, 0.9)), math.rad(-45), math.rad(35))
+	-- Stand in the aisle 7.5 studs in front of the counter, facing the stall
+	local stand = counter + f * 7.5 + side * 1.2
+	local toStall = (counter - stand)
+	local yaw = math.atan2(-toStall.X, -toStall.Z)
+	walkPos = Vector3.new(stand.X, 0, stand.Z)
+	walkYaw = yaw
+	avatarYaw = yaw
+	walkPitch = math.rad(-12)
 	Cam.inspectSlot = slot
-	mode = "walk"
+	Cam.set("walk")
 end
 
 -- the radius the market fills at size n
@@ -126,15 +177,15 @@ end
 Cam.focusSlot = nil :: number?
 
 local function atStall(slot: number): (CFrame, number)
-	-- stand in the aisle a few studs from the counter, a little to one side,
-	-- at eye level: the sign, the badge and the seller in frame
+	-- stand in the open aisle 9.5 studs from the counter, slightly to one side,
+	-- at eye level: the sign, the counter goods/crates, and the seller in frame
 	local L = Layout.SLOTS[slot]
 	local f = Vector3.new(L.facing.x, 0, L.facing.z)
 	local side = Vector3.new(-f.Z, 0, f.X)
 	local counter = Vector3.new(L.pos.x, 0, L.pos.z)
-	local sway = math.sin(t * 0.08) * 1.5
-	local eye = counter + f * 15 + side * (5 + sway) + Vector3.new(0, 8, 0)
-	return CFrame.lookAt(eye, counter + Vector3.new(0, 7, 0)), 60
+	local sway = math.sin(t * 0.08) * 0.8
+	local eye = counter + f * 9.5 + side * (1.8 + sway) + Vector3.new(0, 6.2, 0)
+	return CFrame.lookAt(eye, counter + Vector3.new(0, 5.0, 0)), 62
 end
 
 local function street(n: number): (CFrame, number)
@@ -199,7 +250,7 @@ local function walkStep(dt: number): (CFrame, number)
 	if UserInputService:IsKeyDown(Enum.KeyCode.Right) or UserInputService:IsKeyDown(Enum.KeyCode.E) then
 		turn -= 1
 	end
-	walkYaw += turn * 1.65 * dt
+	walkYaw += turn * 1.8 * dt
 
 	local fwd = 0
 	if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Up) then
@@ -215,26 +266,30 @@ local function walkStep(dt: number): (CFrame, number)
 	if UserInputService:IsKeyDown(Enum.KeyCode.A) then
 		strafe -= 1
 	end
-	local up = 0
-	if UserInputService:IsKeyDown(Enum.KeyCode.R) or UserInputService:IsKeyDown(Enum.KeyCode.PageUp) then
-		up += 1
-	end
-	if UserInputService:IsKeyDown(Enum.KeyCode.F) or UserInputService:IsKeyDown(Enum.KeyCode.PageDown) then
-		up -= 1
-	end
-	local speed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 56 or 28
+	local speed = UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) and 44 or 22
 	local rot = CFrame.Angles(0, walkYaw, 0)
 	local move = (rot.LookVector * fwd + rot.RightVector * strafe)
-	if move.Magnitude > 0 then
-		move = move.Unit * speed * dt
+	local moving = move.Magnitude > 0.01
+	if moving then
+		local dir = move.Unit
+		move = dir * speed * dt
+		avatarYaw = math.atan2(-dir.X, -dir.Z)
 	end
 	walkPos = Vector3.new(
 		math.clamp(walkPos.X + move.X, -Layout.EDGE_R - 20, Layout.EDGE_R + 20),
-		math.clamp(walkPos.Y + up * 22 * dt, 5.5, 95),
+		0,
 		math.clamp(walkPos.Z + move.Z, -Layout.EDGE_R - 20, Layout.EDGE_R + 20)
 	)
-	local cf = CFrame.new(walkPos) * CFrame.Angles(0, walkYaw, 0) * CFrame.Angles(walkPitch, 0, 0)
-	return cf, 60
+	local rig = ensureAvatar()
+	if rig then
+		local footCF = CFrame.new(walkPos.X, 0, walkPos.Z) * CFrame.Angles(0, avatarYaw, 0)
+		Rigs.place(rig, footCF, moving)
+	end
+	local head = Vector3.new(walkPos.X, 4.4, walkPos.Z)
+	local camRot = CFrame.Angles(0, walkYaw, 0) * CFrame.Angles(walkPitch, 0, 0)
+	local eye = head - camRot.LookVector * 8.5 + Vector3.new(0, 1.6, 0)
+	local cf = CFrame.lookAt(eye, head + Vector3.new(0, 0.6, 0))
+	return cf, 62
 end
 
 function Cam.update(dt: number, n: number)
@@ -244,7 +299,7 @@ function Cam.update(dt: number, n: number)
 	t += dt
 	local cam = workspace.CurrentCamera
 	cam.CameraType = Enum.CameraType.Scriptable
-	-- pressing WASD / Arrow keys enters walk mode automatically
+	-- pressing WASD / Arrow keys enters 3rd-person walk mode automatically
 	if mode ~= "walk" and (
 		UserInputService:IsKeyDown(Enum.KeyCode.W)
 		or UserInputService:IsKeyDown(Enum.KeyCode.S)
@@ -254,9 +309,6 @@ function Cam.update(dt: number, n: number)
 		Cam.set("walk")
 	end
 	local m = mode
-	if m == "auto" then
-		m = n <= 50 and "street" or "overview"
-	end
 	local cf, fov
 	if m == "walk" then
 		cf, fov = walkStep(dt)
@@ -264,6 +316,15 @@ function Cam.update(dt: number, n: number)
 		cam.CFrame = cam.CFrame:Lerp(cf, a)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
 		return
+	elseif m == "follow" then
+		if Cam.topSlot and Layout.SLOTS[Cam.topSlot] then
+			cf, fov = atStall(Cam.topSlot)
+			local a = math.min(1, dt * 5.0)
+			cam.CFrame = cam.CFrame:Lerp(cf, a)
+			cam.FieldOfView += (fov - cam.FieldOfView) * a
+			return
+		end
+		cf, fov = (n <= 50) and street(n) or overview(n, dt)
 	elseif m == "street" then
 		cf, fov = street(n)
 		dist = extent(n)
