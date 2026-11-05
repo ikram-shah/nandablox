@@ -658,29 +658,29 @@ function World.highlightSlot(slot: number?)
 	if not beaconPart then
 		beaconPart = cyl({
 			Name = "InspectBeacon",
-			Size = Vector3.new(36, 3.2, 3.2),
+			Size = Vector3.new(24, 2.2, 2.2),
 			Color = Color3.fromRGB(255, 220, 90),
 			Material = Enum.Material.Neon,
-			Transparency = 0.65,
+			Transparency = 0.72,
 			CastShadow = false,
 		})
 		beaconRing = cyl({
 			Name = "InspectRing",
-			Size = Vector3.new(0.35, 13, 13),
+			Size = Vector3.new(0.25, 12.5, 12.5),
 			Color = Color3.fromRGB(255, 220, 90),
 			Material = Enum.Material.Neon,
-			Transparency = 0.25,
+			Transparency = 0.45,
 			CastShadow = false,
 		})
 		local h = Instance.new("Highlight")
 		h.FillColor = Color3.fromRGB(255, 220, 90)
-		h.FillTransparency = 0.72
+		h.FillTransparency = 0.88
 		h.OutlineColor = Color3.fromRGB(255, 235, 120)
-		h.OutlineTransparency = 0
+		h.OutlineTransparency = 0.05
 		h.Parent = root
 		beaconHighlight = h
 	end
-	beaconPart.CFrame = CFrame.new(L.pos.x, 18, L.pos.z) * CFrame.Angles(0, 0, math.pi / 2)
+	beaconPart.CFrame = CFrame.new(L.pos.x, 26, L.pos.z) * CFrame.Angles(0, 0, math.pi / 2)
 	beaconPart.Parent = root
 	beaconRing.CFrame = CFrame.new(L.pos.x, 0.22, L.pos.z) * CFrame.Angles(0, 0, math.pi / 2)
 	beaconRing.Parent = root

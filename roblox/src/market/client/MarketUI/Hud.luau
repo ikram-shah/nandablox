@@ -37,7 +37,10 @@ local status: TextLabel
 local presenter = false
 local onFocus: ((any) -> ())?
 local onVisit: ((any) -> ())?
+local onCamera: ((string) -> ())?
 local showControlsBtn: TextButton? = nil
+local shortcutsBox: Frame? = nil
+local topCard: any = nil
 
 ------------------------------------------------------------------ helpers
 
@@ -111,25 +114,32 @@ local function cardFor(c, now: number)
 		Parent = f,
 	})
 	local facts = {}
-	table.insert(facts, ageText(c.age_s or 0))
-	table.insert(facts, (c.ratings or 0) == 0 and "no ratings" or string.format("%d ratings ★%.1f", c.ratings, c.rating_avg or 0))
-	if c.signature == "unchecked" then
-		table.insert(facts, "unsigned")
-	end
 	if c.vouchedBy then
-		table.insert(facts, "vouched: " .. c.vouchedBy)
+		table.insert(facts, "✓ vouched: " .. c.vouchedBy)
 	elseif (c.ratings or 0) == 0 then
-		table.insert(facts, "unvouched")
+		table.insert(facts, "⚠ unvouched")
+	else
+		table.insert(facts, string.format("%d ratings ★%.1f", c.ratings, c.rating_avg or 0))
 	end
 	if c.hasStock == false then
 		table.insert(facts, "no crates")
 	else
 		table.insert(facts, "stocked")
 	end
+	if c.signature == "unchecked" then
+		table.insert(facts, "unsigned")
+	end
+	local clueColor = muted
+	if c.hasStock == false then
+		clueColor = mine and Color3.fromRGB(185, 52, 36) or Theme.WARN
+	elseif c.vouchedBy then
+		clueColor = mine and Color3.fromRGB(36, 118, 68) or Theme.OK
+	end
 	label({
 		Text = table.concat(facts, " · "),
+		Font = Theme.BOLD,
 		TextSize = 13,
-		TextColor3 = muted,
+		TextColor3 = clueColor,
 		Size = UDim2.new(1, -150, 0, 18),
 		Position = UDim2.new(0, 12, 0, 54),
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -300,6 +310,7 @@ function Hud.layout()
 		return a.c.deadline_at < b.c.deadline_at
 	end)
 	local shown = 0
+	topCard = mine[1] or theirs[1]
 	for _, list in { mine, theirs } do
 		for _, card in list do
 			shown += 1
@@ -339,6 +350,20 @@ end
 
 function Hud.caseCount(): number
 	return #order
+end
+
+function Hud.topCase()
+	return topCard and topCard.c or nil
+end
+
+function Hud.decideTop(verdict: string)
+	if not topCard then
+		return nil
+	end
+	local c = topCard.c
+	send({ op = "verdict", case = c.id, v = verdict })
+	Hud.removeCase(c.id, verdict)
+	return c
 end
 
 ------------------------------------------------------------------ the meter
@@ -471,6 +496,21 @@ function Hud.settings(m)
 	pick("sig", m.signatures)
 end
 
+function Hud.setCameraMode(m: string)
+	pick("cam", m)
+end
+
+function Hud.toggleShortcuts(on: boolean?)
+	if not shortcutsBox then
+		return
+	end
+	if on == nil then
+		shortcutsBox.Visible = not shortcutsBox.Visible
+	else
+		shortcutsBox.Visible = on
+	end
+end
+
 local function buildControls(parent, sizes)
 	controls = panel({
 		Name = "Controls",
@@ -514,6 +554,17 @@ local function buildControls(parent, sizes)
 	}, function(v)
 		send({ op = "second", on = v })
 	end)
+	segmented(controls, "CAMERA (V)", "cam", {
+		{ text = "follow", value = "follow" },
+		{ text = "walk 3P", value = "walk" },
+		{ text = "overview", value = "overview" },
+		{ text = "balcony", value = "balcony" },
+	}, function(v)
+		if onCamera then
+			onCamera(v)
+		end
+	end)
+	pick("cam", "follow")
 	-- red
 	local red = new("Frame", { Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, Parent = controls })
 	label({ Text = "FRAUD (red)", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), Parent = red })
@@ -526,13 +577,16 @@ local function buildControls(parent, sizes)
 		send({ op = "fraud", kind = "impostor" })
 	end)
 	status = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, Parent = controls })
-	label({
-		Text = "WASD/Arrows walk · click card: visit stall · V cam · N/B beats · H hide",
-		TextSize = 11,
-		TextColor3 = Theme.MUTED,
-		Size = UDim2.new(1, 0, 0, 16),
+	button({
+		Text = "? Keyboard Shortcuts (K)",
+		Size = UDim2.new(1, 0, 0, 28),
+		BackgroundColor3 = Theme.PANEL2,
+		TextColor3 = Theme.WHITE,
+		TextSize = 13,
 		Parent = controls,
-	})
+	}, function()
+		Hud.toggleShortcuts()
+	end)
 end
 
 function Hud.status(s)
@@ -620,6 +674,7 @@ function Hud.build(opts)
 	you = opts.you
 	onFocus = opts.onFocus
 	onVisit = opts.onVisit
+	onCamera = opts.onCamera
 	gui = new("ScreenGui", {
 		Name = "MarketHud",
 		ResetOnSpawn = false,
@@ -711,6 +766,42 @@ function Hud.build(opts)
 	})
 	Theme.corner(10).Parent = toast
 	Theme.pad(6, 14).Parent = toast
+	-- Keyboard shortcuts overlay card (toggle with K / ? or the button on the panel)
+	shortcutsBox = panel({
+		Name = "Shortcuts",
+		Size = UDim2.new(0, 480, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		AnchorPoint = Vector2.new(0.5, 1),
+		Position = UDim2.new(0.5, -10, 1, -18),
+		Visible = false,
+		Parent = gui,
+	})
+	Theme.pad(14, 18).Parent = shortcutsBox
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = shortcutsBox })
+	label({
+		Text = "KEYBOARD SHORTCUTS   <font size=\"13\" color=\"#A09A96\">(press K or / to close)</font>",
+		RichText = true,
+		Font = Theme.HEAVY,
+		TextSize = 17,
+		Size = UDim2.new(1, 0, 0, 22),
+		Parent = shortcutsBox,
+	})
+	local rows = {
+		{ "Z  /  X", "Allow / Block the top case in your Inbox" },
+		{ "Click a case card", "Teleport 3rd-person avatar to inspect that stall" },
+		{ "V", "Cycle camera: follow top case → walk 3P → overview → balcony" },
+		{ "WASD / Arrows", "Walk the street in 3rd-person (Right-drag or Q/E turns)" },
+		{ "1 · 2 · 3 · 4", "Set market size: 5 · 50 · 300 · 1000 traders" },
+		{ "M  /  G", "Cycle monitor (off/rules/yours)  /  Toggle signature checks" },
+		{ "L  /  A", "Toggle Gemini outside agent  /  Toggle auto-watcher" },
+		{ "N  /  B", "Next / previous scripted Demo Beat (1..6)" },
+		{ "H  /  K", "Hide/show left control panel  /  Toggle this shortcuts card" },
+	}
+	for _, r in rows do
+		local line = new("Frame", { Size = UDim2.new(1, 0, 0, 20), BackgroundTransparency = 1, Parent = shortcutsBox })
+		label({ Text = r[1], Font = Theme.HEAVY, TextSize = 14, TextColor3 = Theme.WARN, Size = UDim2.new(0, 145, 1, 0), Parent = line })
+		label({ Text = r[2], TextSize = 14, TextColor3 = Theme.WHITE, Size = UDim2.new(1, -150, 1, 0), Position = UDim2.new(0, 150, 0, 0), Parent = line })
+	end
 	Hud.layout()
 	return gui
 end
