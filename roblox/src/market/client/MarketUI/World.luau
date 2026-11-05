@@ -567,7 +567,7 @@ function World.setStall(s)
 		d.badge.Enabled = external
 		d.badgeLabel.Text = "run by " .. tostring(s.label or "an outside agent")
 	end
-	local key = s.id .. ":" .. s.state .. ":" .. (s.good or "")
+	local key = s.id .. ":" .. s.state .. ":" .. (s.good or "") .. ":" .. tostring(s.hasStock ~= false)
 	d.nameLabel.Text = s.name
 	local price = Theme.money(s.price)
 	d.priceLabel.Text = price
@@ -593,22 +593,30 @@ function World.setStall(s)
 		d.nameBg.BackgroundColor3 = Color3.fromRGB(246, 236, 214)
 		d.nameLabel.TextColor3 = Theme.INK
 	end
+	local stocked = s.hasStock ~= false
 	if st == "open" then
 		awning(d.dyn, cf, s.good)
-		goodsOn(d.dyn, s.good, onCounter, s.look or 1)
-		-- spare stock on the shelf
-		goodsOn(d.dyn, s.good, cf * CFrame.new(0, 4.3, D / 2 - 0.9), (s.look or 1) + 7)
+		if stocked then
+			goodsOn(d.dyn, s.good, onCounter, s.look or 1)
+			-- spare stock on the shelf and crates in back
+			goodsOn(d.dyn, s.good, cf * CFrame.new(0, 4.3, D / 2 - 0.9), (s.look or 1) + 7)
+			crate(d.dyn, cf * CFrame.new(-2.4, 0.3, 1.0), 1.3)
+			crate(d.dyn, cf * CFrame.new(2.2, 0.3, 1.0), 1.2)
+		end
 	elseif st == "restock" then
 		awning(d.dyn, cf, s.good)
 		crate(d.dyn, cf * CFrame.new(-2.5, 0.3, 0.8))
 		crate(d.dyn, cf * CFrame.new(-1, 0.3, 1.2), 1.2)
 		crate(d.dyn, cf * CFrame.new(-2.4, 1.7, 0.8), 1.1)
 	elseif st == "setup" then
-		-- awning furled, crates on the counter, a cloth over them
+		-- awning furled; honest sellers have crates and goods ready, fraud storefronts are bare
 		part({ Size = Vector3.new(Layout.STALL_WIDTH, 0.8, 0.8), CFrame = cf * CFrame.new(0, 8.4, D / 2 - 0.6), Color = Theme.GOODS[s.good].awning[1], Material = Enum.Material.Fabric, Parent = d.dyn })
-		crate(d.dyn, onCounter * CFrame.new(-2.5, 0, 0), 1.3)
-		crate(d.dyn, onCounter * CFrame.new(1.8, 0, 0), 1.3)
-		crate(d.dyn, cf * CFrame.new(2, 0.3, 1), 1.6)
+		if stocked then
+			goodsOn(d.dyn, s.good, onCounter, s.look or 1)
+			crate(d.dyn, cf * CFrame.new(-2.4, 0.3, 1.0), 1.4)
+			crate(d.dyn, cf * CFrame.new(2.2, 0.3, 1.0), 1.4)
+			crate(d.dyn, cf * CFrame.new(-2.2, 1.7, 1.0), 1.1)
+		end
 	elseif st == "blocked" then
 		boards(d.dyn, cf, Color3.fromRGB(150, 112, 76))
 	elseif st == "shuttered" then
@@ -625,6 +633,65 @@ end
 
 function World.slotOf(sellerId: string): number?
 	return bySeller[sellerId]
+end
+
+local beaconPart: Part? = nil
+local beaconRing: Part? = nil
+local beaconHighlight: Highlight? = nil
+local beaconSlot: number? = nil
+
+function World.highlightSlot(slot: number?)
+	beaconSlot = slot
+	if not slot or not Layout.SLOTS[slot] then
+		if beaconPart then
+			beaconPart.Parent = nil
+		end
+		if beaconRing then
+			beaconRing.Parent = nil
+		end
+		if beaconHighlight then
+			beaconHighlight.Adornee = nil
+		end
+		return
+	end
+	local L = Layout.SLOTS[slot]
+	if not beaconPart then
+		beaconPart = cyl({
+			Name = "InspectBeacon",
+			Size = Vector3.new(36, 3.2, 3.2),
+			Color = Color3.fromRGB(255, 220, 90),
+			Material = Enum.Material.Neon,
+			Transparency = 0.65,
+			CastShadow = false,
+		})
+		beaconRing = cyl({
+			Name = "InspectRing",
+			Size = Vector3.new(0.35, 13, 13),
+			Color = Color3.fromRGB(255, 220, 90),
+			Material = Enum.Material.Neon,
+			Transparency = 0.25,
+			CastShadow = false,
+		})
+		local h = Instance.new("Highlight")
+		h.FillColor = Color3.fromRGB(255, 220, 90)
+		h.FillTransparency = 0.72
+		h.OutlineColor = Color3.fromRGB(255, 235, 120)
+		h.OutlineTransparency = 0
+		h.Parent = root
+		beaconHighlight = h
+	end
+	beaconPart.CFrame = CFrame.new(L.pos.x, 18, L.pos.z) * CFrame.Angles(0, 0, math.pi / 2)
+	beaconPart.Parent = root
+	beaconRing.CFrame = CFrame.new(L.pos.x, 0.22, L.pos.z) * CFrame.Angles(0, 0, math.pi / 2)
+	beaconRing.Parent = root
+	local d = stalls[slot]
+	if beaconHighlight then
+		beaconHighlight.Adornee = d and d.model or nil
+	end
+end
+
+function World.focusedSlot(): number?
+	return beaconSlot
 end
 
 function World.clearStalls()

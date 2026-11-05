@@ -328,4 +328,27 @@ return function(t)
 		local per = (os.clock() - t0) / (60 / 0.25)
 		A.ok(per < 0.004, string.format("%.2f ms per 0.25 s step", per * 1000))
 	end)
+
+	t.case("gray-zone clues: honest newcomers have vouchers and crates; scams are unvouched with no crates", function(A)
+		local sim = MarketSim.new({ seed = 41, n = 50 })
+		sim:setMonitor("rules")
+		sim:addWatcher("me")
+		run(sim, 30)
+		local scam = sim:injectFraud("scam", { price = 0.65 })
+		local scamCase = sim:publicCase(sim.cases[scam.case])
+		A.eq(scamCase.vouchedBy, nil, "scam has no voucher")
+		A.eq(scamCase.hasStock, false, "scam has no crates")
+		local honestNew = nil
+		for _, c in sim.caseList do
+			if c.truth == "honest" and c.ratings == 0 then
+				honestNew = sim:publicCase(c)
+				break
+			end
+		end
+		A.ok(honestNew ~= nil, "saw an honest newcomer case")
+		if honestNew then
+			A.ok(type(honestNew.vouchedBy) == "string" and #honestNew.vouchedBy > 0, "honest newcomer is vouched")
+			A.eq(honestNew.hasStock, true, "honest newcomer has crates")
+		end
+	end)
 end

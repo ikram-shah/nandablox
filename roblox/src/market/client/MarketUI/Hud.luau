@@ -36,6 +36,8 @@ local toast: TextLabel
 local status: TextLabel
 local presenter = false
 local onFocus: ((any) -> ())?
+local onVisit: ((any) -> ())?
+local showControlsBtn: TextButton? = nil
 
 ------------------------------------------------------------------ helpers
 
@@ -114,12 +116,23 @@ local function cardFor(c, now: number)
 	if c.signature == "unchecked" then
 		table.insert(facts, "unsigned")
 	end
+	if c.vouchedBy then
+		table.insert(facts, "vouched: " .. c.vouchedBy)
+	elseif (c.ratings or 0) == 0 then
+		table.insert(facts, "unvouched")
+	end
+	if c.hasStock == false then
+		table.insert(facts, "no crates")
+	else
+		table.insert(facts, "stocked")
+	end
 	label({
 		Text = table.concat(facts, " · "),
-		TextSize = 15,
+		TextSize = 13,
 		TextColor3 = muted,
 		Size = UDim2.new(1, -150, 0, 18),
 		Position = UDim2.new(0, 12, 0, 54),
+		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = f,
 	})
 	if c.twin then
@@ -192,7 +205,24 @@ local function cardFor(c, now: number)
 		BorderSizePixel = 0,
 		Parent = track,
 	}, { Theme.corner(3) })
-	-- hover a card: point at its stall
+	-- hover a card: highlight its stall; click the left side of the card: jump to the stall
+	local inspectHit = new("TextButton", {
+		Text = "",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, -148, 1, -14),
+		Position = UDim2.new(0, 0, 0, 0),
+		Parent = f,
+	})
+	inspectHit.MouseEnter:Connect(function()
+		if onFocus then
+			onFocus(c)
+		end
+	end)
+	inspectHit.Activated:Connect(function()
+		if onVisit then
+			onVisit(c)
+		end
+	end)
 	f.MouseEnter:Connect(function()
 		if onFocus then
 			onFocus(c)
@@ -472,6 +502,18 @@ local function buildControls(parent, sizes)
 	}, function(v)
 		send({ op = "vote", on = v })
 	end)
+	segmented(controls, "OUTSIDE AGENT (L)", "agent", {
+		{ text = "scripted", value = false },
+		{ text = "Gemini", value = true },
+	}, function(v)
+		send({ op = "agent", on = v })
+	end)
+	segmented(controls, "WATCHERS / CREW", "second", {
+		{ text = "1 (you)", value = false },
+		{ text = "2 (+helper)", value = true },
+	}, function(v)
+		send({ op = "second", on = v })
+	end)
 	-- red
 	local red = new("Frame", { Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, Parent = controls })
 	label({ Text = "FRAUD (red)", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), Parent = red })
@@ -485,8 +527,8 @@ local function buildControls(parent, sizes)
 	end)
 	status = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, Parent = controls })
 	label({
-		Text = "V camera · N / P demo beats · H presenter view",
-		TextSize = 12,
+		Text = "WASD/Arrows walk · click card: visit stall · V cam · N/B beats · H hide",
+		TextSize = 11,
 		TextColor3 = Theme.MUTED,
 		Size = UDim2.new(1, 0, 0, 16),
 		Parent = controls,
@@ -494,6 +536,10 @@ local function buildControls(parent, sizes)
 end
 
 function Hud.status(s)
+	if s then
+		pick("agent", s.agentOn == true)
+		pick("second", s.secondOn == true)
+	end
 	if not status then
 		return
 	end
@@ -558,6 +604,9 @@ end
 function Hud.presenter(on: boolean)
 	presenter = on
 	controls.Visible = not on
+	if showControlsBtn then
+		showControlsBtn.Visible = on
+	end
 end
 
 function Hud.isPresenter(): boolean
@@ -570,6 +619,7 @@ function Hud.build(opts)
 	send = opts.send
 	you = opts.you
 	onFocus = opts.onFocus
+	onVisit = opts.onVisit
 	gui = new("ScreenGui", {
 		Name = "MarketHud",
 		ResetOnSpawn = false,
@@ -594,6 +644,18 @@ function Hud.build(opts)
 	inboxMore = label({ Text = "", Font = Theme.HEAVY, TextSize = 18, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -26), TextXAlignment = Enum.TextXAlignment.Center, Parent = inbox })
 	buildMeter(gui)
 	buildControls(gui, opts.sizes or { 5, 50, 300, 1000 })
+	showControlsBtn = button({
+		Text = "Controls (H)",
+		Size = UDim2.new(0, 128, 0, 34),
+		Position = UDim2.new(0, 16, 0, 16),
+		BackgroundColor3 = Theme.PANEL,
+		TextColor3 = Theme.WHITE,
+		TextSize = 14,
+		Visible = false,
+		Parent = gui,
+	}, function()
+		Hud.presenter(false)
+	end)
 	-- caption, bottom centre
 	captionBox = panel({
 		Name = "Caption",
