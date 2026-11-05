@@ -422,6 +422,8 @@ local function state()
 		caption = room.caption,
 		beat = room.beat,
 		cam = room.cam,
+		-- the stall the outside agent runs (the beat-6 camera looks at it)
+		agentSlot = agentSeller and sim.byId[agentSeller] and sim.byId[agentSeller].slot or nil,
 		beats = #BEATS,
 		gateway = gateway:status(),
 		watchers = (function()
