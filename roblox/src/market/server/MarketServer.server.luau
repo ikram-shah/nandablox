@@ -214,7 +214,7 @@ local function majorityLever()
 	end
 end
 
-local function setMonitor(mode: string)
+local function setMonitor(mode: string, keep: boolean?)
 	if mode == "external" then
 		gateway:setEnabled(true)
 		sim:setMonitor("external", Config.GATEWAY_MONITOR)
@@ -222,7 +222,8 @@ local function setMonitor(mode: string)
 		if sim.monitor == "external" then
 			gateway:setEnabled(#(sim:gatewayRequest().decisions) > 0)
 		end
-		sim:setMonitor(mode)
+		-- (keep: the loadout as it is, no preset)
+		sim:setMonitor(mode, nil, keep)
 	end
 	sim:mark("monitor " .. mode)
 end
@@ -613,7 +614,7 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		sim:setSize(msg.n)
 		sim:mark(msg.n .. " traders")
 	elseif op == "monitor" and (msg.mode == "off" or msg.mode == "rules" or msg.mode == "external") then
-		setMonitor(msg.mode)
+		setMonitor(msg.mode, msg.keep == true)
 	elseif op == "vote" and type(msg.on) == "boolean" then
 		room.votes[id] = msg.on
 		majorityLever()
