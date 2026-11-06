@@ -10,7 +10,7 @@ local lib = require("./lib")
 
 local UI = "src/market/client/MarketUI/"
 
-local function stubs()
+local function stubs(rigsOver: { [string]: any }?)
 	local keys: { [any]: boolean } = {}
 	local function signal()
 		return { Connect = function() end }
@@ -26,7 +26,7 @@ local function stubs()
 		InputEnded = signal(),
 		InputChanged = signal(),
 	}
-	local market = { Layout = "Layout" }
+	local market = { Layout = "Layout", Avatars = "Avatars" }
 	local game = {
 		GetService = function(_, name)
 			if name == "UserInputService" then
@@ -58,6 +58,9 @@ local function stubs()
 		label = function() end,
 		setShirtColor = function() end,
 	}
+	for k, v in rigsOver or {} do
+		rigs[k] = v
+	end
 	local theme = {
 		GOLD = roblox.Color3.new(1, 0.8, 0),
 		BAD = roblox.Color3.new(1, 0, 0),
@@ -67,7 +70,7 @@ local function stubs()
 		GOODS = {},
 	}
 	local delayed = {}
-	local mods: { [any]: any } = { Layout = lib.Layout, RigFigures = rigs, Theme = theme }
+	local mods: { [any]: any } = { Layout = lib.Layout, Avatars = lib.Avatars, RigFigures = rigs, Theme = theme }
 	local script = { Parent = { RigFigures = "RigFigures", Effects = "Effects", Theme = "Theme" } }
 	local base = {
 		game = game,
@@ -295,5 +298,42 @@ return function(T)
 		E2.focus(nil)
 		E2.deal(nb, nil, "lamp", false, true)
 		A.eq(#env2.delayed, 2, "with no focus, every counterfeit gets it")
+	end)
+
+	T.case("camera: a player's stock stand-in is swapped for their avatar when it arrives", function(A)
+		local arrived: { [number]: boolean } = {}
+		local taken, given = {}, {}
+		local env = stubs({
+			ready = true,
+			hasAvatar = function(uid)
+				return uid ~= nil and arrived[uid] == true
+			end,
+			takePlayer = function(uid, role)
+				local r = { userId = arrived[uid] and uid or nil, role = role }
+				table.insert(taken, r)
+				return r
+			end,
+			give = function(r)
+				table.insert(given, r)
+			end,
+			setTeam = function() end,
+		})
+		local Cam = env.Cam
+		Cam.syncPlayers({ { id = "p42", num = 2, role = "red", x = 0, z = 34, yaw = 0 } }, "p1")
+		run(Cam, 0.2, 5)
+		A.eq(#taken, 1, "one rig for the peer")
+		A.ok(taken[1].userId == nil, "stock while the avatar is building")
+		A.eq(taken[1].role, "red")
+		arrived[42] = true
+		run(Cam, 0.2, 5)
+		A.eq(#given, 1, "the stand-in went back to the pool")
+		A.ok(given[1] == taken[1], "the stock rig, not another")
+		A.eq(#taken, 2, "and the avatar was taken")
+		A.eq(taken[2].userId, 42, "the player's own avatar")
+		run(Cam, 0.5, 5)
+		A.eq(#taken, 2, "no churn once it is the avatar")
+		-- the player leaves
+		Cam.syncPlayers({}, "p1")
+		A.eq(#given, 2, "their avatar rig goes back too")
 	end)
 end

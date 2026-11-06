@@ -11,6 +11,7 @@ lib.MarketSim = req("MarketSim")
 lib.Layout = req("Layout")
 lib.Gateway = req("Gateway")
 lib.Rng = req("Rng")
+lib.Avatars = req("Avatars")
 
 function lib.config(over: { [string]: any }?)
 	local c = table.clone(lib.Config)
