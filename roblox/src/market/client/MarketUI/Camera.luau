@@ -466,8 +466,9 @@ function Cam.update(dt: number, n: number)
 		local f = Vector3.new(L.facing.x, 0, L.facing.z)
 		local side = Vector3.new(-f.Z, 0, f.X)
 		local counter = Vector3.new(L.pos.x, 0, L.pos.z)
-		local eye = counter + f * 16 + side * 3.5 + Vector3.new(0, 9, 0)
-		cf, fov = CFrame.lookAt(eye, counter + Vector3.new(0, 5.2, 0)), 60
+		-- (not much further out: across the aisle stand the next row's stalls)
+		local eye = counter + f * 11.5 + side * 1.6 + Vector3.new(0, 7.4, 0)
+		cf, fov = CFrame.lookAt(eye, counter + Vector3.new(0, 5.4, 0)), 64
 		local a = math.min(1, dt * 4)
 		cam.CFrame = cam.CFrame:Lerp(cf, a)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
@@ -498,7 +499,13 @@ function Cam.update(dt: number, n: number)
 			cam.FieldOfView += (fov - cam.FieldOfView) * a
 			return
 		end
-		cf, fov = (n <= 50) and street(n) or overview(n, dt)
+		-- (not `a and street(n) or overview(...)`: that keeps only the first
+		-- return value, fov came back nil and every frame errored here)
+		if n <= 50 then
+			cf, fov = street(n)
+		else
+			cf, fov = overview(n, dt)
+		end
 	elseif m == "street" then
 		lastMoving = false
 		cf, fov = street(n)

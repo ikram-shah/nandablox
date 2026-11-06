@@ -9,7 +9,7 @@ to run it on stage.
 
 ```sh
 cd roblox
-tools/test-market.sh                 # 36 Lune tests; prints the claims table below
+tools/test-market.sh                 # 46 Lune tests; prints the claims table below
 tools/serve.sh market                # rojo serve (port 34872), in tmux nandablox-rojo
 tools/open_in_studio.sh market studio-market   # builds market.project.json, opens it in Studio
 ```
@@ -81,6 +81,57 @@ and neither are the established stalls that appear when the market grows.
 Turnover (each seller retires at 0.4/min and a newcomer takes the slot) and
 the frauds (0.04 per trader per minute) produce the flood. Nothing artificial
 inflates it.
+
+## Teams and the timed round (added 2026-11-05, not in version 15)
+
+**Choose your team on join.** Every player gets a "Choose your team" picker
+first: **BLUE** (watchers: the inbox, the monitors and the council) or **RED**
+(con artists: run a scam stall or a counterfeit stall). The server's old
+guess (first player Blue, second Red) is only the pre-selected card; **Enter**
+takes it. **T** or "switch team" (left panel) switches later.
+
+- **Blue's screen:** the inbox, the meter, monitor / signature / agent / crew
+  controls.
+- **Red's screen:** the red panel on the right instead of the inbox: the
+  tools (**Scam stall**, **Impersonate**, **Counterfeit**), a running
+  **stolen** tally for your own stalls, each stall's status (waiting in Blue's
+  inbox, allowed, BLOCKED, took 7.35 · closed) and "Blue's inbox: N waiting".
+  Red never sees Blue's cards, and Red's camera never follows them.
+- **Both:** the round bar (timer, phase, score line), traders, camera, K.
+- Opening a stall puts **you behind its counter** (badge "RED · stall name"),
+  and the camera looks at you from the aisle; "stand here" on the red panel
+  goes back; WASD walks away. Blue sees your avatar there.
+- The watchers are the Blue players. With no Blue player at all, a modelled
+  "auto watcher" takes the inbox, so a lone Red player has someone to beat.
+  Crew (round phase, beat 5, the "2" button) adds a second Blue human if there
+  is one, else the helper; it no longer turns Red players Blue.
+
+**The counterfeit stall** (`counterfeit`, the "picture of spices" scam):
+priced 5–14% under market, so the rule monitor's price line allows it. It
+sells a framed print: each buyer pays and gets a red ✕ **counterfeit**; after
+3 prints it shutters (one escape, every sale counted as stolen). Its card says
+"spice <small>(print)</small>" and "framed prints on the counter"; the stall
+shows small framed pictures instead of sacks and crates. An optional fifth
+rule line, "listing says print/photo → escalate", is behind
+`Config.RULE_KEYWORD_PRINT` (off).
+
+**Start 5:00 round** (round bar, or **R**; anyone can press it) runs
+`Config.ROUND_PHASES`, a table of { start, name, banner, settings, prompt }:
+
+| at | phase | settings | prompt |
+|---|---|---|---|
+| 0:00 | Calm | 5 traders, monitor off, signatures on, 1 watcher | |
+| 1:00 | Rush | 300 traders | Blue, once calls/min per watcher pass 3× budget (36): "Inbox at 3× budget: pick a monitor." |
+| 2:00 | Lever | | Blue: council vote on signature checks |
+| 3:00 | Fakes | fraud agents' counterfeit share 0.5 | |
+| 4:00 | Crew | 2 watchers | |
+| 5:00 | Scoreboard | | overlay: honest deals (count, value), stolen, caught, escaped, false alarms, peak calls/min, chart of calls/min with the phases marked |
+
+Calls/min for the chart and the 3× trigger are sampled every 2 s over a
+trailing 30 s window. Headless (seed 20261106, nobody answering) 3× is
+crossed 1:42–2:02 into the round, i.e. 42–62 s into Rush; with the meter's 60 s
+window it would be 2:16–2:38. A beat (N/B) stops a running round; all panel
+controls keep working during one.
 
 ## If something goes wrong
 

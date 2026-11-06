@@ -661,7 +661,7 @@ function Hud.status(s)
 				name = "you"
 			else
 				k += 1
-				name = "watcher " .. k
+				name = w.label == "auto watcher" and "auto watcher" or ("watcher " .. k)
 			end
 			table.insert(names, name .. (w.auto and " (auto)" or ""))
 		end
@@ -874,7 +874,7 @@ local function buildRound(parent)
 	-- the bar, top centre under the prices: timer, phase, progress, score, start/stop
 	local f = panel({
 		Name = "Round",
-		Size = UDim2.new(0, 560, 0, 0),
+		Size = UDim2.new(0, 600, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		AnchorPoint = Vector2.new(0.5, 0),
 		Position = UDim2.new(0.5, -110, 0, 64),
@@ -884,8 +884,8 @@ local function buildRound(parent)
 	Theme.pad(8, 14).Parent = f
 	new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = f })
 	local top = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = 1, Parent = f })
-	rnd.clock = label({ Text = "FREE PLAY", Font = Theme.HEAVY, TextSize = 24, Size = UDim2.new(0, 120, 1, 0), Parent = top })
-	rnd.phase = label({ Text = "", RichText = true, Font = Theme.BOLD, TextSize = 16, Size = UDim2.new(1, -290, 1, 0), Position = UDim2.new(0, 124, 0, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = top })
+	rnd.clock = label({ Text = "FREE PLAY", Font = Theme.HEAVY, TextSize = 24, Size = UDim2.new(0, 112, 1, 0), Parent = top })
+	rnd.phase = label({ Text = "", RichText = true, Font = Theme.BOLD, TextSize = 17, Size = UDim2.new(1, -282, 1, 0), Position = UDim2.new(0, 114, 0, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = top })
 	rnd.btn = button({
 		Text = "▶ Start 5:00 round",
 		Font = Theme.HEAVY,
@@ -902,15 +902,17 @@ local function buildRound(parent)
 	rnd.track = new("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Theme.PANEL2, BorderSizePixel = 0, LayoutOrder = 2, Visible = false, Parent = f }, { Theme.corner(4) })
 	rnd.fill = new("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Theme.GOLD, BorderSizePixel = 0, Parent = rnd.track }, { Theme.corner(4) })
 	rnd.ticks = {}
-	rnd.score = label({ Text = "", RichText = true, TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Parent = f })
+	-- the phase's banner line, under the progress
+	rnd.sub = label({ Text = "", TextSize = 15, TextColor3 = Theme.WHITE, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Visible = false, TextTruncate = Enum.TextTruncate.AtEnd, Parent = f })
+	rnd.score = label({ Text = "", RichText = true, TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 4, TextTruncate = Enum.TextTruncate.AtEnd, Parent = f })
 	rnd.bar = f
 	-- the prompt (a question for one team), under the bar
 	rnd.prompts = new("Frame", {
 		Name = "Prompts",
-		Size = UDim2.new(0, 560, 0, 0),
+		Size = UDim2.new(0, 600, 0, 0),
 		AutomaticSize = Enum.AutomaticSize.Y,
 		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, -110, 0, 150),
+		Position = UDim2.new(0.5, -110, 0, 172),
 		BackgroundTransparency = 1,
 		Parent = parent,
 	})
@@ -980,8 +982,10 @@ function Hud.round(s)
 		local left = (r.length or 300) - (r.t or 0)
 		rnd.clock.Text = fmtClock(left)
 		rnd.clock.TextColor3 = left <= 30 and Theme.WARN or Theme.WHITE
-		local nextBit = r.nextName and r.nextName ~= "Scoreboard" and string.format("  <font color=\"#A09A96\">next: %s at %s</font>", r.nextName, fmtClock(r.nextAt or 0)) or ""
-		rnd.phase.Text = string.format("<b>%s</b> · %s%s", string.upper(r.name or ""), r.banner or "", nextBit)
+		local nextBit = r.nextName and string.format("   <font size=\"14\" color=\"#A09A96\">next: %s in %s</font>", r.nextName == "Scoreboard" and "scoreboard" or r.nextName, fmtClock((r.nextAt or 0) - (r.t or 0))) or ""
+		rnd.phase.Text = string.format("<font color=\"#F6C446\">%s</font>%s", string.upper(r.name or ""), nextBit)
+		rnd.sub.Text = r.banner or ""
+		rnd.sub.Visible = true
 		rnd.fill.Size = UDim2.new(math.clamp((r.t or 0) / math.max(1, r.length or 300), 0, 1), 0, 1, 0)
 		setTicks(r.marks or {}, r.length or 300)
 		-- a new phase: the big banner
@@ -994,6 +998,7 @@ function Hud.round(s)
 		end
 	else
 		rnd.phaseKey = nil
+		rnd.sub.Visible = false
 		rnd.clock.Text = "FREE PLAY"
 		rnd.clock.TextColor3 = Theme.WHITE
 		rnd.phase.Text = r.done and "<font color=\"#A09A96\">round over · free play</font>" or "<font color=\"#A09A96\">5 phases, then a scoreboard</font>"
@@ -1083,7 +1088,7 @@ function Hud.scoreboard(sb)
 	end
 	local dim = new("Frame", { Name = "Scoreboard", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, ZIndex = 50, Parent = gui })
 	rnd.sbOverlay = dim
-	local W, H = 780, 560
+	local W, H = 780, 524
 	local f = panel({ Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 0.02, Parent = dim })
 	label({ Text = "ROUND OVER", Font = Theme.HEAVY, TextSize = 30, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -48, 0, 34), Position = UDim2.new(0, 24, 0, 18), Parent = f })
 	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 52), Parent = f })
