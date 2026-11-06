@@ -324,8 +324,8 @@ Config.ROUND_PHASES = {
 	{
 		at = 240,
 		name = "Crew",
-		banner = "A second watcher joins: lookout, trim, skipper.",
-		set = { watchers = 2, unlock = "all", botRate = 10 },
+		banner = "1,000 traders: even with checks, one watcher drowns. A crew joins: lookout, trim, skipper.",
+		set = { n = 1000, watchers = 2, unlock = "all", botRate = 10 },
 	},
 	{
 		at = 300,
