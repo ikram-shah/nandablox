@@ -289,6 +289,27 @@ local SECOND = "helper"
 -- (con artists). A player picks on join; until then the default below is
 -- only the pre-selected card in their picker.
 local playerRole: { [Player]: string } = {}
+
+-- Blue's crew roles (docs/market-game.md, "Why a human, and why a crew"):
+-- lookout (inbox, escapes), trim (loadout), skipper (council votes). One
+-- Blue holds all three; two split them lookout + skipper / trim; three take
+-- one each. In join order.
+local function crewRoles(p: Player): { string }
+	local blues = {}
+	for _, q in Players:GetPlayers() do
+		if (playerRole[q] or "blue") == "blue" then
+			table.insert(blues, q)
+		end
+	end
+	local i = table.find(blues, p) or 1
+	if #blues <= 1 then
+		return { "lookout", "trim", "skipper" }
+	elseif #blues == 2 then
+		return i == 1 and { "lookout", "skipper" } or { "trim" }
+	end
+	return ({ { "lookout" }, { "trim" }, { "skipper" } })[((i - 1) % 3) + 1]
+end
+
 local playerChosen: { [Player]: boolean } = {}
 local playerPose: { [Player]: { x: number, z: number, yaw: number, moving: boolean, mind: number? } } = {}
 -- the frauds a red player opened (seller ids, newest last)
@@ -871,26 +892,6 @@ local function lastN(list, n: number)
 	return out
 end
 
--- Blue's crew roles (docs/market-game.md, "Why a human, and why a crew"):
--- lookout (inbox, escapes), trim (loadout), skipper (council votes). One
--- Blue holds all three; two split them lookout + skipper / trim; three take
--- one each. In join order.
-local function crewRoles(p: Player): { string }
-	local blues = {}
-	for _, q in Players:GetPlayers() do
-		if (playerRole[q] or "blue") == "blue" then
-			table.insert(blues, q)
-		end
-	end
-	local i = table.find(blues, p) or 1
-	if #blues <= 1 then
-		return { "lookout", "trim", "skipper" }
-	elseif #blues == 2 then
-		return i == 1 and { "lookout", "skipper" } or { "trim" }
-	end
-	return ({ { "lookout" }, { "trim" }, { "skipper" } })[((i - 1) % 3) + 1]
-end
-
 local function gameFor(p: Player)
 	local g = sim:gameState()
 	local role = playerRole[p] or "blue"
@@ -1037,7 +1038,14 @@ RunService.Heartbeat:Connect(function(dt)
 					stolen = math.floor((lastScore.stolen or 0) + 0.5),
 					honestDeals = lastScore.honestDeals,
 				},
-				meter = sim:meter(),
+				-- the meter shows the round's numbers too
+				meter = (function()
+					local m = sim:meter()
+					m.caught = lastScore.caught
+					m.escaped = lastScore.escaped
+					m.falseAlarms = lastScore.falseAlarms
+					return m
+				end)(),
 			}
 			lastScore.seq = scoreSeq
 			scoreNow = lastScore
