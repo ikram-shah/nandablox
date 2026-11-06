@@ -366,7 +366,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		Hud.presenter(nextPres)
 	elseif kc == Enum.KeyCode.V then
 		local m = Cam.toggle()
-		Hud.toast("Camera: " .. m .. (m == "walk" and " (3rd-person · WASD / Arrows)" or (m == "follow" and " (follows top inbox case)" or "")), Theme.BLUE)
+		Hud.toast("Camera: " .. m .. (m == "walk" and " (3rd-person · WASD / Arrows)" or (m == "follow" and " (follows top inbox case)" or (m == "auto" and " (follows the inbox; the whole market above 300)" or ""))), Theme.BLUE)
 	elseif kc == Enum.KeyCode.R then
 		local active = lastState and lastState.round and lastState.round.active
 		send({ op = "round", on = not active })
@@ -432,6 +432,7 @@ RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 	Cam.update(dt, lastMeter and lastMeter.n or 5)
+	Hud.sweeping(Cam.sweeping())
 	poseAt -= dt
 	if poseAt <= 0 then
 		poseAt = 0.15
@@ -479,7 +480,7 @@ RunService.RenderStepped:Connect(function(dt)
 				Cam.set(extCam)
 			end
 			-- the beat's shot (V or panel overrides it until the next beat)
-			local shot = lastState.cam or "follow"
+			local shot = lastState.cam or "auto"
 			if shot ~= lastShot then
 				lastShot = shot
 				-- (a Red player behind their counter stays there)

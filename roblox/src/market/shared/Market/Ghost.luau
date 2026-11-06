@@ -57,6 +57,7 @@ function Ghost:advance(seconds: number)
 		for _, p in round:prompt(sim.monitor) do
 			round:answer(p.id)
 		end
+		round:checkMoney(sim, { "bot" })
 		self.done = round.done
 	end
 	return self.done
@@ -69,7 +70,9 @@ function Ghost:result()
 	return {
 		blue = b.score,
 		red = r.score,
-		winner = Score.winner(b.score, r.score),
+		winner = self.round.score and self.round.score.ended and self.round.score.ended.winner or Score.winner(b.score, r.score),
+		ended = self.round.score and self.round.score.ended and self.round.score.ended.why or nil,
+		endedAt = self.round.score and self.round.score.endedAt or nil,
 		fees = b.fees,
 		refunds = b.refunds,
 		fines = b.fines,

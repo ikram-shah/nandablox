@@ -162,10 +162,19 @@ The traders buttons are locked while a round runs.
 - **No human Red?** The bot Red plays: success rate per attack, mostly the
   best, sometimes another; it sits out when nothing works.
 - **Money (NB):** Blue = 2% fees − 1.5× refunds + fines (caught deposits) −
-  check costs (inspector 15/min, escrow 50/min, reader 0.15 per read). Red =
+  check costs (inspector 15/min, escrow 60/min, reader 0.15 per read) −
+  watcher wages (5 NB/min per Blue seat, human or helper). Red =
   loot − rent − purchases − forfeited deposits. Bigger profit wins.
   Headless balance (seeds 1–7): no checks loses, every check loses, floor +
   voucher + inspector wins (`tests/market/balance.luau` prints the table).
+- **Money runs out:** Blue starts with a 150 NB treasury (the round bar shows
+  "N left"). Below 0 the round ends at once, **MARKET BANKRUPT · RED WINS**;
+  if every Red (or the bot) has no stall open and can't pay a deposit, **RED
+  WENT BROKE · BLUE WINS**. The scoreboard's subtitle says when and why.
+  Headless, every check goes bankrupt around 2:45–3:15.
+- **Camera:** "auto" (default) follows the inbox up to 300 traders and holds
+  the overview above; when the market grows it sweeps out for 6 s ("showing
+  the whole market…"). V cycles auto → follow → walk 3P → overview → balcony.
 - **Scoreboard:** winner, both profits, each Red's line (humans apart from
   the bot), where the no-checks and every-check Blues finished on the same
   seed (two headless "ghost" rounds run during the round), and Blue's
