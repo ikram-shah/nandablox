@@ -490,7 +490,10 @@ local function stallStatus(s): string
 	elseif st == "shuttered" then
 		return string.format("took %s · closed", fmtMoney(s.stolen or 0))
 	elseif st == "gone" then
-		return (s.stolen or 0) > 0 and string.format("took %s · gone", fmtMoney(s.stolen)) or "packed up"
+		if (s.stolen or 0) > 0 then
+			return string.format("took %s · gone", fmtMoney(s.stolen))
+		end
+		return s.blockedBy and "was blocked · gone" or "packed up"
 	end
 	if round.active then
 		-- in the game Red learns nothing about Blue's checks until the outcome

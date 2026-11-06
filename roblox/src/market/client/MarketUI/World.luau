@@ -386,7 +386,7 @@ local function prints(folder, good: string, cf: CFrame, look: number, n: number?
 	local rng = Random.new(look)
 	n = n or 4
 	size = size or 1
-	local frameCol = Color3.fromRGB(196, 160, 72)
+	local frameCol = Color3.fromRGB(52, 36, 26) -- dark wood: the picture reads against it
 	for i = 0, n - 1 do
 		local x = (i - (n - 1) / 2) * 1.9
 		local w, h = 1.5 * size, 1.15 * size
