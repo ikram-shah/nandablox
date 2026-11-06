@@ -440,6 +440,13 @@ RunService.RenderStepped:Connect(function(dt)
 					chooseTeam(extTeam)
 				end
 			end
+			-- and the follow camera's stall (tests, screenshots): like hovering a card
+			local extSlot = workspace:GetAttribute("MarketInspect")
+			if extSlot ~= nil then
+				workspace:SetAttribute("MarketInspect", nil)
+				Cam.inspectSlot = extSlot
+				World.highlightSlot(extSlot)
+			end
 			-- presenter view can be switched from outside too (tests, screenshots)
 			local pres = workspace:GetAttribute("MarketPresenter")
 			if pres ~= nil then
