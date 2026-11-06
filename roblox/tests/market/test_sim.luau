@@ -174,7 +174,7 @@ return function(t)
 		for _, e in evs do
 			if e.k == "case" and e.c.kind == "listing" then
 				local d = e.c.deadline_at - e.c.created
-				A.between(d, Config.CASE_WINDOW[1], Config.CASE_WINDOW[2] + Config.SIG_LISTING_S + 0.01)
+				A.between(d, Config.CASE_WINDOW[1], Config.CASE_WINDOW[2] + 2 * Config.FRICTION_LISTING_S + 0.01)
 				n += 1
 			end
 		end
@@ -330,8 +330,10 @@ return function(t)
 	end)
 
 	t.case("gray-zone clues: honest newcomers have vouchers and crates; scams are unvouched with no crates", function(A)
+		-- (monitor off: every listing reaches the human. Under the loadout's
+		-- price floor + voucher an honest newcomer is rarely a case at all)
 		local sim = MarketSim.new({ seed = 41, n = 50 })
-		sim:setMonitor("rules")
+		sim:setMonitor("off")
 		sim:addWatcher("me")
 		run(sim, 30)
 		local scam = sim:injectFraud("scam", { price = 0.65 })

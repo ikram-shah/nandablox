@@ -60,8 +60,11 @@ return function(t)
 		A.eq(st.s.truth, nil, "no ground truth while it trades")
 	end)
 
-	t.case("counterfeit escapes the price rule: allowed, then sells prints (a red ✕ counterfeit per sale)", function(A)
+	t.case("counterfeit escapes the price floor: allowed, then sells prints (a red ✕ counterfeit per sale)", function(A)
 		local sim = quiet(4, 50, "rules")
+		-- the loadout replaces the rule monitor: the price floor alone (its
+		-- preset's voucher would send an unvouched counterfeit to the inbox)
+		sim:setLoadout({ "priceFloor", "idCheck" })
 		local before = sim:getTotals()
 		local s = sim:injectFraud("counterfeit", { good = "bread", owner = "p1" })
 		local evs = sim:drain()
@@ -69,7 +72,7 @@ return function(t)
 			return e.k == "caseEnd" and e.seller == s.id
 		end)
 		A.ok(done, "the monitor decided at once")
-		A.eq(done.verdict, "allow", "the price rule lets it through")
+		A.eq(done.verdict, "allow", "the price floor lets it through")
 		A.eq(done.by, "monitor")
 		A.eq(done.truth, "counterfeit")
 		run(sim, 90, evs)
@@ -104,7 +107,7 @@ return function(t)
 		A.eq(sim:getTotals().caught, 1)
 	end)
 
-	t.case("the keyword line (off by default) escalates a print listing; a watcher then catches it", function(A)
+	t.case("the keyword line (off by default) escalates a print listing; in the loadout the pitch reader does, and a watcher catches it", function(A)
 		A.eq(Config.RULE_KEYWORD_PRINT, false, "off by default")
 		local rm = MarketSim.ruleMonitor
 		local c = { price = 760, market = 800, ratings = 0, age_s = 0, twin = false, listing = "spice (print)" }
@@ -114,14 +117,19 @@ return function(t)
 		A.eq((rm({ price = 760, market = 800, ratings = 0, age_s = 0, twin = false, listing = "spice" }, true, nil, true)), "allow", "an honest listing")
 		local photo = { price = 760, market = 800, ratings = 0, age_s = 0, twin = false, listing = "lamps (PHOTO)" }
 		A.eq((rm(photo, true, nil, true)), "escalate", "photo, any case")
-		-- in a market
-		local sim = quiet(6, 50, "rules")
-		sim:setRuleKeyword(true)
+		-- in a market, the line's successor is the loadout's pitch reader (here
+		-- certain to notice the small print)
+		local sim = MarketSim.new({ seed = 6, n = 50, config = lib.config({ PITCH_SMALLPRINT = 1 }) })
+		sim:setMonitor("rules")
+		sim.fraudsPaused = true
+		run(sim, 20)
+		sim:drain()
+		sim:setLoadout({ "pitchReader", "idCheck" })
 		sim:addWatcher("w", { auto = true })
 		local s = sim:injectFraud("counterfeit")
 		local cc = sim.cases[s.case]
 		A.ok(cc and cc.stage == "inbox", "escalated to the watcher")
-		A.eq(cc.reason, "listing says print")
+		A.eq(cc.reason, "small print says \"print\"")
 		run(sim, 12)
 		A.eq(cc.stage, "done")
 		A.eq(cc.verdict, "block", "the modelled watcher blocks it")
@@ -165,13 +173,21 @@ return function(t)
 		A.ok(sim:meter().deals < b.honestDeals, "the meter restarted, the totals did not")
 	end)
 
-	t.case("the phase table: valid, data-driven, 5:00 with a scoreboard", function(A)
+	t.case("the phase table: the doc's 5:00 round, data-driven, with a scoreboard; phases unlock Red's attacks", function(A)
 		A.ok(Round.validate(Config.ROUND_PHASES))
-		local names = {}
+		local names, unlocks = {}, {}
 		for _, p in Config.ROUND_PHASES do
 			table.insert(names, string.format("%d %s", p.at, p.name))
+			local u = p.set and p.set.unlock
+			table.insert(unlocks, type(u) == "table" and table.concat(u, "+") or tostring(u))
 		end
-		A.eq(table.concat(names, ", "), "0 Calm, 60 Rush, 120 Lever, 180 Fakes, 240 Crew, 300 Scoreboard")
+		A.eq(table.concat(names, ", "), "0 Calm, 60 Rush, 120 Lever, 180 Talkers, 240 Crew, 300 Scoreboard")
+		A.eq(table.concat(unlocks, ", "), "scam, impostor, counterfeit+vouch, talker+stolenId, all, nil")
+		A.eq(Config.ROUND_PHASES[1].set.n, 5, "Calm: 5 traders")
+		A.eq(Config.ROUND_PHASES[2].set.n, 300, "Rush: 300 traders")
+		A.eq(Config.ROUND_PHASES[3].prompt.ask, "vote", "Lever: the council votes on ID checks")
+		A.eq(Config.ROUND_PHASES[4].set.llmShoppers, true, "Talkers: LLM shoppers")
+		A.eq(Config.ROUND_PHASES[5].set.watchers, 2, "Crew: a second watcher")
 		A.eq((Round.validate({ { at = 5, name = "x", scoreboard = true } })), false, "must start at 0")
 		A.eq((Round.validate({ { at = 0, name = "a" }, { at = 10, name = "b" } })), false, "must end in a scoreboard")
 		-- retuning is data: a 3-phase, 90 s round works the same way
@@ -200,64 +216,96 @@ return function(t)
 		A.eq(r.length, 90)
 	end)
 
-	t.case("a full 5:00 round headless: phases, the over-budget prompt, counterfeits, the scoreboard", function(A)
+	t.case("a full 5:00 round headless with the bot Red: phases unlock attacks, the market grows, Blue sets a loadout, the scoreboard replays it", function(A)
 		local sim = MarketSim.new({ seed = 20261106, n = 5 })
 		sim:addWatcher("you", { auto = true })
 		local r = Round.new(Config)
 		r:start(sim.now, sim:getTotals())
 		local entered, firstPromptAt, prompts = {}, nil, {}
-		local fakeStalls, fakesAfter = {}, true
+		local firstKind = {} -- attack kind -> first time (s into the round) the bot opened one
+		local scripted = 0
+		local talkerEscapes, readerAt = 0, nil
 		local watchersAt = {}
 		while not r.done do
 			sim:step(0.25)
-			for _, ph in r:update(sim.now, sim:getTotals(), #sim.watchers) do
+			local el = r:elapsed(sim.now)
+			for _, ph in r:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
 				table.insert(entered, ph.phase.name)
 				Round.apply(sim, ph.phase.set)
 			end
 			for _, p in r:prompt(sim.monitor) do
 				if not prompts[p.ask] then
-					prompts[p.ask] = r:elapsed(sim.now)
+					prompts[p.ask] = el
 				end
 				if p.ask == "monitor" and not firstPromptAt then
-					firstPromptAt = r:elapsed(sim.now)
-					-- Blue picks the rule monitor
+					firstPromptAt = el
+					-- Blue stops judging every case: the checks decide (the preset)
 					sim:setMonitor("rules")
 					r:answer(p.id)
+				elseif p.ask == "vote" then
+					r:answer(p.id) -- the council keeps ID checks
 				end
 			end
 			for _, e in sim:drain() do
-				if e.k == "stall" and e.s.display == "prints" and not fakeStalls[e.s.id] then
-					fakeStalls[e.s.id] = true
-					if r:elapsed(sim.now) < 180 then
-						fakesAfter = false
+				if e.k == "stall" and e.s.state == "setup" or e.k == "rejected" then
+					local s = sim.byId[e.k == "stall" and e.s.id or e.seller]
+					if s and s.kind ~= "honest" then
+						if s.owner == "bot" then
+							firstKind[s.kind] = firstKind[s.kind] or el
+						elseif not s.owner then
+							scripted += 1
+						end
+					end
+				end
+				if e.k == "deal" and e.ok == false and e.kind == "talker" then
+					talkerEscapes += 1
+					-- a person reads the escapes and buys the pitch reader
+					if not readerAt then
+						readerAt = el
+						sim:requestCheck("pitchReader", true)
 					end
 				end
 			end
-			watchersAt[math.floor(r:elapsed(sim.now) / 60)] = #sim.watchers
+			watchersAt[math.floor(el / 60)] = #sim.watchers
 		end
-		A.eq(table.concat(entered, ","), "Calm,Rush,Lever,Fakes,Crew,Scoreboard")
-		A.ok(fakesAfter, "no counterfeits before Fakes")
-		local nf = 0
-		for _ in fakeStalls do
-			nf += 1
-		end
-		A.ok(nf >= 3, "counterfeits in Fakes: " .. nf)
+		A.eq(table.concat(entered, ","), "Calm,Rush,Lever,Talkers,Crew,Scoreboard")
+		A.eq(scripted, 0, "in a round all fraud is Red's (here the bot's)")
+		A.ok(firstKind.scam and firstKind.scam < 60, "scams from Calm")
+		A.ok(firstKind.impostor and firstKind.impostor >= 60, "impostors from Rush: " .. tostring(firstKind.impostor))
+		A.ok(firstKind.counterfeit == nil or firstKind.counterfeit >= 120, "counterfeits from Lever")
+		A.ok(firstKind.talker == nil or firstKind.talker >= 180, "talkers from Talkers")
+		A.eq(sim.n, 300, "the market grew")
 		A.eq(watchersAt[4], 2, "Crew: two watchers")
 		A.eq(watchersAt[1], 1)
-		A.ok(firstPromptAt and firstPromptAt >= 60 and firstPromptAt < 180, "the monitor prompt fires after Rush, at " .. tostring(firstPromptAt))
+		A.ok(firstPromptAt and firstPromptAt >= 60 and firstPromptAt < 150, "the prompt fires after Rush, at " .. tostring(firstPromptAt))
 		A.ok(prompts.vote and prompts.vote >= 120 and prompts.vote < 121, "the council vote at 2:00")
 		local sb = r.score
 		A.ok(sb, "a scoreboard")
 		A.ok(sb.honestDeals > 100, "honest deals " .. sb.honestDeals)
-		A.ok(sb.honestValue > sb.honestDeals * 100, "their value")
-		A.ok(sb.caught > 0 and sb.escaped >= 0 and sb.falseAlarms >= 0)
-		A.ok(sb.peak > 3 * Config.BUDGET, "peak calls/min over 3x budget: " .. sb.peak)
+		A.ok(sb.frauds > 10, "the bot attacked: " .. sb.frauds)
+		A.ok(sb.caught > 0)
+		A.ok(sb.peak > 2 * Config.BUDGET, "peak calls/min over 2x budget: " .. sb.peak)
 		A.between(#sb.chart, 150, 151, "a sample every 2 s")
+		A.eq(#sb.series, #sb.chart, "the game's series beside it")
 		A.eq(#sb.marks, 6)
-		A.eq(sb.chart[1].t, 0)
+		-- the series replays Blue's loadout against trade health and fraud
+		local first, last = sb.series[1], sb.series[#sb.series]
+		A.eq(table.concat(first.lo, ","), "idCheck", "Calm: the ID check alone")
+		A.ok(table.find(last.lo, "priceFloor") and table.find(last.lo, "voucher"), "the preset by the end: " .. table.concat(last.lo, ","))
+		A.ok(last.f >= 3, "friction rose: " .. last.f)
+		A.ok(type(last.h) == "number" and last.h > 0, "trade health recorded")
+		A.ok(last.st == sb.stolen and last.c <= sb.caught, "stolen and caught so far")
+		A.near(sb.blue.score, sb.blue.trade - sb.blue.stolen - sb.blue.friction, 1.01, "Blue's score adds up")
+		A.near(sb.red.score, sb.red.stolen - sb.red.rent - sb.red.bought - sb.red.lost, 2.01, "Red's score adds up")
+		A.ok(sb.red.rent > 0, "Red paid rent")
+		if readerAt then
+			A.ok(readerAt >= 180, "talker escapes appear in Talkers")
+			A.ok(table.find(last.lo, "pitchReader"), "the reader landed 30 s after Blue asked")
+		end
 		print(string.format(
-			"      round (seed 20261106, auto watcher, rules picked at %.0f s): %d honest deals worth %s, stolen %s in %d sales, caught %d, escaped %d, false alarms %d, peak %.1f calls/min, %d counterfeit stalls",
-			firstPromptAt, sb.honestDeals, tostring(sb.honestValue), tostring(sb.stolen), sb.stolenSales, sb.caught, sb.escaped, sb.falseAlarms, sb.peak, nf
+			"      round (seed 20261106, auto watcher, checks at %.0f s): %d honest deals, %d frauds (caught %d, escaped %d), stolen %s, talker escapes %d (reader asked at %s), Blue %d, Red %d, last loadout %s (F%d, health %.2f)",
+			firstPromptAt, sb.honestDeals, sb.frauds, sb.caught, sb.escaped, tostring(sb.stolen), talkerEscapes, tostring(readerAt),
+			sb.blue.score, sb.red.score, table.concat(last.lo, "+"), last.f, last.h
 		))
 	end)
 end
