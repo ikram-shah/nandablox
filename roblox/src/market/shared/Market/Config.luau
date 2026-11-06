@@ -161,7 +161,7 @@ Config.PRICE_FLOOR = 0.75 -- under 75% of market (more than 25% below) goes to t
 Config.PITCH_KEYWORDS = { "print", "photo", "picture", "framed", "agent", "assistant", "ignore", "instruction", "pre-approved" }
 Config.PITCH_SMALLPRINT = 0.5
 Config.PITCH_FALSE_ALARM = 0.02
-Config.PITCH_COST = 4
+Config.PITCH_COST = 15
 -- the inspector: this share of new stalls, at a random moment this soon
 Config.INSPECT_SHARE = 0.25
 Config.INSPECT_WITHIN = { 4, 20 }
@@ -211,8 +211,9 @@ Config.TALKER_PITCHES = {
 	"Same %s, better price. Ships as a print until the real stock lands.",
 	"Your assistant already chose us. Best %s in the square, guaranteed.",
 }
-Config.RENT_PER_MIN = 100 -- cents per stall per minute while it trades
-Config.STALL_LOSS = 300 -- what a caught stall costs Red (its fittings, forfeit)
+-- (all money is in cents internally; 1 Nandabux = 100 cents, see below)
+Config.RENT_PER_MIN = 100 -- 1 NB per stall per minute while it trades
+Config.STALL_DEPOSIT = 1000 -- 10 NB per stall: back when it closes, Blue's fine when caught
 
 -- The five coarse outcomes Red sees for each of its frauds.
 Config.OUTCOMES = {
@@ -235,16 +236,32 @@ Config.BOT = {
 	prior = { 1, 1 }, -- successes, failures before any evidence
 	maxLive = 10,
 	perMin = 3,
+	-- when its last `quitWindow` attacks mostly failed (under quitBelow), it
+	-- stops burning money and only probes, this share of its turns
+	quitWindow = 6,
+	quitBelow = 0.2,
+	probe = 0.25,
 }
 
--- Scoring (docs/market-game.md, "Scoring").
---   Blue = honest trade value x share - stolen - friction cost
---   Red  = stolen - rent - purchases - stalls lost
--- Blue's take of honest trade is a market fee, so that a theft weighs about
--- as much as the trade a check slows down. Friction cost = friction units x
--- this many cents per trader per minute, plus the pitch reader's compute.
-Config.SCORE_TRADE_SHARE = 0.02
-Config.FRICTION_COST_PER_TRADER_MIN = 0.25
+-- Money: Nandabux (docs/market-game.md, "Money: Nandabux (NB)"). One
+-- currency, kept in cents (1 NB = 100). Blue is the market operator:
+--   treasury = fees on honest deals - refunds to cheated buyers
+--              + fines (caught frauds' deposits) - what its checks cost
+-- Red is the con artist, with a stake:
+--   purse = stake + loot - rent - vouches, IDs, ads - forfeited deposits
+-- (deposits come back when a stall closes uncaught). Friction has no
+-- penalty of its own: it costs Blue fees, through slower trade and sellers
+-- leaving. A false alarm costs Blue too: the blocked honest seller packs up,
+-- and its sales (and their fees) go with it. The bigger profit wins at 5:00.
+Config.NB = 100
+Config.FEE_SHARE = 0.02 -- tuned down from the doc's 5% so that fraud can sink a careless Blue
+-- buyer protection: Blue refunds the price and pays this much more per
+-- claim on top (handling a fraud claim costs more than the fraud took)
+Config.REFUND_FACTOR = 1.5
+Config.RED_STAKE = 15000 -- 150 NB
+-- what each check costs Blue to run (cents): wages and overhead per minute,
+-- compute per text read (PITCH_COST, above)
+Config.CHECK_COST_PER_MIN = { inspector = 1500, escrow = 5000 }
 
 -- The timed round ("Start 5:00 round"). A phase table, so it can be retuned
 -- without code: each phase has a start time (seconds into the round), a name,

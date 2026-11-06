@@ -1,12 +1,12 @@
--- Score: both sides' scores from the sim's running totals
--- (docs/market-game.md, "Scoring"). Pure; all in cents.
+-- Score: both sides' profit in Nandabux from the sim's running totals
+-- (docs/market-game.md, "Money: Nandabux (NB)"). Pure; all in cents.
 --
---   Blue = honest trade value x SCORE_TRADE_SHARE - stolen - friction cost
---   Red  = stolen by Red's stalls - rent - vouches, IDs and ads - stalls lost
+--   Blue = fees on honest deals - refunds to cheated buyers + fines - check costs
+--   Red  = loot - rent - vouches, IDs and ads - forfeited deposits
 --
--- `d` is a table of totals (or of differences of totals since a round began):
--- honestValue, stolen, frictionCost, compute, redStolen, redRent,
--- redPurchases, redLost.
+-- `d` is a table of totals (or of differences since a round began):
+-- blueFees, blueRefunds, blueFines, blueCosts, compute, redStolen, redRent,
+-- redPurchases, redLost. The bigger profit wins.
 
 local function sibling(name: string): any
 	if typeof(script) == "Instance" then
@@ -22,16 +22,17 @@ local function r(x: number): number
 	return math.floor(x + 0.5)
 end
 
-function Score.blue(d, cfg)
-	cfg = cfg or DefaultConfig
-	local trade = (d.honestValue or 0) * cfg.SCORE_TRADE_SHARE
-	local friction = (d.frictionCost or 0) + (d.compute or 0)
-	local stolen = d.stolen or 0
+function Score.blue(d, _cfg)
+	local fees = d.blueFees or 0
+	local refunds = d.blueRefunds or 0
+	local fines = d.blueFines or 0
+	local costs = d.blueCosts or 0
 	return {
-		score = r(trade - stolen - friction),
-		trade = r(trade),
-		stolen = r(stolen),
-		friction = r(friction),
+		score = r(fees - refunds + fines - costs),
+		fees = r(fees),
+		refunds = r(refunds),
+		fines = r(fines),
+		costs = r(costs),
 		compute = r(d.compute or 0),
 	}
 end
@@ -50,12 +51,24 @@ function Score.red(d)
 	}
 end
 
+-- who is ahead: "blue" | "red" | "tie"
+function Score.winner(blue: number, red: number): string
+	if blue > red then
+		return "blue"
+	elseif red > blue then
+		return "red"
+	end
+	return "tie"
+end
+
 -- one Red player's ledger (MarketSim.red[owner]) as a score
 function Score.ledger(l)
 	if not l then
 		return Score.red({})
 	end
-	return Score.red({ redStolen = l.stolen, redRent = l.rent, redPurchases = l.bought, redLost = l.lost })
+	local sc = Score.red({ redStolen = l.stolen, redRent = l.rent, redPurchases = l.bought, redLost = l.lost })
+	sc.purse = r(l.purse or 0)
+	return sc
 end
 
 return Score
