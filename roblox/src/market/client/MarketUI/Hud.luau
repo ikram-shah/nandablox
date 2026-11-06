@@ -8,6 +8,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 
 local Theme = require(script.Parent.Theme)
+local GamePanel = require(script.Parent.GamePanel)
 local new, label, button = Theme.new, Theme.label, Theme.button
 
 local Hud = {}
@@ -52,6 +53,10 @@ local onTeam: ((string) -> ())?
 local red: any = {} -- the red panel's parts
 local rnd: any = {} -- the round bar, the prompt, the banner, the scoreboard
 local picker: Frame? = nil
+-- the game (a round is on): the loadout strip / attack shop replace the
+-- monitor and lever controls
+local gameOn = false
+local crewText = "watcher"
 
 ------------------------------------------------------------------ helpers
 
@@ -717,6 +722,65 @@ function Hud.isPresenter(): boolean
 	return presenter
 end
 
+-- A round is on: the loadout strip (Blue) or the attack shop (Red) takes
+-- over from the monitor, signature, agent and crew controls; the toast
+-- moves above the strip.
+function Hud.gameMode(on: boolean)
+	gameOn = on
+	local blue = team == "blue"
+	for _, inst in blueOnly do
+		inst.Visible = blue and not on
+	end
+	if toast then
+		toast.Position = on and UDim2.new(0.5, -110, 1, -232) or UDim2.new(0.5, -110, 1, -110)
+	end
+	if red.panel then
+		for _, b in red.tools or {} do
+			b.Visible = not on
+		end
+		if red.toolsTitle then
+			red.toolsTitle.Visible = not on
+		end
+		if red.inbox then
+			red.inbox.Visible = not on
+		end
+		if red.outTitle then
+			red.outTitle.Visible = on
+		end
+	end
+end
+
+function Hud.isGameMode(): boolean
+	return gameOn
+end
+
+-- the bottom of the left control panel (the escapes list goes under it)
+function Hud.controlsBottom(): number
+	if not controls or not controls.Visible then
+		return 16
+	end
+	return controls.AbsolutePosition.Y + controls.AbsoluteSize.Y
+end
+
+function Hud.meterTop(): number
+	if not meter.frame then
+		return 600
+	end
+	return meter.frame.AbsolutePosition.Y
+end
+
+-- Blue's crew roles on the team chip
+function Hud.setCrew(list: { string }?)
+	crewText = list and #list > 0 and table.concat(list, " · ") or "watcher"
+	if team == "blue" and teamChip then
+		teamChip.Text = "TEAM BLUE · " .. crewText
+	end
+end
+
+function Hud.gui(): ScreenGui
+	return gui
+end
+
 ------------------------------------------------------------------ teams
 
 local RED_DARK = Color3.fromRGB(150, 40, 40)
@@ -740,8 +804,9 @@ function Hud.setTeam(t: string)
 	team = t
 	local blue = t == "blue"
 	for _, inst in blueOnly do
-		inst.Visible = blue
+		inst.Visible = blue and not gameOn
 	end
+	GamePanel.setTeam(t)
 	if inboxPanel then
 		inboxPanel.Visible = blue
 	end
@@ -752,7 +817,7 @@ function Hud.setTeam(t: string)
 		red.panel.Visible = not blue
 	end
 	if teamChip then
-		teamChip.Text = blue and "TEAM BLUE · watcher" or "TEAM RED · con artist"
+		teamChip.Text = blue and ("TEAM BLUE · " .. crewText) or "TEAM RED · con artist"
 		teamChip.BackgroundColor3 = blue and BLUE_DARK or RED_DARK
 	end
 	if rnd.prompts then
@@ -788,7 +853,8 @@ local function buildRedPanel(parent)
 	red.stolen = label({ Text = "0.00", Font = Theme.HEAVY, TextSize = 40, TextColor3 = Theme.GOLD, Size = UDim2.new(0.55, 0, 0, 42), Position = UDim2.new(0, 0, 0, 16), Parent = tally })
 	red.stolenSub = label({ Text = "", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(0.45, 0, 0, 40), Position = UDim2.new(0.55, 0, 0, 18), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Right, Parent = tally })
 	-- the tools
-	label({ Text = "OPEN A STALL", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 3, Parent = f })
+	red.toolsTitle = label({ Text = "OPEN A STALL", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 3, Parent = f })
+	red.tools = {}
 	for i, tool in TOOLS do
 		local b = button({
 			Text = "",
@@ -803,6 +869,7 @@ local function buildRedPanel(parent)
 			end
 			send(msg)
 		end)
+		table.insert(red.tools, b)
 		label({ Text = tool.text, Font = Theme.HEAVY, TextSize = 18, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 12, 0, 3), Parent = b })
 		label({ Text = tool.desc, TextSize = 13, TextColor3 = Color3.fromRGB(240, 200, 196), Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 12, 0, 25), TextTruncate = Enum.TextTruncate.AtEnd, Parent = b })
 	end
@@ -824,17 +891,33 @@ local function buildRedPanel(parent)
 	red.none = label({ Text = "none yet: open one above", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 15, Parent = f })
 	-- what Blue is facing, without the cards
 	red.inbox = label({ Text = "Blue's inbox: 0 waiting", Font = Theme.BOLD, TextSize = 16, TextColor3 = Theme.BLUE, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 20, Parent = f })
+	-- the game: your frauds' coarse outcomes, newest first (no checks named)
+	red.outTitle = label({ Text = "YOUR FRAUDS · OUTCOMES", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 21, Visible = false, Parent = f })
+	red.outRows = {}
+	for i = 1, 6 do
+		red.outRows[i] = label({ Text = "", TextSize = 14, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 21 + i, TextTruncate = Enum.TextTruncate.AtEnd, Visible = false, Parent = f })
+	end
 	red.panel = f
 end
 
 -- refresh the red panel from the room's state and the meter
-function Hud.red(s, m, minding: number?)
+function Hud.red(s, m, minding: number?, g: any?)
 	if not red.panel then
 		return
 	end
 	local info = s and s.red and s.red[you]
 	local stolen = info and info.stolen or 0
 	red.stolen.Text = Theme.money(stolen)
+	-- the game: the outcome log, and the score in the tally's corner
+	local rows = gameOn and g and GamePanel.redLog(g) or {}
+	for i, row in red.outRows or {} do
+		local r = rows[i]
+		row.Visible = r ~= nil
+		if r then
+			row.Text = r.text
+			row.TextColor3 = r.color
+		end
+	end
 	local stalls = info and info.stalls or {}
 	local sales, live = 0, 0
 	red.rowStall = {}
@@ -863,6 +946,10 @@ function Hud.red(s, m, minding: number?)
 	end
 	red.none.Visible = #stalls == 0
 	red.stolenSub.Text = live > 0 and string.format("%d stall%s open", live, live == 1 and "" or "s") or "open a stall to start"
+	local sc = gameOn and g and GamePanel.redScore(g)
+	if sc then
+		red.stolenSub.Text = string.format("score %s%s\ncosts %s", sc.score < 0 and "−" or "", Theme.money(math.abs(sc.score)), Theme.money(sc.rent + sc.bought + sc.lost))
+	end
 	local n = m and m.inbox or 0
 	red.inbox.Text = string.format("Blue's inbox: %d waiting", n)
 	red.inbox.TextColor3 = n > 6 and Theme.WARN or Theme.BLUE
@@ -1004,7 +1091,15 @@ function Hud.round(s)
 		rnd.phase.Text = r.done and "<font color=\"#A09A96\">round over · free play</font>" or "<font color=\"#A09A96\">5 phases, then a scoreboard</font>"
 	end
 	local sc = s.score
-	if sc then
+	if sc and rnd.active and r.blue then
+		-- the game: both scores, live
+		rnd.score.Text = string.format(
+			"<font color=\"#5A96F0\"><b>Blue %s</b></font> · <font color=\"#E85448\"><b>Red %s</b></font>   <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · stolen %s",
+			(r.blue < 0 and "−" or "") .. Theme.money(math.abs(r.blue)),
+			(r.red < 0 and "−" or "") .. Theme.money(math.abs(r.red)),
+			sc.caught or 0, sc.escaped or 0, Theme.money(sc.stolen or 0)
+		)
+	elseif sc then
 		rnd.score.Text = string.format(
 			"%s  <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · <font color=\"#F0B43C\">false alarms %d</font> · stolen %s · honest deals %d",
 			(rnd.active or r.done) and "this round:" or "so far:",
@@ -1019,7 +1114,9 @@ function Hud.prompts(list)
 	rnd.lastPrompts = list
 	local want = {}
 	for _, p in list or {} do
-		if (p.team == "all" or p.team == team) and not rnd.dismissed[p.id] then
+		-- (the council vote is the skipper's; a solo Blue is skipper too)
+		local mine = not (p.ask == "vote" and not GamePanel.roles().skipper)
+		if (p.team == "all" or p.team == team) and mine and not rnd.dismissed[p.id] then
 			want[p.id] = p
 		end
 	end
@@ -1039,13 +1136,13 @@ function Hud.prompts(list)
 			local opts
 			if p.ask == "monitor" then
 				opts = {
-					{ "rule monitor (4 lines)", { op = "monitor", mode = "rules" } },
+					{ "checks: floor + voucher", { op = "monitor", mode = "rules" } },
+					{ "my loadout decides", { op = "monitor", mode = "rules", keep = true } },
 					{ "your monitor", { op = "monitor", mode = "external" } },
-					{ "not now", nil },
 				}
 			else
 				opts = {
-					{ "keep signatures ON", { op = "vote", on = true } },
+					{ "keep ID checks ON", { op = "vote", on = true } },
 					{ "turn them OFF", { op = "vote", on = false } },
 				}
 			end
@@ -1078,6 +1175,11 @@ local function chartLine(parent, x0: number, y0: number, x1: number, y1: number,
 	})
 end
 
+local function signed(c: number?): string
+	c = math.floor((c or 0) + 0.5)
+	return (c < 0 and "−" or "") .. Theme.money(math.abs(c))
+end
+
 function Hud.scoreboard(sb)
 	if rnd.sbOverlay then
 		rnd.sbOverlay:Destroy()
@@ -1088,10 +1190,27 @@ function Hud.scoreboard(sb)
 	end
 	local dim = new("Frame", { Name = "Scoreboard", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, ZIndex = 50, Parent = gui })
 	rnd.sbOverlay = dim
-	local W, H = 780, 524
+	local game_ = sb.series and #sb.series > 0 and sb.blue ~= nil
+	-- fit the screen: the game's scoreboard is taller
+	local vh = gui.AbsoluteSize.Y
+	local W, H = 900, game_ and math.min(700, vh - 40) or 524
 	local f = panel({ Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 0.02, Parent = dim })
-	label({ Text = "ROUND OVER", Font = Theme.HEAVY, TextSize = 30, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -48, 0, 34), Position = UDim2.new(0, 24, 0, 18), Parent = f })
-	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 52), Parent = f })
+	label({ Text = "ROUND OVER", Font = Theme.HEAVY, TextSize = 30, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -48, 0, 34), Position = UDim2.new(0, 24, 0, 16), Parent = f })
+	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 50), Parent = f })
+	local y = 78
+	if game_ then
+		-- both scores, with what they are made of
+		local function scoreBox(x: number, title: string, color: Color3, score: number, parts: string)
+			local box = new("Frame", { Size = UDim2.new(0, (W - 60) / 2, 0, 74), Position = UDim2.new(0, x, 0, y), BackgroundColor3 = Theme.PANEL2, BackgroundTransparency = 0.3, BorderSizePixel = 0, Parent = f }, { Theme.corner(10) })
+			label({ Text = title, Font = Theme.HEAVY, TextSize = 15, TextColor3 = color, Size = UDim2.new(0, 120, 0, 18), Position = UDim2.new(0, 12, 0, 8), Parent = box })
+			label({ Text = signed(score), Font = Theme.HEAVY, TextSize = 34, TextColor3 = color, Size = UDim2.new(0, 170, 0, 38), Position = UDim2.new(0, 12, 0, 28), Parent = box })
+			label({ Text = parts, RichText = true, TextSize = 13, TextColor3 = Theme.MUTED, TextWrapped = true, Size = UDim2.new(1, -196, 1, -12), Position = UDim2.new(0, 186, 0, 6), TextYAlignment = Enum.TextYAlignment.Center, Parent = box })
+		end
+		local bl, rd = sb.blue, sb.red
+		scoreBox(24, "BLUE", Theme.BLUE, bl.score, string.format("honest trade %s<br/>− stolen %s<br/>− friction %s (compute %s)", signed(bl.trade), signed(bl.stolen), signed(bl.friction), signed(bl.compute)))
+		scoreBox(36 + (W - 60) / 2, "RED", Theme.BAD, rd.score, string.format("stolen %s<br/>− rent %s · bought %s<br/>− stalls lost %s", signed(rd.stolen), signed(rd.rent), signed(rd.bought), signed(rd.lost)))
+		y += 84
+	end
 	-- the numbers: two rows of four
 	local stats = {
 		{ "honest deals", tostring(sb.honestDeals or 0), Theme.WHITE },
@@ -1103,17 +1222,23 @@ function Hud.scoreboard(sb)
 		{ "false alarms", tostring(sb.falseAlarms or 0), Theme.WARN },
 		{ "judgment calls", tostring(sb.asked or 0), Theme.WHITE },
 	}
+	local cellH = game_ and 48 or 58
 	for i, st in stats do
 		local col = (i - 1) % 4
 		local rowI = (i - 1) // 4
-		local cell = new("Frame", { Size = UDim2.new(0, (W - 48) / 4, 0, 58), Position = UDim2.new(0, 24 + col * (W - 48) / 4, 0, 82 + rowI * 64), BackgroundTransparency = 1, Parent = f })
-		label({ Text = st[2], Font = Theme.HEAVY, TextSize = 30, TextColor3 = st[3], Size = UDim2.new(1, 0, 0, 34), Parent = cell })
-		label({ Text = st[1], TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 34), Parent = cell })
+		local cell = new("Frame", { Size = UDim2.new(0, (W - 48) / 4, 0, cellH), Position = UDim2.new(0, 24 + col * (W - 48) / 4, 0, y + rowI * (cellH + 4)), BackgroundTransparency = 1, Parent = f })
+		label({ Text = st[2], Font = Theme.HEAVY, TextSize = game_ and 24 or 30, TextColor3 = st[3], Size = UDim2.new(1, 0, 0, game_ and 28 or 34), Parent = cell })
+		label({ Text = st[1], TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, game_ and 28 or 34), Parent = cell })
 	end
-	-- the chart
-	label({ Text = "JUDGMENT CALLS PER MINUTE", Font = Theme.HEAVY, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 16), Position = UDim2.new(0, 24, 0, 218), Parent = f })
-	local cw, ch = W - 48 - 36, 230
-	local chart = new("Frame", { Size = UDim2.new(0, cw, 0, ch), Position = UDim2.new(0, 24 + 36, 0, 246), BackgroundColor3 = Theme.PANEL2, BackgroundTransparency = 0.3, BorderSizePixel = 0, ClipsDescendants = false, Parent = f })
+	y += 2 * (cellH + 4) + 10
+	-- the chart(s): calls/min (left, or full width), Blue's loadout (right)
+	local chartW = game_ and math.floor((W - 48) * 0.42) or (W - 48)
+	label({ Text = "JUDGMENT CALLS PER MINUTE", Font = Theme.HEAVY, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(0, chartW, 0, 16), Position = UDim2.new(0, 24, 0, y), Parent = f })
+	local cw, ch = chartW - 36, H - (y + 28) - 30
+	local chart = new("Frame", { Size = UDim2.new(0, cw, 0, ch), Position = UDim2.new(0, 24 + 36, 0, y + 28), BackgroundColor3 = Theme.PANEL2, BackgroundTransparency = 0.3, BorderSizePixel = 0, ClipsDescendants = false, Parent = f })
+	if game_ then
+		GamePanel.drawSeries(f, sb, 24 + chartW + 16, y, W - 48 - chartW - 16, H - y - 20)
+	end
 	local length = sb.length or 300
 	local top = math.max(24, (sb.peak or 0) * 1.15, (sb.budget or 12) * 3.2)
 	top = math.ceil(top / 12) * 12
@@ -1138,10 +1263,12 @@ function Hud.scoreboard(sb)
 		if m.at > 0 and m.at < length then
 			new("Frame", { Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(0, x, 0, 0), BackgroundColor3 = Theme.WHITE, BackgroundTransparency = 0.6, BorderSizePixel = 0, Parent = chart })
 		end
-		if m.at < length then
+		if m.at < length and not game_ then
 			label({ Text = m.name, Font = Theme.BOLD, TextSize = 12, TextColor3 = Theme.WHITE, Size = UDim2.new(0, 80, 0, 14), Position = UDim2.new(0, x + 4, 0, 3), Parent = chart })
 		end
-		label({ Text = fmtClock(m.at), TextSize = 12, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 40, 0, 14), Position = UDim2.new(0, x - 20, 1, 4), TextXAlignment = Enum.TextXAlignment.Center, Parent = chart })
+		if not game_ or m.at == 0 or m.at >= length or m.at % 120 == 0 then
+			label({ Text = fmtClock(m.at), TextSize = 12, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 40, 0, 14), Position = UDim2.new(0, x - 20, 1, 4), TextXAlignment = Enum.TextXAlignment.Center, Parent = chart })
+		end
 	end
 	-- the line
 	local pts = sb.chart or {}
@@ -1374,7 +1501,7 @@ function Hud.build(opts)
 		{ "V", "Cycle camera: follow top case → walk 3P → overview → balcony" },
 		{ "WASD / Arrows", "Walk the street in 3rd-person (Right-drag or Q/E turns)" },
 		{ "1 · 2 · 3 · 4", "Set market size: 5 · 50 · 300 · 1000 traders" },
-		{ "M  /  G", "Cycle monitor (off/rules/yours)  /  Toggle signature checks" },
+		{ "M  /  G", "Cycle monitor (off/rules/yours)  /  Vote on the ID check (lands in 30 s)" },
 		{ "L  /  A", "Toggle Gemini outside agent  /  Toggle auto-watcher" },
 		{ "N  /  B", "Next / previous scripted Demo Beat (1..6)" },
 		{ "H  /  K", "Hide/show left control panel  /  Toggle this shortcuts card" },

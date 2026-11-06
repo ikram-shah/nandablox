@@ -150,7 +150,16 @@ local function buildLoadout()
 		end)
 		blue.signs[c.id] = b
 	end
-	blue.foot = label({ Text = "", RichText = true, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), Position = UDim2.new(0, 0, 0, 160), TextTruncate = Enum.TextTruncate.AtEnd, Parent = f })
+	blue.foot = label({ Text = "", RichText = true, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -214, 0, 18), Position = UDim2.new(0, 0, 0, 160), TextTruncate = Enum.TextTruncate.AtEnd, Parent = f })
+	-- who decides a listing: you see every one, or only what a check escalates
+	blue.monBtn = button({ Text = "", TextSize = 13, Size = UDim2.new(0, 206, 0, 22), Position = UDim2.new(1, -206, 0, 158), BackgroundColor3 = Theme.PANEL2, Parent = f }, function()
+		if not roles.trim then
+			GamePanel.hint("The trim decides what reaches the inbox")
+			return
+		end
+		local judgingAll = last and last.monitor == "off"
+		send({ op = "monitor", mode = judgingAll and "rules" or "off", keep = true })
+	end)
 	blue.strip = f
 end
 
@@ -196,7 +205,10 @@ local function updateLoadout(g)
 		b.TextColor3 = on and Theme.GOLD or Theme.MUTED
 	end
 	local trim = roles.trim and "" or "  <font color=\"#F0B43C\">(the trim's call)</font>"
-	blue.foot.Text = string.format("a change lands %d s after you press it · compute spent %s%s", cfg.delay or 30, money(g.compute), trim)
+	blue.foot.Text = string.format("changes land %d s later · compute %s%s", cfg.delay or 30, money(g.compute), trim)
+	local all = g.monitor == "off"
+	blue.monBtn.Text = all and "inbox: EVERY listing ▸ switch" or (g.monitor == "external" and "inbox: your monitor ▸ switch" or "inbox: checks escalate ▸ switch")
+	blue.monBtn.TextColor3 = all and Theme.WARN or Theme.OK
 end
 
 ------------------------------------------------------------------ Blue: escapes and catches (the lookout's)

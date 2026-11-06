@@ -18,6 +18,7 @@ local Theme = require(UI.Theme)
 local World = require(UI.World)
 local Crowd = require(UI.Crowd)
 local Hud = require(UI.Hud)
+local GamePanel = require(UI.GamePanel)
 local Figures = require(UI.SimpleFigures)
 local Rigs = require(UI.RigFigures)
 local Cam = require(UI.Camera)
@@ -110,6 +111,34 @@ Hud.build({
 		Hud.toast("Behind your counter at " .. tostring(name) .. " (WASD to walk away)", Theme.BAD)
 	end,
 })
+-- the game's panels: Blue's loadout strip and escapes, Red's attack shop
+local lastGame = hello.game
+GamePanel.build({ send = send, gui = Hud.gui(), config = hello.config.game })
+GamePanel.onHint = function(text: string)
+	Hud.toast(text, Theme.WARN)
+end
+local function onGame(g)
+	if not g then
+		return
+	end
+	lastGame = g
+	if g.crew then
+		GamePanel.setRoles(g.crew)
+		Hud.setCrew(g.crew)
+	end
+	if g.roundOn ~= Hud.isGameMode() then
+		Hud.gameMode(g.roundOn == true)
+	end
+	GamePanel.update(g)
+end
+onGame(hello.game)
+local OUTCOME_TEXT = {
+	rejected = "rejected at listing",
+	blocked = "blocked by a person",
+	inspected = "shut down by an inspector",
+	refunded = "refunded at delivery",
+	paid = "paid out",
+}
 Cam.onModeChange = function(m)
 	Hud.setCameraMode(m)
 end
@@ -177,8 +206,8 @@ local function onEvent(e, now: number)
 				Hud.toast("You allowed " .. c.stall .. ": it was " .. what, Theme.BAD)
 			end
 		end
-		-- red: news of your own stall
-		if Hud.team() == "red" and myStalls[e.seller] then
+		-- red: news of your own stall (in the game, only the coarse outcome: below)
+		if Hud.team() == "red" and myStalls[e.seller] and not Hud.isGameMode() then
 			if e.verdict == "block" then
 				Hud.toast((e.stall or "Your stall") .. ": BLOCKED by " .. (e.by == "monitor" and "the monitor" or "a watcher"), Theme.BAD)
 			elseif e.verdict == "allow" or e.verdict == "expired" then
@@ -197,9 +226,25 @@ local function onEvent(e, now: number)
 			if e.owner == me then
 				Hud.toast(string.format("+%s: %s %s", Theme.money(e.price or 0), name, e.counterfeit and ("sold a print of " .. tostring(good)) or "took a buyer's money"), Theme.GOLD)
 			elseif Hud.team() == "blue" and (e.first ~= false) then
-				Hud.toast("Escaped: " .. name .. (e.counterfeit and (" sold a picture of " .. tostring(good)) or " took a buyer's money"), Theme.BAD)
+				-- escapes come with their type
+				Hud.toast("Escaped: " .. (e.text or (name .. (e.counterfeit and (" sold a picture of " .. tostring(good)) or " took a buyer's money"))), Theme.BAD)
 			end
 		end
+	elseif k == "refund" then
+		-- escrow: the money goes back (Blue sees the catch in its list, the
+		-- owner gets the outcome); nothing flies
+		_ = e
+	elseif k == "outcome" then
+		if e.owner == me then
+			local paid = e.outcome == "paid"
+			Hud.toast(string.format("%s (%s): %s%s", tostring(e.stall), tostring(e.kind), OUTCOME_TEXT[e.outcome] or e.outcome, (e.stolen or 0) > 0 and (" · took " .. Theme.money(e.stolen)) or ""), paid and Theme.GOLD or Theme.BAD)
+		end
+	elseif k == "attackFailed" then
+		if e.by == me then
+			Hud.toast("Can't open that: " .. tostring(e.why), Theme.WARN)
+		end
+	elseif k == "loadout" and Hud.team() == "blue" and e.check then
+		Hud.toast(string.format("Loadout: %s %s · friction %d", tostring(e.check), e.on and "ON" or "off", e.friction or 0), Theme.BLUE)
 	elseif k == "prices" then
 		prices = e.p
 	elseif k == "manualFraud" then
@@ -208,7 +253,13 @@ local function onEvent(e, now: number)
 			return
 		end
 		myStalls[e.seller] = true
-		if e.kind == "impostor" and e.signatures then
+		if Hud.isGameMode() then
+			-- in the game Red learns the outcome, not the reason
+			if e.slot and e.state ~= "rejected" then
+				Cam.mind(e.slot, e.stall)
+			end
+			Hud.toast(string.format("Opened %s '%s'%s%s: rent %s/min", tostring(e.kind), tostring(e.stall), e.vouch and " +vouch" or "", e.stolenId and " +stolen ID" or "", Theme.money(100)), Theme.BAD)
+		elseif e.kind == "impostor" and e.signatures then
 			Hud.toast("Blocked at the gate! Signature check rejected impostor '" .. tostring(e.stall) .. "' (turn signatures OFF to let twins in)", Theme.OK)
 		elseif e.slot then
 			-- you stand behind its counter; the camera goes there
@@ -249,6 +300,9 @@ Batch.OnClientEvent:Connect(function(b)
 	end
 	if b.m then
 		lastMeter = b.m
+	end
+	if b.g then
+		onGame(b.g)
 	end
 	if b.s then
 		lastState = b.s
@@ -458,7 +512,8 @@ RunService.RenderStepped:Connect(function(dt)
 			Hud.caption(lastState.caption, lastState.beat, lastState.beats)
 			Hud.status(lastState)
 			Hud.round(lastState)
-			Hud.red(lastState, lastMeter, Cam.minding())
+			Hud.red(lastState, lastMeter, Cam.minding(), lastGame)
+			GamePanel.placeEscapes(Hud.controlsBottom(), Hud.meterTop())
 		end
 		if prices then
 			Hud.prices(prices)

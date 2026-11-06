@@ -1614,11 +1614,11 @@ end
 -- loadout's checks: allowed unless one escalates; with no listing check in
 -- the loadout, the old rule monitor's place is taken by its preset, price
 -- floor + voucher, at once), "external" (an outside monitor).
-function MarketSim:setMonitor(mode: string, name: string?)
+function MarketSim:setMonitor(mode: string, name: string?, keepLoadout: boolean?)
 	assert(mode == "off" or mode == "rules" or mode == "external", "monitor: off | rules | external")
 	self.monitor = mode
 	self.monitorName = name or (mode == "external" and "external" or "rules")
-	if mode == "rules" and not (self.loadout.priceFloor or self.loadout.voucher or self.loadout.pitchReader) then
+	if mode == "rules" and not keepLoadout and not (self.loadout.priceFloor or self.loadout.voucher or self.loadout.pitchReader) then
 		for _, id in self.cfg.PRESET_RULES or {} do
 			self.pendingLoadout[id] = nil
 			self:setCheck(id, true, true)
