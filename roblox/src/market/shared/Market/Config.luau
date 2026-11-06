@@ -233,7 +233,7 @@ Config.BOT = {
 	explore = 0.2,
 	decay = 0.85,
 	prior = { 1, 1 }, -- successes, failures before any evidence
-	maxLive = 6,
+	maxLive = 10,
 	perMin = 3,
 }
 
@@ -243,8 +243,8 @@ Config.BOT = {
 -- Blue's take of honest trade is a market fee, so that a theft weighs about
 -- as much as the trade a check slows down. Friction cost = friction units x
 -- this many cents per trader per minute, plus the pitch reader's compute.
-Config.SCORE_TRADE_SHARE = 0.05
-Config.FRICTION_COST_PER_TRADER_MIN = 1
+Config.SCORE_TRADE_SHARE = 0.02
+Config.FRICTION_COST_PER_TRADER_MIN = 0.25
 
 -- The timed round ("Start 5:00 round"). A phase table, so it can be retuned
 -- without code: each phase has a start time (seconds into the round), a name,
@@ -279,27 +279,27 @@ Config.ROUND_PHASES = {
 		at = 60,
 		name = "Rush",
 		banner = "300 traders. You can't judge every case: set the loadout.",
-		set = { n = 300, unlock = { "impostor" }, botRate = 4 },
+		set = { n = 300, unlock = { "impostor" }, botRate = 6 },
 		prompt = { team = "blue", ask = "monitor", when = "overBudget", factor = 2, text = "Inbox at 2× budget: stop judging every case. Turn on checks." },
 	},
 	{
 		at = 120,
 		name = "Lever",
 		banner = "The council votes on ID checks. Counterfeits and bought vouches.",
-		set = { unlock = { "counterfeit", "vouch" }, botRate = 5 },
+		set = { unlock = { "counterfeit", "vouch" }, botRate = 8 },
 		prompt = { team = "blue", ask = "vote", text = "Council vote: keep ID checks? (friction 2: slower trade, no impostors)" },
 	},
 	{
 		at = 180,
 		name = "Talkers",
 		banner = "LLM shoppers arrive, and smooth talkers follow.",
-		set = { unlock = { "talker", "stolenId" }, llmShoppers = true, botRate = 6 },
+		set = { unlock = { "talker", "stolenId" }, llmShoppers = true, botRate = 10 },
 	},
 	{
 		at = 240,
 		name = "Crew",
 		banner = "A second watcher joins: lookout, trim, skipper.",
-		set = { watchers = 2, unlock = "all", botRate = 6 },
+		set = { watchers = 2, unlock = "all", botRate = 10 },
 	},
 	{
 		at = 300,
