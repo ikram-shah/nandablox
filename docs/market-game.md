@@ -136,6 +136,33 @@ unlocks an attack.
 | 4:00 | Crew | a second watcher joins | everything |
 | 5:00 | Scoreboard | | |
 
+## Why a human, and why a crew
+
+The round should feel like: at 0:00 you click cases; by 2:00 you can't keep
+up and the game pushes you off the inbox onto the loadout; by 4:00 you're a
+crew with roles. The inbox should matter less and less. That arc, from
+clicking cases to setting policy to working as a crew, is the slides' claim
+as the player feels it.
+
+| Slide claim | Moment in the game |
+|---|---|
+| L1, biking: one person, one agent | 5 traders: you see and decide every case |
+| L2, paragliding: read conditions, occasional inputs | 300 traders: you stop deciding cases and set the loadout, reading escapes and trade speed |
+| "Why not agents watching agents?" | the checks *are* agents watching agents: they cut the load but catch only what they were built for |
+| Someone has to set the values | friction: how much trade to give up for safety has no right answer |
+| L3, crewed sailing: many people, different roles | lookout (inbox, escapes), trim (loadout, friction), skipper (council rules); Red is the weather |
+
+**The human's job isn't judging cases forever. It's closing the loop on
+novelty, and choosing the tradeoff.** A rule covers yesterday's attack; Red
+adapts, and a new kind of fraud escapes that no check was built for. So each
+round needs a moment where a new attack passes the whole loadout and only a
+person reading the escapes notices. The 3:00 talkers phase is that moment:
+"talked into buying a print" escapes appear, and Blue decides whether the
+pitch reader's cost is worth it.
+
+Two people clicking one inbox is a bigger watchtower, not a crew. L3 needs
+roles.
+
 ## Mapping to the paper
 
 - **L1 / L2 / L3:** one watcher; a monitor hierarchy; a crew.
