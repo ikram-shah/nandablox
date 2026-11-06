@@ -230,9 +230,10 @@ local function buildEscapes()
 	blue.escList = new("Frame", { Size = UDim2.new(1, 0, 1, -22), Position = UDim2.new(0, 0, 0, 22), BackgroundTransparency = 1, ClipsDescendants = true, Parent = f })
 	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = blue.escList })
 	blue.escRows = {}
-	for i = 1, 8 do
-		blue.escRows[i] = label({ Text = "", RichText = true, TextSize = 13, Size = UDim2.new(1, 0, 0, 17), TextTruncate = Enum.TextTruncate.AtEnd, LayoutOrder = i, Visible = false, Parent = blue.escList })
+	for i = 1, 7 do
+		blue.escRows[i] = label({ Text = "", RichText = true, TextSize = 13, TextWrapped = true, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = i, Visible = false, Parent = blue.escList })
 	end
+	blue.escNone = label({ Text = "nothing yet", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 17), LayoutOrder = 0, Parent = blue.escList })
 	blue.escPanel = f
 end
 
@@ -258,6 +259,7 @@ local function updateEscapes(g)
 		row.Visible = it ~= nil
 		row.Text = it and it.text or ""
 	end
+	blue.escNone.Visible = #items == 0
 end
 
 ------------------------------------------------------------------ Red: the attack shop
@@ -537,7 +539,8 @@ function GamePanel.placeEscapes(controlsBottom: number, meterTop: number)
 		return
 	end
 	local top = controlsBottom + 10
-	local h = math.max(80, meterTop - 10 - top)
+	-- as tall as seven wrapped lines, no taller than the room above the meter
+	local h = math.clamp(meterTop - 10 - top, 80, 250)
 	blue.escPanel.Position = UDim2.new(0, 16, 0, top)
 	blue.escPanel.Size = UDim2.new(0, 300, 0, h)
 end

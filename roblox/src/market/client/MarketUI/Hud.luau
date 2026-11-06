@@ -477,7 +477,7 @@ function Hud.meter(m)
 		meter.sub.Text = string.format("budget %d per watcher", budget)
 	end
 	local mon = m.monitor == "off" and "monitor off" or (m.monitor == "rules" and "rule monitor" or ("monitor: " .. tostring(m.monitorName)))
-	meter.sub2.Text = string.format("%d traders · %s · signatures %s", m.n, mon, m.signatures and "on" or "off")
+	meter.sub2.Text = string.format("%d traders · %s · ID check %s", m.n, mon, m.signatures and "on" or "off")
 	local mins = math.max(m.elapsed or 0, 1) / 60
 	meter.caught.Text = tostring(m.caught)
 	meter.escaped.Text = tostring(m.escaped)
@@ -568,6 +568,10 @@ local function buildControls(parent, sizes)
 		Parent = teamRow,
 	})
 	Theme.corner(8).Parent = teamChip
+	-- (a long crew name shrinks to fit)
+	teamChip.TextScaled = true
+	new("UITextSizeConstraint", { MaxTextSize = 15, MinTextSize = 10, Parent = teamChip })
+	Theme.pad(2, 6).Parent = teamChip
 	button({
 		Text = "switch team (T)",
 		TextSize = 13,
@@ -776,7 +780,7 @@ end
 
 -- Blue's crew roles on the team chip
 function Hud.setCrew(list: { string }?)
-	crewText = list and #list > 0 and table.concat(list, " · ") or "watcher"
+	crewText = list and #list >= 3 and "whole crew" or (list and #list > 0 and table.concat(list, "+") or "watcher")
 	if team == "blue" and teamChip then
 		teamChip.Text = "TEAM BLUE · " .. crewText
 	end
@@ -1100,8 +1104,8 @@ function Hud.round(s)
 		-- the game: both scores, live
 		rnd.score.Text = string.format(
 			"<font color=\"#5A96F0\"><b>Blue %s</b></font> · <font color=\"#E85448\"><b>Red %s</b></font>   <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · stolen %s",
-			(r.blue < 0 and "−" or "") .. Theme.money(math.abs(r.blue)),
-			(r.red < 0 and "−" or "") .. Theme.money(math.abs(r.red)),
+			GamePanel.nb(r.blue),
+			GamePanel.nb(r.red),
 			sc.caught or 0, sc.escaped or 0, Theme.money(sc.stolen or 0)
 		)
 	elseif sc then
@@ -1221,8 +1225,8 @@ function Hud.scoreboard(sb)
 		-- where the extreme Blues finished on this seed, and each Red's line
 		local gh = sb.ghosts
 		local ghostText = gh and string.format(
-			"<font color=\"#A09A96\">same seed, bot Red:</font> no checks <font color=\"#5A96F0\">%s</font> vs <font color=\"#E85448\">%s</font> · every check <font color=\"#5A96F0\">%s</font> vs <font color=\"#E85448\">%s</font>",
-			signed(gh.none.blue), signed(gh.none.red), signed(gh.all.blue), signed(gh.all.red)
+			"<font color=\"#A09A96\">same seed, bot Red (NB, Blue vs Red):</font> no checks <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font> · every check <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font>",
+			math.floor(gh.none.blue / 100 + 0.5), math.floor(gh.none.red / 100 + 0.5), math.floor(gh.all.blue / 100 + 0.5), math.floor(gh.all.red / 100 + 0.5)
 		) or "<font color=\"#A09A96\">(the extreme Blues were not run)</font>"
 		label({ Text = ghostText, RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 36), Position = UDim2.new(0, 24, 0, y), TextWrapped = true, Parent = f })
 		local lines = {}
@@ -1236,8 +1240,8 @@ function Hud.scoreboard(sb)
 	-- the numbers: two rows of four
 	local stats = {
 		{ "honest deals", tostring(sb.honestDeals or 0), Theme.WHITE },
-		{ "honest value", Theme.money(sb.honestValue or 0), Theme.OK },
-		{ "stolen", Theme.money(sb.stolen or 0), Theme.BAD },
+		{ "honest value", game_ and GamePanel.nb(sb.honestValue) or Theme.money(sb.honestValue or 0), Theme.OK },
+		{ "stolen", game_ and GamePanel.nb(sb.stolen) or Theme.money(sb.stolen or 0), Theme.BAD },
 		{ "peak calls/min", string.format("%.0f", sb.peak or 0), (sb.peak or 0) > (sb.budget or 12) and Theme.WARN or Theme.OK },
 		{ "caught", tostring(sb.caught or 0), Theme.OK },
 		{ "escaped", tostring(sb.escaped or 0), Theme.BAD },
