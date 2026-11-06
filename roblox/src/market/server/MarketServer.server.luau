@@ -17,6 +17,7 @@ local MarketSim = require(Market.MarketSim)
 local Gateway = require(Market.Gateway)
 local Round = require(Market.Round)
 local Layout = require(Market.Layout)
+local Score = require(Market.Score)
 
 local TICK = 0.25 -- seconds of simulated (and real) time per step
 local METER_EVERY = 0.5
@@ -131,6 +132,7 @@ local room = {
 	auto = {} :: { [string]: boolean },
 	paused = false,
 	crew = false,
+	botRate = Config.BOT.perMin,
 }
 
 -- the timed round (Config.ROUND_PHASES) and the last scoreboard it produced
@@ -203,12 +205,12 @@ local function majorityLever()
 			off += 1
 		end
 	end
-	if on > off and not sim.signatures then
-		sim:setSignatures(true)
-		sim:mark("signatures on")
-	elseif off > on and sim.signatures then
-		sim:setSignatures(false)
-		sim:mark("signatures off")
+	-- the council's vote and the loadout's ID check toggle are one flag; like
+	-- any loadout change it lands LOADOUT_DELAY_S later
+	if on > off then
+		sim:requestCheck("idCheck", true)
+	elseif off > on then
+		sim:requestCheck("idCheck", false)
 	end
 end
 
@@ -322,9 +324,36 @@ local function syncWatchers()
 	end
 end
 
+-- The bot Red plays during a round when no human plays Red.
+local function humanRed(): boolean
+	for _, p in Players:GetPlayers() do
+		if playerRole[p] == "red" then
+			return true
+		end
+	end
+	return false
+end
+
+local function syncBot()
+	if round.active and not humanRed() then
+		sim:setRedBot(true, room.botRate)
+	else
+		sim:setRedBot(false)
+	end
+end
+
+-- after a round: the market as it was (scripted fraud agents, every attack open)
+local function afterRound()
+	sim:setRedBot(false)
+	sim:setUnlocked(nil)
+	sim:setLlmShoppers(false)
+	sim.fraudsPaused = false
+end
+
 local function stopRound(why: string?)
 	if round.active then
 		round:stop()
+		afterRound()
 		sim:mark(why or "round stopped")
 	end
 end
@@ -401,6 +430,10 @@ local function applyPhase(ph)
 			room.crew = k >= 2
 			syncWatchers()
 		end,
+		botRate = function(rate: number)
+			room.botRate = rate
+			syncBot()
+		end,
 	})
 	if ph.prompt and ph.prompt.ask == "vote" then
 		room.votes = {} -- a fresh council vote
@@ -416,8 +449,15 @@ local function startRound()
 	setOutsideAgent(false)
 	sim.fraudsPaused = false
 	sim:setCounterfeitShare(0)
+	-- a fresh ledger for every Red player, and a bot Red that knows nothing yet
+	sim.red = {}
+	sim.stolenBy = {}
+	sim.bot = nil
+	for _, p in Players:GetPlayers() do
+		playerStalls[p] = nil
+	end
 	round:start(sim.now, sim:getTotals())
-	for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers) do
+	for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
 		applyPhase(ph.phase)
 	end
 	sim:mark("round")
@@ -433,14 +473,31 @@ end
 -- what a red player's stall is doing, in a few words
 local function stallStatus(s): string
 	local st = s.state
+	-- Red sees one coarse outcome, never which check (docs/market-game.md)
+	if s.outcome == "rejected" then
+		return "rejected at listing"
+	elseif s.outcome == "blocked" then
+		return "blocked by a person"
+	elseif s.outcome == "inspected" then
+		return "shut down by an inspector"
+	elseif s.outcome == "refunded" then
+		return "refunded at delivery"
+	end
 	if st == "rejected" then
-		return "rejected at the gate (signature check)"
+		return "rejected at listing"
 	elseif st == "blocked" then
-		return "BLOCKED by " .. (s.blockedBy == "monitor" and "the monitor" or "a watcher")
+		return "blocked"
 	elseif st == "shuttered" then
 		return string.format("took %s · closed", fmtMoney(s.stolen or 0))
 	elseif st == "gone" then
 		return (s.stolen or 0) > 0 and string.format("took %s · gone", fmtMoney(s.stolen)) or "packed up"
+	end
+	if round.active then
+		-- in the game Red learns nothing about Blue's checks until the outcome
+		if st == "open" and (s.stolen or 0) > 0 then
+			return string.format("open · took %s so far", fmtMoney(s.stolen))
+		end
+		return st == "setup" and "opening" or (st == "open" and "open · trading" or st)
 	end
 	local c = s.case and sim.cases[s.case]
 	local by = s.allowedBy == "monitor" and "allowed by the monitor"
@@ -560,12 +617,12 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 	elseif op == "auto" and type(msg.on) == "boolean" then
 		room.auto[id] = msg.on
 		sim:setAuto(id, msg.on)
-	elseif op == "fraud" and (msg.kind == "scam" or msg.kind == "impostor" or msg.kind == "counterfeit") then
-		local opts: any = { owner = id }
+	elseif (op == "fraud" or op == "attack") and type(msg.kind) == "string" then
+		-- Red opens an attack (a stall it pays rent on), with what it bought for
+		-- it; in a round only what the phase has unlocked
+		local opts: any = { vouch = msg.vouch == true, stolenId = msg.stolenId == true }
 		if msg.kind == "scam" and type(msg.price) == "number" then
 			opts.price = math.clamp(msg.price, 0.2, 1)
-		elseif msg.kind == "scam" and sim.monitor == "rules" then
-			opts.price = 0.58
 		end
 		if type(msg.good) == "string" and sim.goods[msg.good] then
 			opts.good = msg.good
@@ -573,7 +630,10 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		if type(msg.victim) == "string" then
 			opts.victim = msg.victim
 		end
-		local s = sim:injectFraud(msg.kind, opts)
+		local s, why = sim:redAttack(id, msg.kind, opts)
+		if not s then
+			sim:emit({ k = "attackFailed", by = id, kind = msg.kind, why = why })
+		end
 		if s then
 			local list = playerStalls[player] or {}
 			table.insert(list, s.id)
@@ -591,7 +651,25 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 				state = s.state,
 				signatures = sim.signatures,
 				by = id,
+				vouch = opts.vouch or nil,
+				stolenId = opts.stolenId or nil,
 			})
+		end
+	elseif op == "check" and type(msg.id) == "string" and type(msg.on) == "boolean" then
+		-- Blue changes its loadout: it lands LOADOUT_DELAY_S later
+		if playerRole[player] ~= "red" then
+			sim:requestCheck(msg.id, msg.on)
+		end
+	elseif op == "sign" and type(msg.id) == "string" and type(msg.on) == "boolean" then
+		-- Blue posts (or takes down) a sign at the gate: free, true or not
+		if playerRole[player] ~= "red" then
+			sim:setSign(msg.id, msg.on)
+		end
+	elseif op == "preset" and msg.name == "rules" then
+		if playerRole[player] ~= "red" then
+			for _, cid in Config.PRESET_RULES do
+				sim:requestCheck(cid, true)
+			end
 		end
 	elseif op == "beat" and type(msg.i) == "number" then
 		applyBeat(math.floor(msg.i))
@@ -601,6 +679,7 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		playerRole[player] = msg.role
 		playerChosen[player] = true
 		syncWatchers()
+		syncBot()
 	elseif op == "second" and type(msg.on) == "boolean" then
 		room.crew = msg.on
 		syncWatchers()
@@ -706,6 +785,83 @@ local function state()
 	}
 end
 
+------------------------------------------------------------------ the game, per team
+
+-- What one player's panels need (docs/market-game.md, "What each side
+-- sees"). Everyone: trade speed, Blue's signs, what Red has unlocked, both
+-- scores. Blue: its loadout, changes on their way, friction, compute, the
+-- escapes with their type and the catches. Red: its own ledger and its
+-- frauds' coarse outcomes. Neither sees the other's choices.
+local function lastN(list, n: number)
+	local out = {}
+	for i = math.max(1, #list - n + 1), #list do
+		table.insert(out, list[i])
+	end
+	return out
+end
+
+local function gameFor(p: Player)
+	local g = sim:gameState()
+	local role = playerRole[p] or "blue"
+	local out: any = {
+		role = role,
+		health = g.health,
+		dealsPerMin = g.dealsPerMin,
+		baseline = g.baseline,
+		signs = g.signs,
+		unlocked = g.unlocked,
+		llmShoppers = g.llmShoppers,
+		roundOn = round.active,
+	}
+	if role == "red" then
+		local l = sim.red[watcherId(p)]
+		out.red = {
+			score = Score.ledger(l),
+			stalls = l and l.stalls or 0,
+			outcomes = l and l.outcomes or nil,
+			log = l and lastN(l.log, 12) or {},
+		}
+	else
+		out.loadout = g.loadout
+		out.pending = g.pending
+		out.friction = g.friction
+		out.band = g.band
+		out.compute = g.compute
+		out.monitor = g.monitor
+		out.escapes = lastN(sim.escapeLog, 10)
+		out.catches = lastN(sim.catchLog, 10)
+		out.bot = g.bot
+	end
+	return out
+end
+
+-- the static menus (sent once)
+local function gameConfig()
+	local checks = {}
+	for _, c in Config.CHECKS do
+		table.insert(checks, { id = c.id, label = c.label, short = c.short, friction = c.friction, when = c.when, act = c.act, what = c.what, compute = c.compute })
+	end
+	local attacks = {}
+	for _, a in Config.ATTACKS do
+		table.insert(attacks, { id = a.id, label = a.label, cost = a.cost, costLabel = a.costLabel, what = a.what })
+	end
+	local mods = {}
+	for _, m in Config.MODS do
+		table.insert(mods, { id = m.id, label = m.label, cost = m.cost, what = m.what })
+	end
+	return {
+		checks = checks,
+		attacks = attacks,
+		mods = mods,
+		outcomes = Config.OUTCOMES,
+		rent = Config.RENT_PER_MIN,
+		stallLoss = Config.STALL_LOSS,
+		delay = Config.LOADOUT_DELAY_S,
+		healthy = Config.FRICTION_HEALTHY,
+		seized = Config.FRICTION_SEIZED,
+	}
+end
+
 hello.OnServerInvoke = function(player: Player)
 	return {
 		you = watcherId(player),
@@ -720,7 +876,8 @@ hello.OnServerInvoke = function(player: Player)
 		end)(),
 		meter = sim:meter(),
 		state = state(),
-		config = { budget = Config.BUDGET, sizes = Config.SIZES },
+		config = { budget = Config.BUDGET, sizes = Config.SIZES, game = gameConfig() },
+		game = gameFor(player),
 		score = lastScore,
 	}
 end
@@ -738,6 +895,7 @@ Players.PlayerRemoving:Connect(function(p)
 	playerPose[p] = nil
 	playerStalls[p] = nil
 	syncWatchers()
+	syncBot()
 end)
 
 ------------------------------------------------------------------ the loop
@@ -758,10 +916,11 @@ RunService.Heartbeat:Connect(function(dt)
 	sim:step(TICK)
 	local scoreNow = nil
 	if round.active then
-		for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers) do
+		for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
 			applyPhase(ph.phase)
 		end
 		if round.done and round.score then
+			afterRound()
 			scoreSeq += 1
 			lastScore = round.score
 			lastScore.seq = scoreSeq
@@ -789,8 +948,15 @@ RunService.Heartbeat:Connect(function(dt)
 		meterAt = sim.now + METER_EVERY
 		out.m = sim:meter()
 		out.s = state()
+		-- each player's own team view rides on the state ticks
+		for _, p in Players:GetPlayers() do
+			local o = table.clone(out)
+			o.g = gameFor(p)
+			batchEv:FireClient(p, o)
+		end
+	else
+		batchEv:FireAllClients(out)
 	end
-	batchEv:FireAllClients(out)
 end)
 
 print(string.format("[market] server up: seed %d, %d traders, gateway %s", seed, sim.n, gateway.enabled and "on" or "off"))
