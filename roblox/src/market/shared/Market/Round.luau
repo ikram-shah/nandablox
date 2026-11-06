@@ -10,6 +10,11 @@
 --   r:prompt(sim.monitor)          -- the prompt to show now, if any
 --   r:scoreboard()                 -- once r.done
 --
+-- With the game (docs/market-game.md), pass `sim:gameState()` as update's
+-- fourth argument: each sample then also records Blue's loadout, friction,
+-- trade health, stolen and caught so far, and both scores, and the
+-- scoreboard replays them.
+--
 -- Calls per minute are judgment calls asked of the watchers (the meter's
 -- needle), measured here from the running total over a trailing window, so a
 -- change of setting (which restarts the meter) does not restart the chart.
@@ -21,6 +26,7 @@ local function sibling(name: string): any
 	return (require :: any)("./" .. name)
 end
 local DefaultConfig = sibling("Config")
+local Score = sibling("Score")
 
 local Round = {}
 Round.__index = Round
@@ -125,7 +131,7 @@ end
 -- Advance to `now`. Returns the phases entered on this call (in order), each
 -- { index, phase }; the caller applies phase.set. `watchers` = how many
 -- watchers share the inbox (for the per-watcher rate).
-function Round:update(now: number, totals, watchers: number?)
+function Round:update(now: number, totals, watchers: number?, game: any?)
 	local entered = {}
 	if not self.active then
 		return entered
@@ -138,7 +144,19 @@ function Round:update(now: number, totals, watchers: number?)
 		local st = self.nextSample
 		local rate = rateAt(self, math.max(st, 0), totals.asked)
 		local per = rate / math.max(1, watchers or 1)
-		table.insert(self.samples, { t = st, asked = totals.asked, rate = rate, perWatcher = per })
+		local sample: any = { t = st, asked = totals.asked, rate = rate, perWatcher = per }
+		if game then
+			local d = self:diff(totals)
+			sample.loadout = table.clone(game.loadout or {})
+			sample.friction = game.friction
+			sample.health = game.health
+			sample.stolen = math.floor((d.stolen or 0) + 0.5)
+			sample.caught = d.caught or 0
+			sample.escaped = d.escaped or 0
+			sample.blue = Score.blue(d, self.cfg).score
+			sample.red = Score.red(d).score
+		end
+		table.insert(self.samples, sample)
 		self.peak = math.max(self.peak, rate)
 		self.peakPerWatcher = math.max(self.peakPerWatcher, per)
 		self.nextSample += every
@@ -209,19 +227,47 @@ function Round:answer(id: number)
 	self.answered[id] = true
 end
 
+-- totals since the round began
+function Round:diff(totals)
+	local b = self.base or {}
+	local out = {}
+	for k, v in totals do
+		if type(v) == "number" then
+			out[k] = v - (b[k] or 0)
+		end
+	end
+	return out
+end
+
 -- What the round did: totals since its start, plus the chart.
 function Round:scoreboard()
 	local b, l = self.base or {}, self.last or {}
 	local function d(k: string): number
 		return (l[k] or 0) - (b[k] or 0)
 	end
+	local diff = self:diff(l)
 	local marks = {}
 	for _, p in self.phases do
 		table.insert(marks, { at = p.at, name = p.name })
 	end
 	local chart = {}
+	-- the game's series: Blue's loadout over time against trade and fraud
+	local series = {}
 	for _, s in self.samples do
 		table.insert(chart, { t = s.t, r = math.floor(s.rate * 10 + 0.5) / 10 })
+		if s.friction then
+			table.insert(series, {
+				t = s.t,
+				lo = s.loadout,
+				f = s.friction,
+				h = s.health,
+				st = s.stolen,
+				c = s.caught,
+				e = s.escaped,
+				b = s.blue,
+				r = s.red,
+			})
+		end
 	end
 	return {
 		length = self.length,
@@ -240,6 +286,12 @@ function Round:scoreboard()
 		budget = self.cfg.BUDGET,
 		chart = chart,
 		marks = marks,
+		series = series,
+		blue = Score.blue(diff, self.cfg),
+		red = Score.red(diff),
+		refunded = d("refunded"),
+		inspected = d("inspected"),
+		rejected = d("rejected"),
 	}
 end
 
@@ -273,6 +325,29 @@ function Round.apply(sim, set, hooks)
 	end
 	if set.keyword ~= nil then
 		sim:setRuleKeyword(set.keyword)
+	end
+	-- the game's settings
+	if set.resetLoadout then
+		sim:setLoadout(sim.signatures and { "idCheck" } or {})
+	end
+	if set.scripted ~= nil then
+		sim.fraudsPaused = not set.scripted
+	end
+	if set.resetUnlocks then
+		sim:setUnlocked({})
+	end
+	if set.unlock ~= nil then
+		sim:unlock(set.unlock)
+	end
+	if set.botRate ~= nil then
+		if hooks.botRate then
+			hooks.botRate(set.botRate)
+		else
+			sim:setRedBot(true, set.botRate)
+		end
+	end
+	if set.llmShoppers ~= nil then
+		sim:setLlmShoppers(set.llmShoppers)
 	end
 	if set.watchers then
 		if hooks.watchers then
@@ -308,6 +383,9 @@ function Round:public(now: number, monitor: string?)
 		perWatcher = math.floor(per * 10 + 0.5) / 10,
 		prompts = self:prompt(monitor),
 		marks = marks,
+		-- both scores so far (since the round began)
+		blue = (self.active or self.done) and Score.blue(self:diff(self.last or {}), self.cfg).score or nil,
+		red = (self.active or self.done) and Score.red(self:diff(self.last or {})).score or nil,
 	}
 end
 
