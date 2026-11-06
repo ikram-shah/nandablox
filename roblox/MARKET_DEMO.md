@@ -133,6 +133,46 @@ crossed 1:42–2:02 into the round, i.e. 42–62 s into Rush; with the meter's 6
 window it would be 2:16–2:38. A beat (N/B) stops a running round; all panel
 controls keep working during one.
 
+## The game: loadout, attacks, Nandabux (added 2026-11-05 night, not in version 16)
+
+The rules are `docs/market-game.md` (main branch). In a round the table
+above is replaced by the doc's: **0:00 Calm** (5 traders, you judge every
+case, scams only) · **1:00 Rush** (300 traders, impostors; prompt "Inbox at
+2× budget… Turn on checks") · **2:00 Lever** (council vote on the ID check;
+counterfeits, bought vouches) · **3:00 Talkers** (LLM shoppers, smooth
+talkers, stolen IDs) · **4:00 Crew** (second watcher) · **5:00 Scoreboard**.
+The traders buttons are locked while a round runs.
+
+- **Blue, bottom centre: the LOADOUT strip.** Six checks (price floor +0,
+  voucher +1, ID check +2, pitch reader +1 and compute, inspector +3,
+  escrow +4); a press lands **30 s later** (the tile counts down). Friction
+  gauge: 0–6 healthy, 7–9 slow (honest sellers leave), 10+ seized. Trade
+  health = deals/min against the zero-friction baseline. Signs (free, may
+  bluff), and "inbox: EVERY listing / checks escalate". Left: **ESCAPES &
+  CATCHES** by type ("counterfeit delivered to buyer 41").
+- **Crew roles:** one Blue is the whole crew; two split lookout + skipper /
+  trim; three take one each. Only the trim can press the loadout and signs;
+  the council prompt goes to the skipper.
+- **Red, bottom centre: the ATTACK SHOP.** Scam, impostor, counterfeit,
+  smooth talker (locked until their phase), plus "add to next": bought vouch,
+  stolen ID. Purse 150 NB; each stall a 10 NB deposit + 1 NB/min rent.
+  Right panel: your frauds' coarse outcomes only (rejected at listing /
+  blocked by a person / shut down by an inspector / refunded at delivery /
+  paid out). Blue's signs and the trade speed are all Red sees of Blue.
+- **No human Red?** The bot Red plays: success rate per attack, mostly the
+  best, sometimes another; it sits out when nothing works.
+- **Money (NB):** Blue = 2% fees − 1.5× refunds + fines (caught deposits) −
+  check costs (inspector 15/min, escrow 50/min, reader 0.15 per read). Red =
+  loot − rent − purchases − forfeited deposits. Bigger profit wins.
+  Headless balance (seeds 1–7): no checks loses, every check loses, floor +
+  voucher + inspector wins (`tests/market/balance.luau` prints the table).
+- **Scoreboard:** winner, both profits, each Red's line (humans apart from
+  the bot), where the no-checks and every-check Blues finished on the same
+  seed (two headless "ghost" rounds run during the round), and Blue's
+  loadout lanes against trade health, friction, stolen and caught. The round
+  bar and meter freeze at the scoreboard's numbers until the next round or a
+  free-play setting.
+
 ## If something goes wrong
 
 | beat | what can fail | fallback |

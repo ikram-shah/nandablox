@@ -144,7 +144,7 @@ local function buildLoadout()
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 5), Parent = srow })
 	blue.signs = {}
 	for _, c in cfg.checks do
-		local b = button({ Text = "🪧 " .. (c.short or c.id), TextSize = 13, Size = UDim2.new(1 / 6, -5, 1, 0), BackgroundColor3 = Theme.PANEL2, Parent = srow }, function()
+		local b = button({ Text = (c.short or c.id), TextSize = 13, Size = UDim2.new(1 / 6, -5, 1, 0), BackgroundColor3 = Theme.PANEL2, Parent = srow }, function()
 			if not roles.trim then
 				GamePanel.hint("The trim posts signs")
 				return
@@ -210,7 +210,7 @@ local function updateLoadout(g)
 	local trim = roles.trim and "" or "  <font color=\"#F0B43C\">(the trim's call)</font>"
 	blue.foot.Text = string.format("changes land %d s later · compute %s%s", cfg.delay or 30, money(g.compute), trim)
 	local all = g.monitor == "off"
-	blue.monBtn.Text = all and "inbox: EVERY listing ▸ switch" or (g.monitor == "external" and "inbox: your monitor ▸ switch" or "inbox: checks escalate ▸ switch")
+	blue.monBtn.Text = all and "inbox: EVERY listing · switch" or (g.monitor == "external" and "inbox: your monitor · switch" or "inbox: checks escalate · switch")
 	blue.monBtn.TextColor3 = all and Theme.WARN or Theme.OK
 end
 
@@ -226,7 +226,7 @@ local function buildEscapes()
 		Parent = gui,
 	})
 	Theme.pad(10, 12).Parent = f
-	label({ Text = "ESCAPES  <font size=\"12\" color=\"#A09A96\">what got through, by type</font>", RichText = true, Font = Theme.HEAVY, TextSize = 15, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 18), Parent = f })
+	label({ Text = "ESCAPES <font size=\"12\" color=\"#A09A96\">by type</font> <font color=\"#56C478\">&amp; CATCHES</font>", RichText = true, Font = Theme.HEAVY, TextSize = 15, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 18), Parent = f })
 	blue.escList = new("Frame", { Size = UDim2.new(1, 0, 1, -22), Position = UDim2.new(0, 0, 0, 22), BackgroundTransparency = 1, ClipsDescendants = true, Parent = f })
 	new("UIListLayout", { Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder, Parent = blue.escList })
 	blue.escRows = {}
@@ -249,7 +249,9 @@ local function updateEscapes(g)
 		table.insert(items, { t = e.t, text = string.format("<font color=\"#E85448\">✕</font> %s <font color=\"#A09A96\">%s</font>", e.text, money(e.value)) })
 	end
 	for _, c in g.catches or {} do
-		table.insert(items, { t = c.t, text = string.format("<font color=\"#56C478\">✓</font> %s caught a %s <font color=\"#A09A96\">(%s)</font>", CATCH_BY[c.by] or c.by, KIND_TEXT[c.kind] or c.kind, c.stall or "") })
+		local kind = KIND_TEXT[c.kind] or c.kind
+		local an = string.match(kind, "^[aeiou]") and "an" or "a"
+		table.insert(items, { t = c.t, text = string.format("<font color=\"#56C478\">✓</font> %s caught %s %s <font color=\"#A09A96\">(%s)</font>", CATCH_BY[c.by] or c.by, an, kind, c.stall or "") })
 	end
 	table.sort(items, function(a, b)
 		return a.t > b.t
@@ -361,7 +363,7 @@ local function updateShop(g)
 		local c = checkInfo(id)
 		table.insert(names, c and c.label or id)
 	end
-	red.signs.Text = #names > 0 and ("<font color=\"#A09A96\">BLUE'S SIGNS:</font> 🪧 " .. table.concat(names, " · 🪧 ")) or "<font color=\"#A09A96\">BLUE'S SIGNS: none posted</font>"
+	red.signs.Text = #names > 0 and ("<font color=\"#A09A96\">BLUE'S SIGNS:</font> " .. table.concat(names, " · ")) or "<font color=\"#A09A96\">BLUE'S SIGNS: none posted</font>"
 	red.foot.Text = "You see each fraud's outcome, never which check caught it. A slow market means a heavy loadout."
 end
 
@@ -538,7 +540,7 @@ function GamePanel.placeEscapes(controlsBottom: number, meterTop: number)
 	if not blue.escPanel then
 		return
 	end
-	local top = controlsBottom + 10
+	local top = controlsBottom + 16
 	-- as tall as seven wrapped lines, no taller than the room above the meter
 	local h = math.clamp(meterTop - 10 - top, 80, 250)
 	blue.escPanel.Position = UDim2.new(0, 16, 0, top)

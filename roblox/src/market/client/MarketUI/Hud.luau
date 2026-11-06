@@ -957,7 +957,7 @@ function Hud.red(s, m, minding: number?, g: any?)
 	red.stolenSub.Text = live > 0 and string.format("%d stall%s open", live, live == 1 and "" or "s") or "open a stall to start"
 	local sc = gameOn and g and GamePanel.redScore(g)
 	if sc then
-		red.stolenSub.Text = string.format("score %s%s\ncosts %s", sc.score < 0 and "−" or "", Theme.money(math.abs(sc.score)), Theme.money(sc.rent + sc.bought + sc.lost))
+		red.stolenSub.Text = string.format("profit %s\ncosts %s", GamePanel.nb(sc.score), GamePanel.nb(sc.rent + sc.bought + sc.lost))
 	end
 	local n = m and m.inbox or 0
 	red.inbox.Text = string.format("Blue's inbox: %d waiting", n)
