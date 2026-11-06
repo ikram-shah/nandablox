@@ -261,7 +261,15 @@ Config.REFUND_FACTOR = 1.5
 Config.RED_STAKE = 15000 -- 150 NB
 -- what each check costs Blue to run (cents): wages and overhead per minute,
 -- compute per text read (PITCH_COST, above)
-Config.CHECK_COST_PER_MIN = { inspector = 1500, escrow = 5000 }
+Config.CHECK_COST_PER_MIN = { inspector = 1500, escrow = 6000 } -- (escrow 50 -> 60 NB with watcher wages: every check must go bankrupt before the bot Red goes broke)
+-- every Blue watcher seat (a human at the inbox or the helper bot) is paid
+-- by the minute, so Crew's second watcher is a real cost
+Config.WATCHER_WAGE_PER_MIN = 500 -- 5 NB per seat per minute
+-- Blue's treasury starts here (like Red's stake). Money runs out, either
+-- side, and the round ends early: Blue's treasury below 0 is a bankrupt
+-- market (Red wins); a Red that can't pay a stall deposit with no stall open
+-- is broke (Blue wins)
+Config.BLUE_STAKE = 15000 -- 150 NB
 
 -- The timed round ("Start 5:00 round"). A phase table, so it can be retuned
 -- without code: each phase has a start time (seconds into the round), a name,

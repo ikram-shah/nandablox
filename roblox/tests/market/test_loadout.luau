@@ -518,6 +518,8 @@ return function(t)
 
 	------------------------------------------------------------------ money (Nandabux)
 
+	local Ghost = (require :: any)("../../src/market/shared/Market/Ghost")
+
 	t.case("Red's purse: a stake, a deposit and rent per stall, purchases; the deposit back if uncaught, forfeit (Blue's fine) if caught", function(A)
 		A.eq(Config.RED_STAKE, 15000, "150 NB")
 		local sim = market({}, { n = 300 })
@@ -570,12 +572,12 @@ return function(t)
 		A.near(z.blueFees - a.blueFees, (z.honestValue - a.honestValue) * Config.FEE_SHARE, 1, "fees")
 		A.ok(sc.stolen and sc.stolen > 0, "the scam was paid")
 		A.near(z.blueRefunds - a.blueRefunds, (z.stolen - a.stolen) * Config.REFUND_FACTOR, 1, "buyer protection")
-		A.eq(z.blueCosts - a.blueCosts, 0, "an ID check costs friction, not money")
+		A.near(z.blueCosts - a.blueCosts, z.wages - a.wages, 0.01, "an ID check costs friction, not money (only the watchers' wages)")
 		-- the checks that cost money, per minute
 		local sim2 = market({ "inspector", "escrow" }, { n = 300 })
 		local c0 = sim2:getTotals().blueCosts
 		run(sim2, 60)
-		A.near(sim2:getTotals().blueCosts - c0, Config.CHECK_COST_PER_MIN.inspector + Config.CHECK_COST_PER_MIN.escrow, 2, "wages + overhead, a minute")
+		A.near(sim2:getTotals().blueCosts - c0, Config.CHECK_COST_PER_MIN.inspector + Config.CHECK_COST_PER_MIN.escrow + Config.WATCHER_WAGE_PER_MIN * #sim2.watchers, 2, "wages + overhead, a minute")
 		local sim3 = market({ "pitchReader" }, { n = 300 })
 		local k0 = sim3:getTotals().blueCosts
 		run(sim3, 30)
@@ -608,9 +610,89 @@ return function(t)
 		A.ok(lose < keep * 0.95, "blocking honest sellers costs fees")
 	end)
 
+	t.case("watcher wages: every Blue seat (a human or the helper) costs NB per minute, so a second watcher is a real cost", function(A)
+		local function wages(seats: number)
+			local sim = MarketSim.new({ seed = 5, n = 50 })
+			for i = 1, seats do
+				sim:addWatcher("w" .. i, { auto = true })
+			end
+			local w0, c0 = sim:getTotals().wages, sim:getTotals().blueCosts
+			run(sim, 60)
+			return sim:getTotals().wages - w0, sim:getTotals().blueCosts - c0
+		end
+		local one, cost1 = wages(1)
+		local two = wages(2)
+		A.near(one, Config.WATCHER_WAGE_PER_MIN, 1, "one seat, a minute")
+		A.near(two, 2 * Config.WATCHER_WAGE_PER_MIN, 1, "two seats cost twice")
+		A.near(cost1, one, 0.01, "wages are inside Blue's costs (no checks on)")
+	end)
+
+	t.case("money runs out: Blue's treasury below 0 ends the round early, Red wins ('the market went bankrupt')", function(A)
+		local g = Ghost.new(1, Ghost.ALL)
+		while not g.done do
+			g:advance(10)
+		end
+		local sb = g.round.score
+		A.ok(sb.ended ~= nil, "ended early")
+		A.eq(sb.ended.why, "bankrupt")
+		A.eq(sb.ended.winner, "red")
+		A.eq(sb.ended.text, "the market went bankrupt")
+		A.ok(sb.endedAt < 300, "before 5:00: " .. sb.endedAt)
+		A.ok(Config.BLUE_STAKE + sb.blue.score < 0, "the treasury is below 0")
+		A.eq(g:result().winner, "red")
+		print(string.format("      every check: bankrupt at %d:%02d", sb.endedAt // 60, sb.endedAt % 60))
+	end)
+
+	t.case("money runs out: a Red that can't pay a deposit with no stall open is broke, the round ends early, Blue wins ('Red went broke')", function(A)
+		local Round = (require :: any)("../../src/market/shared/Market/Round")
+		local sim = market({ "idCheck" }, { n = 300 })
+		local round = Round.new(Config)
+		round:start(sim.now, sim:getTotals())
+		local l = MarketSim.ledgerFor(sim, "red")
+		-- enough for one stall, not two
+		l.purse = Config.STALL_DEPOSIT + 50
+		local s = assert(sim:redAttack("red", "scam", { good = "lamp" }))
+		A.eq(sim:redBroke("red"), false, "a stall still trading: not broke")
+		A.eq(round:checkMoney(sim, { "red" }), nil)
+		local t = 0
+		while s.state ~= "gone" and t < 120 do
+			run(sim, 1)
+			t += 1
+		end
+		-- the scam escapes or is caught; either way no stall is open now
+		if l.purse >= Config.STALL_DEPOSIT then
+			l.purse = Config.STALL_DEPOSIT - 1 -- (it took money: make it spend it)
+		end
+		A.eq(sim:redBroke("red"), true, "can't pay a deposit, nothing open")
+		local ending = round:checkMoney(sim, { "red" })
+		A.ok(ending ~= nil)
+		A.eq(ending.why, "broke")
+		A.eq(ending.winner, "blue")
+		A.eq(ending.text, "Red went broke")
+		A.eq(round.active, false)
+		A.eq(round.done, true)
+		A.eq(round.score.ended.why, "broke", "the scoreboard says why")
+		-- one Red broke and another still in business: the round goes on
+		local sim2 = market({}, { n = 300 })
+		local r2 = Round.new(Config)
+		r2:start(sim2.now, sim2:getTotals())
+		MarketSim.ledgerFor(sim2, "a").purse = 0
+		A.eq(r2:checkMoney(sim2, { "a", "b" }), nil, "b still has its stake")
+	end)
+
+	t.case("money runs out: a sensible loadout keeps its treasury above 0 all round (no early end)", function(A)
+		for seed = 1, 3 do
+			local g = Ghost.new(seed, Ghost.SENSIBLE)
+			while not g.done do
+				g:advance(10)
+			end
+			local why = g.round.score.ended and g.round.score.ended.why
+			A.ok(why ~= "bankrupt", "seed " .. seed .. " not bankrupt")
+		end
+	end)
+
 	------------------------------------------------------------------ balance
 
-	local Ghost = (require :: any)("../../src/market/shared/Market/Ghost")
 	t.case("balance, seeded, a full round against the bot Red: no checks loses, every check loses, floor + voucher + inspector wins", function(A)
 		for seed = 1, 3 do
 			local none = Ghost.play(seed, Ghost.NONE)

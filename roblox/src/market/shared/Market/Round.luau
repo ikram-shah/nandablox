@@ -188,6 +188,48 @@ function Round:update(now: number, totals, watchers: number?, game: any?)
 	return entered
 end
 
+-- Money runs out (docs/market-game.md; Config.BLUE_STAKE): Blue's treasury
+-- below 0 ends the round with Red the winner, and every Red in `reds` (owner
+-- ids) broke, with no stall open, ends it with Blue the winner. Call after
+-- update(); returns the ending ({ why, winner, text }) or nil.
+function Round:checkMoney(sim, reds: { string })
+	if not self.active then
+		return nil
+	end
+	local d = self:diff(sim:getTotals())
+	local treasury = (self.cfg.BLUE_STAKE or 0) + Score.blue(d, self.cfg).score
+	local ending = nil
+	if treasury < 0 then
+		ending = { why = "bankrupt", winner = "red", text = "the market went bankrupt" }
+	elseif #reds > 0 then
+		local broke = true
+		for _, owner in reds do
+			if not sim:redBroke(owner) then
+				broke = false
+				break
+			end
+		end
+		if broke then
+			ending = { why = "broke", winner = "blue", text = "Red went broke" }
+		end
+	end
+	if ending then
+		self:finish(sim.now, sim:getTotals(), ending)
+	end
+	return ending
+end
+
+-- end the round now (money ran out): the scoreboard, as at 5:00
+function Round:finish(now: number, totals, ending)
+	self.last = table.clone(totals)
+	self.score = self:scoreboard()
+	self.score.ended = ending
+	self.score.endedAt = math.floor(self:elapsed(now) + 0.5)
+	self.active = false
+	self.done = true
+	self.prompts = {}
+end
+
 -- The latest calls/min (all watchers) and per watcher.
 function Round:rate(): (number, number)
 	local s = self.samples[#self.samples]
@@ -386,6 +428,8 @@ function Round:public(now: number, monitor: string?)
 		-- both scores so far (since the round began)
 		blue = (self.active or self.done) and Score.blue(self:diff(self.last or {}), self.cfg).score or nil,
 		red = (self.active or self.done) and Score.red(self:diff(self.last or {})).score or nil,
+		blueStake = self.cfg.BLUE_STAKE, -- (the treasury is this plus Blue's profit)
+		ended = self.score and self.score.ended or nil,
 	}
 end
 

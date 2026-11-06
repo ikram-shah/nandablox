@@ -134,6 +134,7 @@ function MarketSim.new(opts)
 			blueFines = 0, -- caught frauds' deposits
 			blueCosts = 0, -- what Blue's checks cost (wages, overhead, compute)
 			compute = 0, -- cents: the pitch reader's reads (inside blueCosts)
+			wages = 0, -- cents: watcher seats' wages (inside blueCosts)
 			refunded = 0, -- frauds escrow caught
 			inspected = 0, -- frauds an inspector shut
 			rejected = 0, -- frauds the ID check (or an outside monitor) turned away at listing
@@ -1853,6 +1854,26 @@ function MarketSim:redAttack(owner: string, kind: string, opts)
 	return s
 end
 
+-- Is this Red out of money? True when it has no stall trading and its purse
+-- can't pay the deposit (and price) of the cheapest attack open to it.
+function MarketSim:redBroke(owner: string): boolean
+	for _, o in self.sellers do
+		if o.owner == owner and LIVE[o.state] then
+			return false
+		end
+	end
+	local cheapest = math.huge
+	for _, a in self.cfg.ATTACKS or {} do
+		if self:isUnlocked(a.id) then
+			cheapest = math.min(cheapest, a.cost or 0)
+		end
+	end
+	if cheapest == math.huge then
+		return false -- (nothing open yet: not broke, just waiting)
+	end
+	return ledgerFor(self, owner).purse < cheapest + (self.cfg.STALL_DEPOSIT or 0)
+end
+
 function MarketSim:setRedBot(on: boolean, rate: number?)
 	if on then
 		if not self.bot then
@@ -2071,6 +2092,10 @@ function MarketSim:step(dt: number)
 			self.totals.blueCosts += perMin * dt / 60
 		end
 	end
+	-- and its watchers' wages, per seat
+	local wages = (cfg.WATCHER_WAGE_PER_MIN or 0) * #self.watchers * dt / 60
+	self.totals.blueCosts += wages
+	self.totals.wages += wages
 
 	-- the bot Red: an attack every so often, while it has room for one more stall
 	if self.bot and not self.botPaused and self.now >= self.botNext then

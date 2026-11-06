@@ -529,6 +529,36 @@ function Hud.setCameraMode(m: string)
 	pick("cam", m)
 end
 
+-- "showing the whole market…" while the camera sweeps out after the market grows
+local sweepHint: TextLabel? = nil
+function Hud.sweeping(secs: number)
+	if not sweepHint then
+		if secs <= 0 then
+			return
+		end
+		if not gui then
+			return
+		end
+		sweepHint = label({
+			Name = "SweepHint",
+			Text = "showing the whole market…",
+			Font = Theme.HEAVY,
+			TextSize = 18,
+			TextColor3 = Theme.WHITE,
+			TextStrokeTransparency = 0.4,
+			BackgroundTransparency = 1,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0, 170),
+			Size = UDim2.new(0, 360, 0, 24),
+			TextXAlignment = Enum.TextXAlignment.Center,
+			Parent = gui,
+		})
+	end
+	if sweepHint then
+		sweepHint.Visible = secs > 0
+	end
+end
+
 function Hud.setRole(r: string)
 	Hud.setTeam(r)
 end
@@ -616,6 +646,7 @@ local function buildControls(parent, sizes)
 		send({ op = "second", on = v })
 	end))
 	segmented(controls, "CAMERA (V)", "cam", {
+		{ text = "auto", value = "auto" },
 		{ text = "follow", value = "follow" },
 		{ text = "walk 3P", value = "walk" },
 		{ text = "overview", value = "overview" },
@@ -625,7 +656,7 @@ local function buildControls(parent, sizes)
 			onCamera(v)
 		end
 	end)
-	pick("cam", "follow")
+	pick("cam", "auto")
 	status = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, Parent = controls })
 	button({
 		Text = "? Keyboard Shortcuts (K)",
@@ -1112,8 +1143,9 @@ function Hud.round(s)
 	if sc and rnd.active and r.blue then
 		-- the game: both scores, live
 		rnd.score.Text = string.format(
-			"<font color=\"#5A96F0\"><b>Blue %s</b></font> · <font color=\"#E85448\"><b>Red %s</b></font>   <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · stolen %s",
+			"<font color=\"#5A96F0\"><b>Blue %s</b></font> <font color=\"#A09A96\">(%s left)</font> · <font color=\"#E85448\"><b>Red %s</b></font>   <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · stolen %s",
 			GamePanel.nb(r.blue),
+			GamePanel.nb((r.blueStake or 15000) + r.blue),
 			GamePanel.nb(r.red),
 			sc.caught or 0, sc.escaped or 0, Theme.money(sc.stolen or 0)
 		)
@@ -1215,9 +1247,21 @@ function Hud.scoreboard(sb)
 	local title = "ROUND OVER"
 	if game_ and sb.winner then
 		title = sb.winner == "blue" and "ROUND OVER · BLUE WINS" or (sb.winner == "red" and "ROUND OVER · RED WINS" or "ROUND OVER · A TIE")
+		-- money ran out: say so first
+		if sb.ended and sb.ended.why == "bankrupt" then
+			title = "MARKET BANKRUPT · RED WINS"
+		elseif sb.ended and sb.ended.why == "broke" then
+			title = "RED WENT BROKE · BLUE WINS"
+		end
 	end
 	label({ Text = title, Font = Theme.HEAVY, TextSize = 30, TextColor3 = sb.winner == "red" and Theme.BAD or (sb.winner == "blue" and Theme.BLUE or Theme.GOLD), Size = UDim2.new(1, -250, 0, 34), Position = UDim2.new(0, 24, 0, 16), Parent = f })
-	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 50), Parent = f })
+	local sub = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12)
+	if sb.ended then
+		sub = string.format("ended early at %s: %s · otherwise it ends at %s", fmtClock(sb.endedAt or 0), sb.ended.text or sb.ended.why, fmtClock(sb.length or 300))
+	elseif game_ then
+		sub = string.format("ran the full %s: nobody ran out of money · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12)
+	end
+	label({ Text = sub, TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 50), Parent = f })
 	local y = 78
 	if game_ then
 		-- both scores, with what they are made of
@@ -1228,23 +1272,31 @@ function Hud.scoreboard(sb)
 			label({ Text = parts, RichText = true, TextSize = 13, TextColor3 = Theme.MUTED, TextWrapped = true, Size = UDim2.new(1, -196, 1, -12), Position = UDim2.new(0, 186, 0, 6), TextYAlignment = Enum.TextYAlignment.Center, Parent = box })
 		end
 		local bl, rd = sb.blue, sb.red
-		scoreBox(24, "BLUE profit", Theme.BLUE, bl.score, string.format("fees %s − refunds %s<br/>+ fines %s<br/>− checks %s", signed(bl.fees), signed(bl.refunds), signed(bl.fines), signed(bl.costs)))
+		scoreBox(24, "BLUE profit", Theme.BLUE, bl.score, string.format("fees %s − refunds %s<br/>+ fines %s<br/>− checks &amp; wages %s", signed(bl.fees), signed(bl.refunds), signed(bl.fines), signed(bl.costs)))
 		scoreBox(36 + (W - 60) / 2, "RED profit", Theme.BAD, rd.score, string.format("loot %s − rent %s<br/>− bought %s<br/>− deposits lost %s", signed(rd.stolen), signed(rd.rent), signed(rd.bought), signed(rd.lost)))
 		y += 80
 		-- where the extreme Blues finished on this seed, and each Red's line
 		local gh = sb.ghosts
+		local function gend(g): string
+			if g.ended == "bankrupt" then
+				return " <font color=\"#A09A96\">(bankrupt " .. fmtClock(g.endedAt or 0) .. ")</font>"
+			elseif g.ended == "broke" then
+				return " <font color=\"#A09A96\">(Red broke " .. fmtClock(g.endedAt or 0) .. ")</font>"
+			end
+			return ""
+		end
 		local ghostText = gh and string.format(
-			"<font color=\"#A09A96\">same seed, bot Red (NB, Blue vs Red):</font> no checks <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font> · every check <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font>",
-			math.floor(gh.none.blue / 100 + 0.5), math.floor(gh.none.red / 100 + 0.5), math.floor(gh.all.blue / 100 + 0.5), math.floor(gh.all.red / 100 + 0.5)
+			"<font color=\"#A09A96\">same seed, bot Red (NB, Blue vs Red):</font> no checks <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font>%s · every check <font color=\"#5A96F0\">%d</font> vs <font color=\"#E85448\">%d</font>%s",
+			math.floor(gh.none.blue / 100 + 0.5), math.floor(gh.none.red / 100 + 0.5), gend(gh.none), math.floor(gh.all.blue / 100 + 0.5), math.floor(gh.all.red / 100 + 0.5), gend(gh.all)
 		) or "<font color=\"#A09A96\">(the extreme Blues were not run)</font>"
-		label({ Text = ghostText, RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 36), Position = UDim2.new(0, 24, 0, y), TextWrapped = true, Parent = f })
+		label({ Text = ghostText, RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 52), Position = UDim2.new(0, 24, 0, y), TextWrapped = true, Parent = f })
 		local lines = {}
 		for _, rl in sb.reds or {} do
 			local who = rl.id == you and "you" or rl.label
 			table.insert(lines, string.format("<font color=\"#E85448\">%s</font> stole %s, profit %s", who, signed(rl.stolen), signed(rl.score)))
 		end
-		label({ Text = #lines > 0 and table.concat(lines, " · ") or "<font color=\"#A09A96\">no Red stalls</font>", RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 36), Position = UDim2.new(0, 36 + (W - 60) / 2, 0, y), TextWrapped = true, Parent = f })
-		y += 42
+		label({ Text = #lines > 0 and table.concat(lines, " · ") or "<font color=\"#A09A96\">no Red stalls</font>", RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 52), Position = UDim2.new(0, 36 + (W - 60) / 2, 0, y), TextWrapped = true, Parent = f })
+		y += 56
 	end
 	-- the numbers: two rows of four
 	local stats = {
@@ -1533,7 +1585,7 @@ function Hud.build(opts)
 		{ "Z  /  X", "Blue: Allow / Block the top case in your Inbox" },
 		{ "R", "Start (or stop) the timed 5:00 round" },
 		{ "Click a case card", "Teleport 3rd-person avatar to inspect that stall" },
-		{ "V", "Cycle camera: follow top case → walk 3P → overview → balcony" },
+		{ "V", "V cycles camera: auto → follow → walk 3P → overview → balcony" },
 		{ "WASD / Arrows", "Walk the street in 3rd-person (Right-drag or Q/E turns)" },
 		{ "1 · 2 · 3 · 4", "Set market size: 5 · 50 · 300 · 1000 traders" },
 		{ "M  /  G", "Cycle monitor (off/rules/yours)  /  Vote on the ID check (lands in 30 s)" },

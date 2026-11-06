@@ -510,8 +510,8 @@ local function ghostLines()
 	local n, a = ghosts.none:result(), ghosts.all:result()
 	return {
 		seed = ghosts.seed,
-		none = { blue = n.blue, red = n.red, winner = n.winner },
-		all = { blue = a.blue, red = a.red, winner = a.winner },
+		none = { blue = n.blue, red = n.red, winner = n.winner, ended = n.ended, endedAt = n.endedAt },
+		all = { blue = a.blue, red = a.red, winner = a.winner, ended = a.ended, endedAt = a.endedAt },
 	}
 end
 
@@ -1021,6 +1021,23 @@ RunService.Heartbeat:Connect(function(dt)
 		for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
 			applyPhase(ph.phase)
 		end
+		-- money runs out: Blue bankrupt (Red wins) or every Red broke (Blue wins)
+		if round.active then
+			local reds = {}
+			for _, p in Players:GetPlayers() do
+				if playerRole[p] == "red" then
+					table.insert(reds, watcherId(p))
+				end
+			end
+			if #reds == 0 and sim.bot then
+				reds = { "bot" }
+			end
+			local ending = round:checkMoney(sim, reds)
+			if ending then
+				print(string.format("[market] round ended early at %ds: %s", round.score.endedAt or 0, ending.text))
+				sim:mark(ending.text)
+			end
+		end
 		if round.done and round.score then
 			afterRound()
 			scoreSeq += 1
@@ -1028,7 +1045,8 @@ RunService.Heartbeat:Connect(function(dt)
 			-- the game's lines: each Red, and where the extreme Blues finished
 			lastScore.reds = redLines()
 			lastScore.ghosts = ghostLines()
-			lastScore.winner = lastScore.blue and lastScore.red and Score.winner(lastScore.blue.score, lastScore.red.score) or nil
+			lastScore.winner = lastScore.ended and lastScore.ended.winner
+				or (lastScore.blue and lastScore.red and Score.winner(lastScore.blue.score, lastScore.red.score) or nil)
 			ghosts = nil
 			frozen = {
 				score = {
