@@ -1,4 +1,7 @@
 -- The camera. Modes:
+--   * "auto": follow (below), except that above Cam.AUTO_WIDE_ABOVE traders it
+--     holds the overview instead of chasing the top case; a stall you pick
+--     still wins. Cam.mode() says "follow"; Cam.modeName() says "auto".
 --   * "follow": automatically frames the stall of the TOP case in your Inbox
 --     (no clicking needed — as you Allow/Block the top card, the camera glides
 --     to the next top case's stall; when the inbox is empty, shows street/overview).
@@ -10,11 +13,17 @@
 --   * "street": 1st-person eye-level aisle shot.
 --   * "stall": a Red player minding their own scam/counterfeit stall: their
 --     avatar stands behind its counter, seen from the aisle.
+-- When the market grows (in follow, auto or walk) the camera sweeps out to the
+-- overview for Cam.SWEEP_SECONDS so the new scale shows, then glides back.
+-- The stall being framed is passed to Effects.focus, so only its popups play
+-- full size.
 
 local UserInputService = game:GetService("UserInputService")
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
 local Layout = require(Market.Layout)
 local Rigs = require(script.Parent.RigFigures)
+-- (so popups from other stalls stay out of the way of the one you are looking at)
+local Effects = require(script.Parent.Effects)
 
 local Cam = {}
 
@@ -39,6 +48,22 @@ local peers: { [string]: { id: string, num: number, role: string, x: number, z: 
 -- the stall a Red player is minding ("stall" mode)
 local mindSlot: number? = nil
 local mindName: string? = nil
+
+-- "auto": follow, except that above AUTO_WIDE_ABOVE traders the camera holds
+-- the overview instead of chasing the inbox's top case (a stall you picked
+-- still wins). Strictly above, so at the beats' 300 "auto" is plain follow.
+Cam.AUTO_WIDE_ABOVE = 300
+local auto = false
+-- The market grew (a size button, a beat, a round phase): sweep out to the
+-- overview for a few seconds so the new scale is visible, then come back.
+-- Walking, dragging the view, or picking a stall ends it early.
+Cam.SWEEP_SECONDS = 6
+local sweepLeft = 0
+local easeLeft = 0 -- after a sweep, glide back instead of snapping
+local lastN: number? = nil
+local lastInspect: number? = nil
+-- the stall a card's "visit" walked you to (Cam.set clears inspectSlot in walk)
+local visitSlot: number? = nil
 
 local BLUE_SHIRT = Color3.fromRGB(48, 114, 214)
 local RED_SHIRT = Color3.fromRGB(214, 56, 52)
@@ -216,28 +241,43 @@ function Cam.init()
 			lastMouse = nowPos
 			walkYaw -= delta.X * 0.0045
 			walkPitch = math.clamp(walkPitch - delta.Y * 0.0035, math.rad(-55), math.rad(45))
+			sweepLeft = 0
 			if mode ~= "walk" then
 				mode = "walk"
+				auto = false
 			end
 		end
 	end)
 end
 
--- V cycles: follow -> walk -> overview -> balcony -> street -> follow
-local ORDER = { "follow", "walk", "overview", "balcony", "street" }
-function Cam.toggle(): string
-	local i = table.find(ORDER, mode) or 1
-	local nextMode = ORDER[i % #ORDER + 1]
-	Cam.set(nextMode)
-	return mode
+-- V cycles: auto -> follow -> walk -> overview -> balcony -> street -> auto
+local ORDER = { "auto", "follow", "walk", "overview", "balcony", "street" }
+
+-- the mode as the camera row names it: "auto" is follow with the wide rule
+function Cam.modeName(): string
+	return (auto and mode == "follow") and "auto" or mode
 end
 
+function Cam.toggle(): string
+	local i = table.find(ORDER, Cam.modeName()) or 1
+	local nextMode = ORDER[i % #ORDER + 1]
+	Cam.set(nextMode)
+	return Cam.modeName()
+end
+
+-- (still "follow" in auto, so the follow-mode stall highlight keeps working)
 function Cam.mode(): string
 	return mode
 end
 
--- the beat's shot; nil = follow
+-- seconds left of the scale sweep (0 when not sweeping)
+function Cam.sweeping(): number
+	return sweepLeft
+end
+
+-- the beat's shot; nil = follow, "auto" = follow with the wide rule
 function Cam.set(m: string?)
+	auto = m == "auto"
 	if m == "auto" or m == nil then
 		m = "follow"
 	end
@@ -281,8 +321,14 @@ function Cam.set(m: string?)
 	if mode ~= "street" then
 		Cam.inspectSlot = nil
 	end
+	if mode ~= "follow" then
+		auto = false
+	end
+	if mode ~= "walk" then
+		visitSlot = nil
+	end
 	if Cam.onModeChange then
-		Cam.onModeChange(mode)
+		Cam.onModeChange(Cam.modeName())
 	end
 end
 
@@ -303,7 +349,9 @@ function Cam.visitStall(slot: number)
 	avatarYaw = yaw
 	walkPitch = math.rad(-12)
 	Cam.inspectSlot = slot
+	sweepLeft = 0
 	Cam.set("walk")
+	visitSlot = slot
 end
 
 -- the radius the market fills at size n
@@ -455,9 +503,45 @@ function Cam.update(dt: number, n: number)
 	) then
 		Cam.set("walk")
 	end
+	-- the market grew: start the scale sweep (not on join, while the first
+	-- meter arrives; not for a Red player behind their counter; not over a
+	-- beat's scripted street or balcony shot, nor when already wide)
+	if lastN and n > lastN and t > 4 and (mode == "follow" or mode == "walk") then
+		sweepLeft = Cam.SWEEP_SECONDS
+	end
+	lastN = n
+	-- picking a stall (a card, a test hook) ends it
+	if Cam.inspectSlot ~= nil and Cam.inspectSlot ~= lastInspect then
+		sweepLeft = 0
+	end
+	lastInspect = Cam.inspectSlot
+	if sweepLeft > 0 and mode ~= "stall" then
+		sweepLeft = math.max(0, sweepLeft - dt)
+		if mode == "walk" then
+			walkStep(dt) -- (keeps your avatar placed; moving ends the sweep)
+			if lastMoving then
+				sweepLeft = 0
+			end
+		end
+		if sweepLeft > 0 then
+			Effects.focus(nil)
+			local scf, sfov = overview(n, dt)
+			local a = math.min(1, dt * 1.6)
+			cam.CFrame = cam.CFrame:Lerp(scf, a)
+			cam.FieldOfView += (sfov - cam.FieldOfView) * a
+			easeLeft = 1.5
+			return
+		end
+	end
+	easeLeft = math.max(0, easeLeft - dt)
+	-- how fast the shot catches up: as given, or gently just after a sweep
+	local function rate(k: number): number
+		return math.min(1, dt * (easeLeft > 0 and math.min(k, 2.0) or k))
+	end
 	local m = mode
 	local cf, fov
 	if m == "stall" and mindSlot and Layout.SLOTS[mindSlot] then
+		Effects.focus(mindSlot)
 		lastMoving = false
 		local L = Layout.SLOTS[mindSlot]
 		local rig = ensureAvatar()
@@ -476,20 +560,30 @@ function Cam.update(dt: number, n: number)
 		-- (and low enough to see your badge under the awning's valance)
 		local eye = counter + f * 11.5 + side * 1.6 + Vector3.new(0, 8.6, 0)
 		cf, fov = CFrame.lookAt(eye, counter + Vector3.new(0, 5.2, 0)), 64
-		local a = math.min(1, dt * 4)
+		local a = rate(4)
 		cam.CFrame = cam.CFrame:Lerp(cf, a)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
 		return
 	elseif m == "walk" then
 		cf, fov = walkStep(dt)
-		local a = math.min(1, dt * 10)
+		-- the stall you walked to (a card's visit) while you are still near it
+		local near = nil
+		local S = visitSlot and Layout.SLOTS[visitSlot]
+		if S and (Vector3.new(S.pos.x, 0, S.pos.z) - walkPos).Magnitude < 25 then
+			near = visitSlot
+		end
+		Effects.focus(near)
+		local a = rate(10)
 		cam.CFrame = cam.CFrame:Lerp(cf, a)
 		cam.FieldOfView += (fov - cam.FieldOfView) * a
 		return
 	elseif m == "follow" then
 		lastMoving = false
-		local slot = Cam.inspectSlot or Cam.topSlot
+		-- auto, in a big market: hold the overview unless you picked a stall
+		local wide = auto and n > Cam.AUTO_WIDE_ABOVE
+		local slot = Cam.inspectSlot or (not wide and Cam.topSlot or nil)
 		if slot and Layout.SLOTS[slot] then
+			Effects.focus(slot)
 			-- Also move our logical position in front of this stall so other players
 			-- see our avatar standing at the stall we are inspecting!
 			local L = Layout.SLOTS[slot]
@@ -501,30 +595,35 @@ function Cam.update(dt: number, n: number)
 			walkPos = Vector3.new(stand.X, 0, stand.Z)
 			avatarYaw = math.atan2(-toStall.X, -toStall.Z)
 			cf, fov = atStall(slot)
-			local a = math.min(1, dt * 5.0)
+			local a = rate(5.0)
 			cam.CFrame = cam.CFrame:Lerp(cf, a)
 			cam.FieldOfView += (fov - cam.FieldOfView) * a
 			return
 		end
 		-- (not `a and street(n) or overview(...)`: that keeps only the first
 		-- return value, fov came back nil and every frame errored here)
-		if n <= 50 then
+		Effects.focus(nil)
+		if n <= 50 and not wide then
 			cf, fov = street(n)
 		else
 			cf, fov = overview(n, dt)
 		end
 	elseif m == "street" then
 		lastMoving = false
+		local fs = Cam.inspectSlot or Cam.focusSlot
+		Effects.focus(fs and Layout.SLOTS[fs] and fs or nil)
 		cf, fov = street(n)
 		dist = extent(n)
 	elseif m == "balcony" then
 		lastMoving = false
+		Effects.focus(nil)
 		cf, fov = balcony()
 	else
 		lastMoving = false
+		Effects.focus(nil)
 		cf, fov = overview(n, dt)
 	end
-	local a = math.min(1, dt * 2.2)
+	local a = rate(2.2)
 	cam.CFrame = cam.CFrame:Lerp(cf, a)
 	cam.FieldOfView += (fov - cam.FieldOfView) * a
 end

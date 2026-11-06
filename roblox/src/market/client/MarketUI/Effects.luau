@@ -2,6 +2,10 @@
 -- arc back to the buyer. A scam takes the coin and nothing comes back: a red
 -- cross pops over the buyer instead. Verdicts flash the stall: green allowed,
 -- red blocked. Pooled parts, animated on the client; only near the camera.
+--
+-- While the camera is on one stall (Effects.focus), only that stall's deals
+-- play full size: the rest shrink and fade, and keep half the flight slots
+-- free for it. Anything that passes right in front of the lens fades out.
 
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
 local Layout = require(Market.Layout)
@@ -15,6 +19,34 @@ local flying = {}
 local camPos = Vector3.zero
 Effects.RANGE = 160 -- only draw deals this close to the camera
 Effects.MAX = 24 -- in flight at once
+Effects.DIM_SCALE = 0.5 -- other stalls' popups while you look at one
+Effects.DIM_ALPHA = 0.6 -- (their transparency, at least)
+Effects.LENS_NEAR = 1.5 -- closer than this to the camera: invisible
+Effects.LENS_FAR = 4.5 -- fading in between
+local focusSlot: number? = nil
+
+-- the stall the camera is on (nil: none, everything plays as usual)
+function Effects.focus(slot: number?)
+	focusSlot = slot
+end
+
+function Effects.focused(): number?
+	return focusSlot
+end
+
+-- how see-through a popup is: dimmed if it belongs to another stall than the
+-- one in focus, faded if it is about to fill the lens (pure; tested)
+function Effects.alpha(base: number, slot: number?, focus: number?, camDist: number): number
+	local a = base
+	if focus ~= nil and slot ~= focus then
+		a = math.max(a, Effects.DIM_ALPHA)
+	end
+	if camDist < Effects.LENS_FAR then
+		local k = math.clamp((Effects.LENS_FAR - camDist) / (Effects.LENS_FAR - Effects.LENS_NEAR), 0, 1)
+		a = math.max(a, k)
+	end
+	return a
+end
 
 function Effects.init(parent: Instance)
 	folder = Instance.new("Folder")
@@ -57,8 +89,12 @@ local function give(p: Part)
 	table.insert(pool, p)
 end
 
+local curSlot: number? = nil -- the stall the next fly() belongs to
 local function fly(p: Part, from: Vector3, to: Vector3, t0: number, dur: number, height: number, spin: boolean?)
-	table.insert(flying, { p = p, from = from, to = to, t0 = t0, dur = dur, h = height, spin = spin })
+	if focusSlot ~= nil and curSlot ~= focusSlot then
+		p.Size *= Effects.DIM_SCALE
+	end
+	table.insert(flying, { p = p, from = from, to = to, t0 = t0, dur = dur, h = height, spin = spin, slot = curSlot })
 end
 
 -- a deal at the counter of `slot`; `buyerPos` where the buyer stands
@@ -99,6 +135,11 @@ function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boole
 	if #flying >= Effects.MAX then
 		return
 	end
+	local dim = focusSlot ~= nil and slot ~= focusSlot
+	-- keep room in flight for the stall you are watching
+	if dim and #flying >= Effects.MAX // 2 then
+		return
+	end
 	local L = Layout.SLOTS[slot]
 	if not L then
 		return
@@ -109,6 +150,7 @@ function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boole
 	end
 	local hand = buyerPos and (buyerPos + Vector3.new(0, 3.8, 0)) or Vector3.new(L.front.x, 3.8, L.front.z)
 	local now = os.clock()
+	curSlot = slot
 	fly(take("coin"), hand, counter, now, 0.45, 2.2, true)
 	if ok then
 		local parcel = take("parcel")
@@ -128,12 +170,15 @@ function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boole
 		cross.Transparency = 1
 		local above = hand + Vector3.new(0, 3.2, 0)
 		fly(cross, above, above + Vector3.new(0, 1.5, 0), now + (counterfeit and 0.95 or 0.55), 1.1, 0)
-		if counterfeit then
+		-- (the label always draws on top, so only for the stall in focus, or
+		-- when there is none)
+		if counterfeit and not dim then
 			task.delay(0.95, function()
 				fakeTag(above + Vector3.new(0, 2.4, 0))
 			end)
 		end
 	end
+	curSlot = nil
 end
 
 function Effects.update(cam: Vector3)
@@ -151,7 +196,7 @@ function Effects.update(cam: Vector3)
 			flying[#flying] = nil
 		else
 			local pos = f.from:Lerp(f.to, u) + Vector3.new(0, math.sin(u * math.pi) * f.h, 0)
-			f.p.Transparency = (f.h == 0) and u * 0.8 or 0
+			f.p.Transparency = Effects.alpha((f.h == 0) and u * 0.8 or 0, f.slot, focusSlot, (pos - cam).Magnitude)
 			local cf = CFrame.new(pos)
 			if f.spin then
 				cf = cf * CFrame.Angles(0, u * 12, math.pi / 2)
