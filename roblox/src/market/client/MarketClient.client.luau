@@ -239,6 +239,10 @@ local function onEvent(e, now: number)
 			local paid = e.outcome == "paid"
 			Hud.toast(string.format("%s (%s): %s%s", tostring(e.stall), tostring(e.kind), OUTCOME_TEXT[e.outcome] or e.outcome, (e.stolen or 0) > 0 and (" · took " .. Theme.money(e.stolen)) or ""), paid and Theme.GOLD or Theme.BAD)
 		end
+	elseif k == "locked" then
+		if e.by == me then
+			Hud.toast("Locked: " .. tostring(e.why), Theme.WARN)
+		end
 	elseif k == "attackFailed" then
 		if e.by == me then
 			Hud.toast("Can't open that: " .. tostring(e.why), Theme.WARN)

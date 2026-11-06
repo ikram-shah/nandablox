@@ -18,6 +18,7 @@ local Gateway = require(Market.Gateway)
 local Round = require(Market.Round)
 local Layout = require(Market.Layout)
 local Score = require(Market.Score)
+local Ghost = require(Market.Ghost)
 
 local TICK = 0.25 -- seconds of simulated (and real) time per step
 local METER_EVERY = 0.5
@@ -139,6 +140,12 @@ local room = {
 local round = Round.new(Config)
 local lastScore: any = nil
 local scoreSeq = 0
+-- when a round ends, the round bar and the meter hold the scoreboard's
+-- numbers until the next round or a free-play setting
+local frozen: any = nil
+-- the two extreme Blues (no checks, every check) on this round's seed,
+-- played headless a slice per frame so the scoreboard can mark them
+local ghosts: any = nil
 
 ------------------------------------------------------------------ gateway
 
@@ -352,6 +359,7 @@ local function afterRound()
 end
 
 local function stopRound(why: string?)
+	ghosts = nil
 	if round.active then
 		round:stop()
 		afterRound()
@@ -457,11 +465,61 @@ local function startRound()
 	for _, p in Players:GetPlayers() do
 		playerStalls[p] = nil
 	end
+	frozen = nil
+	local gseed = (math.floor(os.time()) % 100000) + 1
+	ghosts = { seed = gseed, none = Ghost.new(gseed, Ghost.NONE, Config), all = Ghost.new(gseed, Ghost.ALL, Config) }
 	round:start(sim.now, sim:getTotals())
 	for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
 		applyPhase(ph.phase)
 	end
 	sim:mark("round")
+end
+
+-- the ghosts' finishing lines (finishing them now if they are behind)
+local function ghostLines()
+	if not ghosts then
+		return nil
+	end
+	for _, k in { "none", "all" } do
+		local g = ghosts[k]
+		while not g.done do
+			g:advance(30)
+		end
+	end
+	local n, a = ghosts.none:result(), ghosts.all:result()
+	return {
+		seed = ghosts.seed,
+		none = { blue = n.blue, red = n.red, winner = n.winner },
+		all = { blue = a.blue, red = a.red, winner = a.winner },
+	}
+end
+
+-- each Red's line for the scoreboard: the humans by number, and the bot
+local function redLines()
+	local out = {}
+	local nums = {}
+	for i, p in Players:GetPlayers() do
+		nums[watcherId(p)] = i
+	end
+	for owner, l in sim.red do
+		local sc = Score.ledger(l)
+		table.insert(out, {
+			id = owner,
+			bot = owner == "bot",
+			label = owner == "bot" and "bot Red" or ("Red player " .. tostring(nums[owner] or "?")),
+			stolen = sc.stolen,
+			score = sc.score,
+			purse = sc.purse,
+			stalls = l.stalls,
+		})
+	end
+	table.sort(out, function(a, b)
+		if a.bot ~= b.bot then
+			return not a.bot
+		end
+		return a.score > b.score
+	end)
+	return out
 end
 
 ------------------------------------------------------------------ red's stalls
@@ -610,7 +668,16 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		return
 	end
 	lastCmd[player] = t
-	if op == "size" and SIZES[msg.n] then
+	-- a free-play setting lets go of the last round's frozen numbers
+	if op == "size" or op == "monitor" or op == "beat" or op == "second" or op == "agent" then
+		if not round.active then
+			frozen = nil
+		end
+	end
+	if op == "size" and round.active then
+		-- the phase table sets the traders while a round runs
+		sim:emit({ k = "locked", by = id, what = "traders", why = "the round sets the traders" })
+	elseif op == "size" and SIZES[msg.n] then
 		sim:setSize(msg.n)
 		sim:mark(msg.n .. " traders")
 	elseif op == "monitor" and (msg.mode == "off" or msg.mode == "rules" or msg.mode == "external") then
@@ -732,7 +799,7 @@ local function state()
 		beats = #BEATS,
 		round = round:public(sim.now, sim.monitor),
 		-- the score line both teams see: since the round began (or the market opened)
-		score = (function()
+		score = frozen and frozen.score or (function()
 			local t = sim:getTotals()
 			local b = round.base or {}
 			local function d(k)
@@ -941,6 +1008,13 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	sim:step(TICK)
+	if ghosts and round.active then
+		for _, k in { "none", "all" } do
+			if not ghosts[k].done then
+				ghosts[k]:advance(0.5)
+			end
+		end
+	end
 	local scoreNow = nil
 	if round.active then
 		for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers, sim:gameState()) do
@@ -950,6 +1024,21 @@ RunService.Heartbeat:Connect(function(dt)
 			afterRound()
 			scoreSeq += 1
 			lastScore = round.score
+			-- the game's lines: each Red, and where the extreme Blues finished
+			lastScore.reds = redLines()
+			lastScore.ghosts = ghostLines()
+			lastScore.winner = lastScore.blue and lastScore.red and Score.winner(lastScore.blue.score, lastScore.red.score) or nil
+			ghosts = nil
+			frozen = {
+				score = {
+					caught = lastScore.caught,
+					escaped = lastScore.escaped,
+					falseAlarms = lastScore.falseAlarms,
+					stolen = math.floor((lastScore.stolen or 0) + 0.5),
+					honestDeals = lastScore.honestDeals,
+				},
+				meter = sim:meter(),
+			}
 			lastScore.seq = scoreSeq
 			scoreNow = lastScore
 			print(string.format("[market] round over: %d honest deals (%s), stolen %s, caught %d, escaped %d, false alarms %d, peak %.1f calls/min",
@@ -973,7 +1062,7 @@ RunService.Heartbeat:Connect(function(dt)
 	local out: any = { t = sim.now, st = serverNow(), ev = events, sb = scoreNow }
 	if sim.now >= meterAt or scoreNow then
 		meterAt = sim.now + METER_EVERY
-		out.m = sim:meter()
+		out.m = frozen and frozen.meter or sim:meter()
 		out.s = state()
 		-- each player's own team view rides on the state ticks
 		for _, p in Players:GetPlayers() do

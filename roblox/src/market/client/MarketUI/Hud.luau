@@ -728,6 +728,11 @@ end
 function Hud.gameMode(on: boolean)
 	gameOn = on
 	local blue = team == "blue"
+	-- the round sets the traders: the buttons dim
+	for _, b in seg.n or {} do
+		b.TextTransparency = on and 0.6 or 0
+		b.AutoButtonColor = not on
+	end
 	for _, inst in blueOnly do
 		inst.Visible = blue and not on
 	end
@@ -1176,8 +1181,7 @@ local function chartLine(parent, x0: number, y0: number, x1: number, y1: number,
 end
 
 local function signed(c: number?): string
-	c = math.floor((c or 0) + 0.5)
-	return (c < 0 and "−" or "") .. Theme.money(math.abs(c))
+	return GamePanel.nb(c)
 end
 
 function Hud.scoreboard(sb)
@@ -1195,7 +1199,11 @@ function Hud.scoreboard(sb)
 	local vh = gui.AbsoluteSize.Y
 	local W, H = 900, game_ and math.min(700, vh - 40) or 524
 	local f = panel({ Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 0.02, Parent = dim })
-	label({ Text = "ROUND OVER", Font = Theme.HEAVY, TextSize = 30, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -48, 0, 34), Position = UDim2.new(0, 24, 0, 16), Parent = f })
+	local title = "ROUND OVER"
+	if game_ and sb.winner then
+		title = sb.winner == "blue" and "ROUND OVER · BLUE WINS" or (sb.winner == "red" and "ROUND OVER · RED WINS" or "ROUND OVER · A TIE")
+	end
+	label({ Text = title, Font = Theme.HEAVY, TextSize = 30, TextColor3 = sb.winner == "red" and Theme.BAD or (sb.winner == "blue" and Theme.BLUE or Theme.GOLD), Size = UDim2.new(1, -250, 0, 34), Position = UDim2.new(0, 24, 0, 16), Parent = f })
 	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 50), Parent = f })
 	local y = 78
 	if game_ then
@@ -1207,9 +1215,23 @@ function Hud.scoreboard(sb)
 			label({ Text = parts, RichText = true, TextSize = 13, TextColor3 = Theme.MUTED, TextWrapped = true, Size = UDim2.new(1, -196, 1, -12), Position = UDim2.new(0, 186, 0, 6), TextYAlignment = Enum.TextYAlignment.Center, Parent = box })
 		end
 		local bl, rd = sb.blue, sb.red
-		scoreBox(24, "BLUE", Theme.BLUE, bl.score, string.format("honest trade %s<br/>− stolen %s<br/>− friction %s (compute %s)", signed(bl.trade), signed(bl.stolen), signed(bl.friction), signed(bl.compute)))
-		scoreBox(36 + (W - 60) / 2, "RED", Theme.BAD, rd.score, string.format("stolen %s<br/>− rent %s · bought %s<br/>− stalls lost %s", signed(rd.stolen), signed(rd.rent), signed(rd.bought), signed(rd.lost)))
-		y += 84
+		scoreBox(24, "BLUE profit", Theme.BLUE, bl.score, string.format("fees %s − refunds %s<br/>+ fines %s<br/>− checks %s", signed(bl.fees), signed(bl.refunds), signed(bl.fines), signed(bl.costs)))
+		scoreBox(36 + (W - 60) / 2, "RED profit", Theme.BAD, rd.score, string.format("loot %s − rent %s<br/>− bought %s<br/>− deposits lost %s", signed(rd.stolen), signed(rd.rent), signed(rd.bought), signed(rd.lost)))
+		y += 80
+		-- where the extreme Blues finished on this seed, and each Red's line
+		local gh = sb.ghosts
+		local ghostText = gh and string.format(
+			"<font color=\"#A09A96\">same seed, bot Red:</font> no checks <font color=\"#5A96F0\">%s</font> vs <font color=\"#E85448\">%s</font> · every check <font color=\"#5A96F0\">%s</font> vs <font color=\"#E85448\">%s</font>",
+			signed(gh.none.blue), signed(gh.none.red), signed(gh.all.blue), signed(gh.all.red)
+		) or "<font color=\"#A09A96\">(the extreme Blues were not run)</font>"
+		label({ Text = ghostText, RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 36), Position = UDim2.new(0, 24, 0, y), TextWrapped = true, Parent = f })
+		local lines = {}
+		for _, rl in sb.reds or {} do
+			local who = rl.id == you and "you" or rl.label
+			table.insert(lines, string.format("<font color=\"#E85448\">%s</font> stole %s, profit %s", who, signed(rl.stolen), signed(rl.score)))
+		end
+		label({ Text = #lines > 0 and table.concat(lines, " · ") or "<font color=\"#A09A96\">no Red stalls</font>", RichText = true, TextSize = 14, Size = UDim2.new(0, (W - 60) / 2, 0, 36), Position = UDim2.new(0, 36 + (W - 60) / 2, 0, y), TextWrapped = true, Parent = f })
+		y += 42
 	end
 	-- the numbers: two rows of four
 	local stats = {
