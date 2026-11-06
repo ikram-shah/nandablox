@@ -22,6 +22,7 @@ local UserInputService = game:GetService("UserInputService")
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
 local Layout = require(Market.Layout)
 local Rigs = require(script.Parent.RigFigures)
+local Avatars = require(Market.Avatars)
 -- (so popups from other stalls stay out of the way of the one you are looking at)
 local Effects = require(script.Parent.Effects)
 
@@ -43,6 +44,9 @@ local dragging = false
 local lastMouse = Vector2.zero
 local avatarRig: any = nil
 local myRole = "blue"
+-- (nil headless; your rig is your real avatar once the server has built it)
+local localPlayer = game:GetService("Players").LocalPlayer
+local myUserId: number? = localPlayer and localPlayer.UserId or nil
 local lastMoving = false
 local peers: { [string]: { id: string, num: number, role: string, x: number, z: number, tx: number, tz: number, yaw: number, moving: boolean, rig: any, stall: string? } } = {}
 -- the stall a Red player is minding ("stall" mode)
@@ -73,7 +77,7 @@ local function stylePlayerRig(rig: any, role: string, who: string, stall: string
 		return
 	end
 	local isRed = role == "red"
-	Rigs.setShirtColor(rig, isRed and RED_SHIRT or BLUE_SHIRT)
+	Rigs.setTeam(rig, isRed and RED_SHIRT or BLUE_SHIRT)
 	local title = (isRed and "RED SCAMMER · " or "BLUE WATCHER · ") .. who
 	if isRed and stall then
 		title = "RED · " .. stall
@@ -93,9 +97,17 @@ local function hideAvatar()
 	end
 end
 
+-- a stock stand-in whose player's real avatar has since arrived: swap it
+local function stale(rig: any, userId: number?): boolean
+	return rig ~= nil and rig.userId == nil and Rigs.hasAvatar(userId)
+end
+
 local function ensureAvatar()
+	if stale(avatarRig, myUserId) then
+		hideAvatar()
+	end
 	if not avatarRig and Rigs.ready then
-		avatarRig = Rigs.take(myRole == "red" and 10 or 1, "buyer")
+		avatarRig = Rigs.takePlayer(myUserId, myRole)
 	end
 	if avatarRig then
 		stylePlayerRig(avatarRig, myRole, "you", mode == "stall" and mindName or nil)
@@ -194,8 +206,13 @@ local function stepPeers(dt: number)
 	end
 	local a = math.min(1, dt * 10)
 	for _, e in peers do
+		local uid = Avatars.userIdFromPlayerId(e.id)
+		if stale(e.rig, uid) then
+			Rigs.give(e.rig)
+			e.rig = nil
+		end
 		if not e.rig then
-			e.rig = Rigs.take(e.role == "red" and 10 or 1, "buyer")
+			e.rig = Rigs.takePlayer(uid, e.role)
 		end
 		if e.rig then
 			stylePlayerRig(e.rig, e.role, "Player " .. tostring(e.num or 2), e.stall)

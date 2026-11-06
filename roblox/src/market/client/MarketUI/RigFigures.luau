@@ -6,17 +6,24 @@
 --
 -- Only the NEAREST few traders get a rig (LOD); everyone else is a simple
 -- figure. Crowd decides who is near; this module only pools and poses.
+--
+-- Players: Rigs.takePlayer clones that player's real avatar (a template the
+-- server built from their HumanoidDescription, ReplicatedStorage.MarketAvatars,
+-- see Avatars.luau) with a team-coloured outline; until it exists, or if it
+-- never does, a stock outfit wearing the team's shirt.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Market = ReplicatedStorage:WaitForChild("Market")
 local Outfits = require(Market.Outfits)
+local Avatars = require(Market.Avatars)
 
 local Rigs = {}
 
 local folder: Folder
 local templates: { Model } = {}
-local pools: { [number]: { any } } = {}
+local avatars: { [number]: Model } = {} -- userId -> that player's avatar template
+local pools: { [any]: { any } } = {}
 local anims = {}
 local live = {}
 local moveParts, moveCFs = {}, {}
@@ -46,21 +53,65 @@ function Rigs.init(parent: Instance)
 		end
 		Rigs.ready = next(templates) ~= nil
 	end)
+	task.spawn(function()
+		local src = ReplicatedStorage:WaitForChild(Avatars.FOLDER, 60)
+		if not src then
+			return
+		end
+		local function add(m: Instance)
+			local id = m:GetAttribute("UserId")
+			if m:IsA("Model") and type(id) == "number" then
+				avatars[id] = m
+			end
+		end
+		local function remove(m: Instance)
+			local id = m:GetAttribute("UserId")
+			if type(id) == "number" and avatars[id] == m then
+				avatars[id] = nil
+			end
+		end
+		for _, m in src:GetChildren() do
+			add(m)
+		end
+		src.ChildAdded:Connect(add)
+		src.ChildRemoved:Connect(remove)
+	end)
 end
 
 local HIP = 3.0 -- root height above the ground for a default R15
 
-local function build(outfit: number)
-	local t = templates[outfit] or templates[next(templates)]
-	local m = t:Clone()
-	local ac = m:FindFirstChildOfClass("AnimationController")
+local function build(key: any, t: Model?)
+	t = t or templates[key] or templates[next(templates)]
+	local m = (t :: Model):Clone()
+	-- the crowd's rigs animate through an AnimationController; a player's
+	-- avatar keeps its (idle) Humanoid, and animates through that one's Animator
+	local ac = m:FindFirstChildOfClass("AnimationController") or m:FindFirstChildOfClass("Humanoid")
 	local animator = ac and ac:FindFirstChildOfClass("Animator")
+	local hip = m:GetAttribute("Hip")
+	local uid = m:GetAttribute("UserId")
 	local r = {
 		model = m,
 		root = m.PrimaryPart,
-		outfit = outfit,
+		outfit = key,
 		tracks = {},
+		hip = type(hip) == "number" and hip or HIP,
+		userId = type(uid) == "number" and uid or nil, -- set: a real avatar
 	}
+	if r.userId then
+		-- the team colour as an outline, so their own clothes stay theirs
+		local h = Instance.new("Highlight")
+		h.Name = "TeamGlow"
+		h.Adornee = m
+		h.FillTransparency = 0.88
+		h.OutlineTransparency = 0
+		h.DepthMode = Enum.HighlightDepthMode.Occluded
+		h.Enabled = false
+		h.Parent = m
+		r.glow = h
+	end
+	-- in the DataModel before loading: a Humanoid's Animator silently never
+	-- plays tracks loaded while its model was unparented (measured in Studio)
+	m.Parent = folder
 	if animator then
 		for k, a in anims do
 			local ok, track = pcall(function()
@@ -161,8 +212,8 @@ end
 
 local TOP_PARTS = { "UpperTorso", "LowerTorso", "LeftUpperArm", "RightUpperArm" }
 function Rigs.setShirtColor(r, col: Color3)
-	if not r or not r.model then
-		return
+	if not r or not r.model or r.userId then
+		return -- (never repaint a player's own avatar)
 	end
 	local bc = r.model:FindFirstChildOfClass("BodyColors")
 	if bc then
@@ -174,6 +225,43 @@ function Rigs.setShirtColor(r, col: Color3)
 			p.Color = col
 		end
 	end
+end
+
+-- a player's team colour: an outline on a real avatar, the shirt on a stock one
+function Rigs.setTeam(r, col: Color3)
+	if not r then
+		return
+	end
+	if r.glow then
+		r.glow.FillColor = col
+		r.glow.OutlineColor = col
+		r.glow.Enabled = true
+	else
+		Rigs.setShirtColor(r, col)
+	end
+end
+
+function Rigs.hasAvatar(userId: number?): boolean
+	return userId ~= nil and avatars[userId] ~= nil
+end
+
+-- the rig for a player: their own avatar if the server built one, else a
+-- stock outfit (Red and Blue get different ones, as before). r.userId tells
+-- which; Camera swaps a stock rig for the avatar once it arrives.
+function Rigs.takePlayer(userId: number?, role: string)
+	local t = userId and avatars[userId]
+	if not t then
+		return Rigs.take(role == "red" and 10 or 1, "buyer")
+	end
+	local key = "u" .. tostring(userId)
+	local pool = pools[key]
+	local r = pool and table.remove(pool) or build(key, t)
+	r.model.Parent = folder
+	r.anim = nil
+	r.mood = nil
+	r.speed = 1
+	live[r] = true
+	return r
 end
 
 function Rigs.take(look: number, role: string)
@@ -203,6 +291,9 @@ function Rigs.give(r)
 	if r.tag then
 		r.tag.Enabled = false
 		r.tag.StudsOffsetWorldSpace = Vector3.new(0, 2.3, 0)
+	end
+	if r.glow then
+		r.glow.Enabled = false
 	end
 	for _, t in r.tracks do
 		t:Stop(0)
@@ -251,7 +342,7 @@ function Rigs.place(r, cf: CFrame, walking: boolean, slump: boolean?)
 	local n = #moveParts + 1
 	local lean = slump and CFrame.Angles(math.rad(-10), 0, 0) or CFrame.identity
 	moveParts[n] = r.root
-	moveCFs[n] = cf * CFrame.new(0, HIP, 0) * lean
+	moveCFs[n] = cf * CFrame.new(0, r.hip or HIP, 0) * lean
 	play(r, walking and "walk" or "idle", 1.15)
 end
 

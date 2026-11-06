@@ -108,6 +108,117 @@ task.spawn(function()
 	print(string.format("[market] %d R15 outfit templates ready", made))
 end)
 
+------------------------------------------------------------------ players' own avatars
+
+-- Each player's real avatar as one more rig template (Avatars.luau): fetched
+-- and built here, cloned and posed by every client like the crowd. Anything
+-- that fails or times out leaves no template, and the clients keep the stock
+-- outfit in the team shirt.
+local Avatars = require(Market.Avatars)
+local avatarFolder = Instance.new("Folder")
+avatarFolder.Name = Avatars.FOLDER
+avatarFolder.Parent = ReplicatedStorage
+local avatarDeps = {
+	spawn = task.spawn,
+	wait = task.wait,
+	now = os.clock,
+	get = function(userId: number)
+		return Players:GetHumanoidDescriptionFromUserIdAsync(userId)
+	end,
+}
+local avatarBuilding: { [number]: boolean } = {}
+
+-- the model's head top above its feet (body only: hats don't count)
+local function headTop(m: Model, hum: Humanoid): number?
+	local root = m.PrimaryPart
+	local head = m:FindFirstChild("Head")
+	if not (root and head and head:IsA("BasePart")) then
+		return nil
+	end
+	local feet = root.Position.Y - root.Size.Y / 2 - hum.HipHeight
+	return head.Position.Y + head.Size.Y / 2 - feet
+end
+
+local function buildAvatar(p: Player)
+	local userId = p.UserId
+	if avatarBuilding[userId] or avatarFolder:FindFirstChild(Avatars.templateName(userId)) then
+		return
+	end
+	avatarBuilding[userId] = true
+	local t0 = os.clock()
+	local desc, why = Avatars.fetch(userId, avatarDeps)
+	if not desc then
+		warn(string.format("[market] avatar %d: %s; stock outfit", userId, tostring(why)))
+		avatarBuilding[userId] = nil
+		return
+	end
+	local ok, m = Avatars.withDeadline(avatarDeps, Avatars.TIMEOUT, function()
+		return Players:CreateHumanoidModelFromDescriptionAsync(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or typeof(m) ~= "Instance" then
+		warn(string.format("[market] avatar %d: build %s; stock outfit", userId, tostring(m)))
+		avatarBuilding[userId] = nil
+		return
+	end
+	local built, err = pcall(function()
+		local hum = m:FindFirstChildOfClass("Humanoid") :: Humanoid
+		-- the Humanoid stays (layered clothing and accessories hang off it)
+		-- but does nothing: no states, no name, no health bar
+		hum.EvaluateStateMachine = false
+		hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+		hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+		hum.RequiresNeck = false
+		hum.BreakJointsOnDeath = false
+		if not hum:FindFirstChildOfClass("Animator") then
+			Instance.new("Animator").Parent = hum
+		end
+		-- root height above the feet, before any fitting (ScaleTo scales the
+		-- parts; whether it scales HipHeight too is not ours to rely on)
+		local hip = hum.HipHeight + m.PrimaryPart.Size.Y / 2
+		local k = Avatars.fitScale(headTop(m, hum))
+		if k < 1 then
+			m:ScaleTo(m:GetScale() * k)
+			hip *= k
+		end
+		for _, x in m:GetDescendants() do
+			if x:IsA("Script") or x:IsA("LocalScript") or x:IsA("Sound") then
+				x:Destroy()
+			elseif x:IsA("BasePart") then
+				x.Anchored = false
+				x.CanCollide = false
+				x.CanQuery = false
+				x.CanTouch = false
+				x.Massless = true
+			end
+		end
+		m.PrimaryPart.Anchored = true
+		m:SetAttribute("Hip", hip) -- for the clients' placing
+		m:SetAttribute("UserId", userId)
+		m.Name = Avatars.templateName(userId)
+		m.Parent = avatarFolder
+	end)
+	avatarBuilding[userId] = nil
+	if not built then
+		warn(string.format("[market] avatar %d: %s; stock outfit", userId, tostring(err)))
+		m:Destroy()
+		return
+	end
+	print(string.format("[market] avatar %d (%s) ready in %.1f s", userId, p.Name, os.clock() - t0))
+end
+
+Players.PlayerAdded:Connect(function(p)
+	task.spawn(buildAvatar, p)
+end)
+for _, p in Players:GetPlayers() do
+	task.spawn(buildAvatar, p)
+end
+Players.PlayerRemoving:Connect(function(p)
+	local m = avatarFolder:FindFirstChild(Avatars.templateName(p.UserId))
+	if m then
+		m:Destroy()
+	end
+end)
+
 ------------------------------------------------------------------ the sim
 
 local seed = tonumber(workspace:GetAttribute("MarketSeed")) or 20261106
