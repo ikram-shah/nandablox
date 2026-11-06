@@ -8,6 +8,8 @@
 --   * "overview": high wide angle over the plaza.
 --   * "balcony": from the watchers' balcony over the south gate (beat 5).
 --   * "street": 1st-person eye-level aisle shot.
+--   * "stall": a Red player minding their own scam/counterfeit stall: their
+--     avatar stands behind its counter, seen from the aisle.
 
 local UserInputService = game:GetService("UserInputService")
 local Market = game:GetService("ReplicatedStorage"):WaitForChild("Market")
@@ -33,19 +35,25 @@ local lastMouse = Vector2.zero
 local avatarRig: any = nil
 local myRole = "blue"
 local lastMoving = false
-local peers: { [string]: { id: string, num: number, role: string, x: number, z: number, tx: number, tz: number, yaw: number, moving: boolean, rig: any } } = {}
+local peers: { [string]: { id: string, num: number, role: string, x: number, z: number, tx: number, tz: number, yaw: number, moving: boolean, rig: any, stall: string? } } = {}
+-- the stall a Red player is minding ("stall" mode)
+local mindSlot: number? = nil
+local mindName: string? = nil
 
 local BLUE_SHIRT = Color3.fromRGB(48, 114, 214)
 local RED_SHIRT = Color3.fromRGB(214, 56, 52)
 
-local function stylePlayerRig(rig: any, role: string, who: string)
+local function stylePlayerRig(rig: any, role: string, who: string, stall: string?)
 	if not rig then
 		return
 	end
 	local isRed = role == "red"
 	Rigs.setShirtColor(rig, isRed and RED_SHIRT or BLUE_SHIRT)
 	local title = (isRed and "RED SCAMMER · " or "BLUE WATCHER · ") .. who
-	Rigs.label(rig, title, isRed and "red" or "blue")
+	if isRed and stall then
+		title = "RED · " .. stall
+	end
+	Rigs.label(rig, title, isRed and "red" or "blue", not (isRed and stall ~= nil))
 end
 
 local function hideAvatar()
@@ -60,7 +68,7 @@ local function ensureAvatar()
 		avatarRig = Rigs.take(myRole == "red" and 10 or 1, "buyer")
 	end
 	if avatarRig then
-		stylePlayerRig(avatarRig, myRole, "you")
+		stylePlayerRig(avatarRig, myRole, "you", mode == "stall" and mindName or nil)
 	end
 	return avatarRig
 end
@@ -80,7 +88,26 @@ function Cam.role(): string
 end
 
 function Cam.pose()
+	if mode == "stall" and mindSlot and Layout.SLOTS[mindSlot] then
+		local L = Layout.SLOTS[mindSlot]
+		return { x = L.back.x, z = L.back.z, yaw = math.atan2(-L.facing.x, -L.facing.z), moving = false, mind = mindSlot }
+	end
 	return { x = walkPos.X, z = walkPos.Z, yaw = avatarYaw, moving = lastMoving }
+end
+
+-- Red: stand behind your own stall's counter (nil: stop minding it)
+function Cam.mind(slot: number?, name: string?)
+	mindSlot = slot
+	mindName = name
+	if slot then
+		Cam.set("stall")
+	elseif mode == "stall" then
+		Cam.set("follow")
+	end
+end
+
+function Cam.minding(): number?
+	return mode == "stall" and mindSlot or nil
 end
 
 function Cam.syncPlayers(list: { any }?, myId: string?)
@@ -91,9 +118,7 @@ function Cam.syncPlayers(list: { any }?, myId: string?)
 	for _, p in list do
 		if type(p) == "table" and type(p.id) == "string" then
 			if p.id == myId then
-				if (p.role == "blue" or p.role == "red") and p.role ~= myRole then
-					Cam.setRole(p.role)
-				end
+				-- (your own team is the client's to follow: MarketClient)
 			else
 				seen[p.id] = true
 				local e = peers[p.id]
@@ -119,6 +144,7 @@ function Cam.syncPlayers(list: { any }?, myId: string?)
 					e.yaw = p.yaw or e.yaw
 					e.moving = p.moving == true
 				end
+				e.stall = p.stall
 			end
 		end
 	end
@@ -142,12 +168,18 @@ local function stepPeers(dt: number)
 			e.rig = Rigs.take(e.role == "red" and 10 or 1, "buyer")
 		end
 		if e.rig then
-			stylePlayerRig(e.rig, e.role, "Player " .. tostring(e.num or 2))
+			stylePlayerRig(e.rig, e.role, "Player " .. tostring(e.num or 2), e.stall)
 			local dx = e.tx - e.x
 			local dz = e.tz - e.z
 			local distSq = dx * dx + dz * dz
-			e.x += dx * a
-			e.z += dz * a
+			if distSq > 30 * 30 then
+				-- a jump (to their stall's counter): snap, don't glide through the stalls
+				e.x, e.z = e.tx, e.tz
+				distSq = 0
+			else
+				e.x += dx * a
+				e.z += dz * a
+			end
 			local footCF = CFrame.new(e.x, 0, e.z) * CFrame.Angles(0, e.yaw, 0)
 			Rigs.place(e.rig, footCF, e.moving or distSq > 0.25)
 		end
@@ -234,8 +266,11 @@ function Cam.set(m: string?)
 			end
 		end
 	end
-	mode = (m == "follow" or m == "walk" or m == "street" or m == "overview" or m == "balcony") and m or "follow"
-	if mode ~= "walk" then
+	if m == "stall" and not mindSlot then
+		m = "follow"
+	end
+	mode = (m == "follow" or m == "walk" or m == "street" or m == "overview" or m == "balcony" or m == "stall") and m or "follow"
+	if mode ~= "walk" and mode ~= "stall" then
 		hideAvatar()
 	end
 	if mode ~= "street" then
@@ -417,7 +452,27 @@ function Cam.update(dt: number, n: number)
 	end
 	local m = mode
 	local cf, fov
-	if m == "walk" then
+	if m == "stall" and mindSlot and Layout.SLOTS[mindSlot] then
+		lastMoving = false
+		local L = Layout.SLOTS[mindSlot]
+		local rig = ensureAvatar()
+		if rig then
+			local p = Vector3.new(L.back.x, 0, L.back.z)
+			local face = Vector3.new(L.facing.x, 0, L.facing.z)
+			Rigs.place(rig, CFrame.lookAt(p, p + face), false)
+		end
+		-- from the aisle, a little to one side and above eye level: the sign,
+		-- the counter (sacks, or framed prints), and you behind it
+		local f = Vector3.new(L.facing.x, 0, L.facing.z)
+		local side = Vector3.new(-f.Z, 0, f.X)
+		local counter = Vector3.new(L.pos.x, 0, L.pos.z)
+		local eye = counter + f * 16 + side * 3.5 + Vector3.new(0, 9, 0)
+		cf, fov = CFrame.lookAt(eye, counter + Vector3.new(0, 5.2, 0)), 60
+		local a = math.min(1, dt * 4)
+		cam.CFrame = cam.CFrame:Lerp(cf, a)
+		cam.FieldOfView += (fov - cam.FieldOfView) * a
+		return
+	elseif m == "walk" then
 		cf, fov = walkStep(dt)
 		local a = math.min(1, dt * 10)
 		cam.CFrame = cam.CFrame:Lerp(cf, a)

@@ -137,6 +137,32 @@ end
 
 local STANDING = { open = true, setup = true, restock = true, blocked = true, shuttered = true }
 
+-- slots where a Red player's own avatar stands behind the counter: the
+-- scripted seller figure steps out of the way there
+local minded: { [number]: boolean } = {}
+local PARKED = CFrame.new(0, -400, 0)
+
+function Crowd.setMinded(slots: { [number]: boolean })
+	local changed = false
+	for k in minded do
+		if not slots[k] then
+			changed = true
+		end
+	end
+	for k in slots do
+		if not minded[k] then
+			changed = true
+		end
+	end
+	if not changed then
+		return
+	end
+	minded = table.clone(slots)
+	for _, f in sellers do
+		f.dirty = true
+	end
+end
+
 function Crowd.seller(s)
 	local f = sellers[s.id]
 	if not STANDING[s.state] then
@@ -164,6 +190,7 @@ function Crowd.seller(s)
 	end
 	f.cf = CFrame.lookAt(p, p + face)
 	f.pos = p
+	f.slot = s.slot
 	f.mood = (s.state == "blocked" or s.state == "shuttered") and "cheated" or nil
 	f.dirty = true
 end
@@ -337,7 +364,7 @@ function Crowd.update(now: number, cam: Vector3, dt: number)
 	for _, f in sellers do
 		if f.dirty then
 			f.dirty = false
-			placeOne(f, f.cf, false)
+			placeOne(f, minded[f.slot] and PARKED or f.cf, false)
 		end
 	end
 	local t2 = os.clock()

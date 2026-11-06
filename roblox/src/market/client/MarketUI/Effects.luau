@@ -62,7 +62,40 @@ local function fly(p: Part, from: Vector3, to: Vector3, t0: number, dur: number,
 end
 
 -- a deal at the counter of `slot`; `buyerPos` where the buyer stands
-function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boolean)
+-- a little "✕ counterfeit" over a buyer who just paid for a picture
+local function fakeTag(at: Vector3)
+	local a = Instance.new("Part")
+	a.Anchored = true
+	a.CanCollide = false
+	a.CanQuery = false
+	a.CanTouch = false
+	a.Transparency = 1
+	a.Size = Vector3.new(0.2, 0.2, 0.2)
+	a.CFrame = CFrame.new(at)
+	local bb = Instance.new("BillboardGui")
+	bb.Size = UDim2.new(0, 150, 0, 30)
+	bb.AlwaysOnTop = true
+	bb.LightInfluence = 0
+	bb.MaxDistance = 120
+	bb.Parent = a
+	local l = Instance.new("TextLabel")
+	l.Size = UDim2.fromScale(1, 1)
+	l.BackgroundColor3 = Theme.BAD
+	l.TextColor3 = Theme.WHITE
+	l.Font = Theme.HEAVY
+	l.TextSize = 18
+	l.Text = "✕ counterfeit"
+	l.Parent = bb
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 15)
+	c.Parent = l
+	a.Parent = folder
+	task.delay(2.2, function()
+		a:Destroy()
+	end)
+end
+
+function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boolean, counterfeit: boolean?)
 	if #flying >= Effects.MAX then
 		return
 	end
@@ -83,10 +116,23 @@ function Effects.deal(slot: number, buyerPos: Vector3?, good: string?, ok: boole
 		parcel.Transparency = 1
 		fly(parcel, counter, hand, now + 0.5, 0.45, 2.0)
 	else
+		if counterfeit then
+			-- what comes back is a picture: a flat frame in the good's colour
+			local pic = take("parcel")
+			pic.Size = Vector3.new(1.1, 0.85, 0.12)
+			pic.Color = good and Theme.GOODS[good] and Theme.GOODS[good].color or Theme.PAPER
+			pic.Transparency = 1
+			fly(pic, counter, hand, now + 0.5, 0.45, 2.0)
+		end
 		local cross = take("cross")
 		cross.Transparency = 1
 		local above = hand + Vector3.new(0, 3.2, 0)
-		fly(cross, above, above + Vector3.new(0, 1.5, 0), now + 0.55, 1.1, 0)
+		fly(cross, above, above + Vector3.new(0, 1.5, 0), now + (counterfeit and 0.95 or 0.55), 1.1, 0)
+		if counterfeit then
+			task.delay(0.95, function()
+				fakeTag(above + Vector3.new(0, 2.4, 0))
+			end)
+		end
 	end
 end
 

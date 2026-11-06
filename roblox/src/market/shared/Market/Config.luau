@@ -67,6 +67,15 @@ Config.IMPOSTOR_PRICE = { 0.86, 0.96 } -- times the victim's price: just cheaper
 Config.SCAM_PRICE = { 0.35, 0.72 } -- times market: too good to be true
 Config.FRAUD_LIFETIME = 120 -- a fraud nobody pays leaves after this
 
+-- The third fraud: a counterfeit stall (the "picture of spices" scam). It is
+-- priced only a little under market, so the price rule waves it through; what
+-- it sells is a framed print of the good. Its listing says so, in small type.
+Config.COUNTERFEIT_PRICE = { 0.86, 0.95 } -- times market: within the rule's 15%
+Config.COUNTERFEIT_SALES = 3 -- prints it sells before buyers complain and it shutters
+-- The scripted fraud agents' share of counterfeits (0 = none; the round's
+-- "Fakes" phase raises it). Kept 0 by default so the old claims hold.
+Config.COUNTERFEIT_SHARE = 0
+
 -- The lever: signature checks. On: impostors are rejected before they are a
 -- case, but every listing and payment takes longer.
 Config.SIG_LISTING_S = 3.0
@@ -77,6 +86,10 @@ Config.RULE_ALLOW_PRICE = 0.85
 Config.RULE_ALLOW_RATINGS = 5
 Config.RULE_BLOCK_PRICE = 0.5
 Config.RULE_BLOCK_AGE = 60
+-- An optional fifth line, off by default (a menu item later): a listing that
+-- says "print" or "photo" is escalated to a watcher instead of allowed.
+Config.RULE_KEYWORD_PRINT = false
+Config.RULE_KEYWORDS = { "print", "photo" }
 
 -- An external monitor has this long to answer before the rules decide: one
 -- tick interval plus the gateway's 900 ms, with room.
@@ -116,5 +129,61 @@ Config.GATEWAY_DRIVER = nil :: string?
 -- what the beat-6 badge calls the hosted gateway's gemini-seller once it has
 -- set a price (its /v1/health reports the model: gemini-2.5-flash)
 Config.AGENT_MODEL_LABEL = "Gemini 2.5 Flash"
+
+-- The timed round ("Start 5:00 round"). A phase table, so it can be retuned
+-- without code: each phase has a start time (seconds into the round), a name,
+-- a banner, the settings it applies (any of: n, monitor "off"|"rules"|
+-- "external", signatures, watchers 1|2, counterfeits = the fraud agents'
+-- counterfeit share, keyword = the rule monitor's print/photo line), and an
+-- optional prompt. A prompt goes to one team ("blue" | "red" | "all"); its
+-- `ask` names the buttons ("monitor" | "vote"); `when = "overBudget"` holds it
+-- back until judgment calls per minute per watcher exceed `factor` x BUDGET
+-- (and it stays armed for the rest of the round until a monitor is picked).
+-- The last phase with `scoreboard = true` ends the round.
+Config.ROUND_SAMPLE_S = 2 -- the calls/min chart: one sample every this many seconds
+-- calls/min over the last this many seconds (at least 15). 30 s, not the
+-- meter's 60: with 60 the needle lags the jump to 300 by a minute and the 3x
+-- prompt would land in Lever (headless: 3x crossed at 1:42-2:02 with 30 s,
+-- 2:16-2:38 with 60 s)
+Config.ROUND_RATE_WINDOW = 30
+Config.ROUND_PHASES = {
+	{
+		at = 0,
+		name = "Calm",
+		banner = "One watcher, a few agents.",
+		set = { n = 5, monitor = "off", signatures = true, watchers = 1, counterfeits = 0 },
+	},
+	{
+		at = 60,
+		name = "Rush",
+		banner = "300 traders. Every new stall is a judgment call.",
+		set = { n = 300 },
+		prompt = { team = "blue", ask = "monitor", when = "overBudget", factor = 3, text = "Inbox at 3× budget: pick a monitor." },
+	},
+	{
+		at = 120,
+		name = "Lever",
+		banner = "The council votes on signature checks.",
+		prompt = { team = "blue", ask = "vote", text = "Council vote: keep signature checks? (slower trade, no impostors)" },
+	},
+	{
+		at = 180,
+		name = "Fakes",
+		banner = "Counterfeit stalls: fair prices, framed prints.",
+		set = { counterfeits = 0.5 },
+	},
+	{
+		at = 240,
+		name = "Crew",
+		banner = "A second watcher joins: the inbox splits.",
+		set = { watchers = 2 },
+	},
+	{
+		at = 300,
+		name = "Scoreboard",
+		banner = "Round over.",
+		scoreboard = true,
+	},
+}
 
 return Config

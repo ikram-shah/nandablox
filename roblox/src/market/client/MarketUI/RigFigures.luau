@@ -123,7 +123,10 @@ local function build(outfit: number)
 	return r
 end
 
-function Rigs.label(r, text: string?, team: string?)
+-- team tags ("blue" | "red") read from across the square (AlwaysOnTop)
+-- unless onTop is false: a red seller's badge behind their own counter is
+-- seen only by someone looking at the stall
+function Rigs.label(r, text: string?, team: string?, onTop: boolean?)
 	if r and r.tag and r.tagLabel then
 		if text and text ~= "" then
 			r.tagLabel.Text = text
@@ -133,14 +136,14 @@ function Rigs.label(r, text: string?, team: string?)
 				r.tagLabel.TextSize = 13
 				r.tag.Size = UDim2.new(0, 188, 0, 26)
 				r.tag.MaxDistance = 240
-				r.tag.AlwaysOnTop = true
+				r.tag.AlwaysOnTop = onTop ~= false
 			elseif team == "red" then
 				r.tagLabel.BackgroundColor3 = Color3.fromRGB(196, 48, 48)
 				r.tagLabel.BackgroundTransparency = 0.06
 				r.tagLabel.TextSize = 13
 				r.tag.Size = UDim2.new(0, 188, 0, 26)
 				r.tag.MaxDistance = 240
-				r.tag.AlwaysOnTop = true
+				r.tag.AlwaysOnTop = onTop ~= false
 			else
 				r.tagLabel.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 				r.tagLabel.BackgroundTransparency = 0.22
