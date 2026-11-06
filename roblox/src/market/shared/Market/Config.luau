@@ -317,8 +317,9 @@ Config.ROUND_PHASES = {
 	{
 		at = 180,
 		name = "Talkers",
-		banner = "LLM shoppers arrive, and smooth talkers follow.",
+		banner = "Smooth talkers arrive: sales pitches aimed at shopping agents.",
 		set = { unlock = { "talker", "stolenId" }, llmShoppers = true, botRate = 10 },
+		prompt = { team = "blue", ask = "pitch", text = "Talkers sell prints with a pitch. No check reads pitches." },
 	},
 	{
 		at = 240,

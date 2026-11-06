@@ -1190,6 +1190,11 @@ function Hud.prompts(list)
 					{ "my loadout decides", { op = "monitor", mode = "rules", keep = true } },
 					{ "your monitor", { op = "monitor", mode = "external" } },
 				}
+			elseif p.ask == "pitch" then
+				opts = {
+					{ "turn on the pitch reader (costs NB)", { op = "check", id = "pitchReader", on = true } },
+					{ "not worth it", nil },
+				}
 			else
 				opts = {
 					{ "keep ID checks ON", { op = "vote", on = true } },
