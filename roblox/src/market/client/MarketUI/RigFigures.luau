@@ -202,6 +202,7 @@ function Rigs.give(r)
 	live[r] = nil
 	if r.tag then
 		r.tag.Enabled = false
+		r.tag.StudsOffsetWorldSpace = Vector3.new(0, 2.3, 0)
 	end
 	for _, t in r.tracks do
 		t:Stop(0)
