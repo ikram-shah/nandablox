@@ -36,10 +36,23 @@ local LIVE = { setup = true, open = true, restock = true }
 
 -- The built-in rule monitor, in full (the design doc's four lines). `c` is a
 -- case's public fields: what anyone can see, never the ground truth.
-function MarketSim.ruleMonitor(c, signatures: boolean, cfg): (string, string)
+function MarketSim.ruleMonitor(c, signatures: boolean, cfg, keyword: boolean?): (string, string)
 	cfg = cfg or DefaultConfig
 	if c.twin and not signatures then
 		return "escalate", "two stalls, one name: can't tell which is real"
+	end
+	-- the optional fifth line (off by default): a listing that says it sells a
+	-- picture of the good goes to a human, whatever its price
+	if keyword == nil then
+		keyword = cfg.RULE_KEYWORD_PRINT
+	end
+	if keyword and type(c.listing) == "string" then
+		local text = string.lower(c.listing)
+		for _, w in cfg.RULE_KEYWORDS or { "print", "photo" } do
+			if string.find(text, w, 1, true) then
+				return "escalate", "listing says " .. w
+			end
+		end
 	end
 	if c.price >= cfg.RULE_ALLOW_PRICE * c.market or c.ratings >= cfg.RULE_ALLOW_RATINGS then
 		return "allow", "ordinary business"
@@ -99,6 +112,25 @@ function MarketSim.new(opts)
 		nextCase = 1,
 		nextPriceAt = 0,
 		monitorName = "rules",
+		-- the scripted fraud agents' share of counterfeits, and the rule
+		-- monitor's optional print/photo line
+		counterfeitShare = cfg.COUNTERFEIT_SHARE or 0,
+		ruleKeyword = cfg.RULE_KEYWORD_PRINT == true,
+		-- running totals since the market opened: never reset by mark()
+		-- (a timed round diffs them)
+		totals = {
+			asked = 0,
+			decided = 0,
+			honestDeals = 0,
+			honestValue = 0,
+			stolen = 0,
+			stolenSales = 0,
+			frauds = 0,
+			caught = 0,
+			escaped = 0,
+			falseAlarms = 0,
+		},
+		stolenBy = {}, -- owner (a red player's id) -> cents taken by their stalls
 		gatewayStats = { ticks = 0, verdicts = 0, actions = 0, fallbacks = 0 },
 	}, MarketSim)
 	for _, g in cfg.GOODS do
@@ -277,6 +309,9 @@ function MarketSim:publicSeller(s)
 		look = s.look,
 		vouchedBy = s.vouchedBy,
 		hasStock = s.hasStock,
+		listing = s.listing,
+		display = s.display,
+		owner = s.owner,
 		-- ground truth only once it no longer matters (the aftermath)
 		truth = (s.state == "shuttered" or s.state == "blocked" or s.state == "gone") and s.kind or nil,
 		reason = s.reason,
@@ -310,6 +345,10 @@ local function addSeller(self, kind: string, opts)
 		vouchedBy = nil
 	elseif kind == "impostor" then
 		hasStock = false
+		vouchedBy = nil
+	elseif kind == "counterfeit" then
+		-- a full counter: of framed prints
+		hasStock = true
 		vouchedBy = nil
 	elseif (opts.ratings or 0) == 0 then
 		-- Honest newcomers have a voucher from an established trader (without advancing self.rng)
@@ -348,7 +387,13 @@ local function addSeller(self, kind: string, opts)
 		vouchedBy = vouchedBy,
 		hasStock = hasStock,
 		createdAt = self.now,
+		owner = opts.owner,
 	}
+	if kind == "counterfeit" then
+		-- what the listing says, in small type, and what is on the counter
+		s.listing = good .. " (print)"
+		s.display = "prints"
+	end
 	self.nextSeller += 1
 	self.slots[slot] = s.id
 	self.byId[s.id] = s
@@ -387,6 +432,7 @@ local function list(self, s)
 		-- the protocol checks the key against the name: rejected before it is ever a case
 		self.count.rejected += 1
 		self.count.caught.signatures += 1
+		self.totals.caught += 1
 		push(self, "caught")
 		s.reason = "signature does not match the name"
 		setState(self, s, "rejected", self.now + 3)
@@ -469,14 +515,29 @@ local function arrive(self, p)
 	end
 end
 
--- A fraud agent acts. kind = "scam" | "impostor"; opts.good, opts.price (fraction
--- of market), opts.victim (a seller id) for a human red player, opts.window
--- (seconds until the first buyer: a long one for a case the presenter decides).
+-- A fraud agent acts. kind = "scam" | "impostor" | "counterfeit"; opts.good,
+-- opts.price (fraction of market), opts.victim (a seller id) for a human red
+-- player, opts.window (seconds until the first buyer: a long one for a case the
+-- presenter decides), opts.owner (the red player running it, for their tally).
 function MarketSim:injectFraud(kind: string, opts)
 	opts = opts or {}
 	local rng = self.rng
 	local cfg = self.cfg
-	if kind == "impostor" then
+	if kind == "counterfeit" then
+		local good = opts.good or rng:pick(self.goodList).id
+		local frac = opts.price or rng:range(cfg.COUNTERFEIT_PRICE[1], cfg.COUNTERFEIT_PRICE[2])
+		local s = addSeller(self, "counterfeit", { good = good, price = marketOf(self, good) * frac, owner = opts.owner })
+		if not s then
+			return nil
+		end
+		s.leaveAt = self.now + cfg.FRAUD_LIFETIME
+		s.window = opts.window
+		s.fakesSold = 0
+		self.count.frauds += 1
+		self.totals.frauds += 1
+		list(self, s)
+		return s
+	elseif kind == "impostor" then
 		local victim = opts.victim and self.byId[opts.victim]
 		if not victim then
 			local cands = {}
@@ -495,6 +556,7 @@ function MarketSim:injectFraud(kind: string, opts)
 			name = victim.name,
 			price = victim.price * rng:range(cfg.IMPOSTOR_PRICE[1], cfg.IMPOSTOR_PRICE[2]),
 			victim = victim.id,
+			owner = opts.owner,
 		})
 		if not s then
 			return nil
@@ -503,18 +565,20 @@ function MarketSim:injectFraud(kind: string, opts)
 		s.leaveAt = self.now + cfg.FRAUD_LIFETIME
 		s.window = opts.window
 		self.count.frauds += 1
+		self.totals.frauds += 1
 		list(self, s)
 		return s
 	else
 		local good = opts.good or rng:pick(self.goodList).id
 		local frac = opts.price or rng:range(cfg.SCAM_PRICE[1], cfg.SCAM_PRICE[2])
-		local s = addSeller(self, "scam", { good = good, price = marketOf(self, good) * frac })
+		local s = addSeller(self, "scam", { good = good, price = marketOf(self, good) * frac, owner = opts.owner })
 		if not s then
 			return nil
 		end
 		s.leaveAt = self.now + cfg.FRAUD_LIFETIME
 		s.window = opts.window
 		self.count.frauds += 1
+		self.totals.frauds += 1
 		list(self, s)
 		return s
 	end
@@ -595,6 +659,8 @@ function caseFor(self, s, kind: string)
 		twin = twin,
 		vouchedBy = s.vouchedBy,
 		hasStock = s.hasStock,
+		listing = s.listing,
+		display = s.display,
 		created = self.now,
 		deadline_at = s.openAt,
 		truth = s.kind, -- ground truth: never sent to a monitor or a watcher
@@ -623,6 +689,8 @@ function MarketSim:publicCase(c)
 		twin = c.twin,
 		vouchedBy = c.vouchedBy,
 		hasStock = c.hasStock,
+		listing = c.listing,
+		display = c.display,
 		deadline_s = math.max(0, math.floor((c.deadline_at - self.now) * 10 + 0.5) / 10),
 		-- for the inbox card (not in the contract's fields, harmless)
 		kind = c.kind,
@@ -652,6 +720,7 @@ end
 local function toInbox(self, c)
 	c.stage = "inbox"
 	self.count.asked += 1
+	self.totals.asked += 1
 	push(self, "asked")
 	local w = leastBusy(self)
 	if w then
@@ -697,9 +766,11 @@ function MarketSim.closeCase(self, c, verdict: string, by: string, who: string?,
 	if verdict == "block" then
 		if fraud then
 			self.count.caught[by == "monitor" and "monitor" or "watchers"] += 1
+			self.totals.caught += 1
 			push(self, "caught")
 		else
 			self.count.falseAlarms[by == "monitor" and "monitor" or "watchers"] += 1
+			self.totals.falseAlarms += 1
 			push(self, "falseAlarms")
 		end
 		if s and LIVE[s.state] then
@@ -744,7 +815,7 @@ function route(self, c)
 		c.stage = "monitor"
 		c.monitorBy = self.now + self.cfg.MONITOR_WAIT_S
 	else
-		local v, why = MarketSim.ruleMonitor(c, self.signatures, self.cfg)
+		local v, why = MarketSim.ruleMonitor(c, self.signatures, self.cfg, self.ruleKeyword)
 		self:monitorVerdict(c, v, why, "rules")
 	end
 end
@@ -774,6 +845,7 @@ function MarketSim:verdict(watcherId: string, caseId: string, v: string): (boole
 		return false, "allow or block"
 	end
 	self.count.decided += 1
+	self.totals.decided += 1
 	push(self, "decided")
 	for _, w in self.watchers do
 		if w.id == watcherId then
@@ -1035,6 +1107,8 @@ local function dealDone(self, b, s)
 	self.count.deals += 1
 	push(self, "deals")
 	if s.kind == "honest" then
+		self.totals.honestDeals += 1
+		self.totals.honestValue += price
 		table.insert(self.goods[s.good].sales, { t = self.now, p = price })
 		if self.rng:chance(0.6) then
 			s.ratings += 1
@@ -1047,11 +1121,24 @@ local function dealDone(self, b, s)
 		end
 		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles(), self:spread()), "stroll")
 	else
-		-- a fraud nobody blocked in time: a buyer paid it. An escape.
+		-- a fraud nobody blocked in time: a buyer paid it. An escape (once per
+		-- stall: a counterfeit sells a few prints before it is found out).
 		local why = s.allowedBy == "monitor" and "missed" or (s.allowedBy == "watcher" and "judged" or "waited")
-		self.count.escaped[why] += 1
-		push(self, "escaped")
+		local first = not s.escapedOnce
+		s.escapedOnce = true
+		if first then
+			self.count.escaped[why] += 1
+			self.totals.escaped += 1
+			push(self, "escaped")
+		end
+		self.totals.stolen += price
+		self.totals.stolenSales += 1
+		s.stolen = (s.stolen or 0) + price
+		if s.owner then
+			self.stolenBy[s.owner] = (self.stolenBy[s.owner] or 0) + price
+		end
 		b.carry = nil
+		local fake = s.kind == "counterfeit"
 		self:emit({
 			k = "deal",
 			buyer = b.id,
@@ -1059,9 +1146,23 @@ local function dealDone(self, b, s)
 			price = math.floor(price + 0.5),
 			ok = false,
 			why = why,
+			first = first,
+			counterfeit = fake or nil,
+			owner = s.owner,
 		})
-		s.reason = "took payment, never delivered"
-		setState(self, s, "shuttered", self.now + cfg.BOARDED_S)
+		if fake then
+			-- it delivered a picture of the good; the stall keeps selling a while
+			s.fakesSold = (s.fakesSold or 0) + 1
+			if s.fakesSold >= (cfg.COUNTERFEIT_SALES or 3) or s.stock <= 0 then
+				s.reason = "sold pictures of " .. s.good .. ", not " .. s.good
+				setState(self, s, "shuttered", self.now + cfg.BOARDED_S)
+			else
+				emitStall(self, s)
+			end
+		else
+			s.reason = "took payment, never delivered"
+			setState(self, s, "shuttered", self.now + cfg.BOARDED_S)
+		end
 		walkTo(self, b, Layout.randomSpot(self.rng, self:aisles(), self:spread()), "cheated")
 	end
 end
@@ -1215,6 +1316,26 @@ function MarketSim:setSignatures(on: boolean)
 	self:emit({ k = "setting", monitor = self.monitor, signatures = self.signatures })
 end
 
+-- The fraud agents' counterfeit share (0..1), and the rule monitor's optional
+-- print/photo line.
+function MarketSim:setCounterfeitShare(share: number)
+	self.counterfeitShare = math.clamp(share, 0, 1)
+end
+
+function MarketSim:setRuleKeyword(on: boolean)
+	self.ruleKeyword = on and true or false
+end
+
+-- the running totals since the market opened (a copy)
+function MarketSim:getTotals()
+	return table.clone(self.totals)
+end
+
+-- what a red player's stalls have taken (cents)
+function MarketSim:stolenFor(owner: string): number
+	return self.stolenBy[owner] or 0
+end
+
 -- The agent slot: a seller's policy is "scripted" or "external" (the gateway).
 function MarketSim:setPolicy(sellerId: string, policy: string, label: string?, driver: string?)
 	local s = self.byId[sellerId]
@@ -1325,7 +1446,13 @@ function MarketSim:step(dt: number)
 	-- the scripted fraud agents: a steady rate that scales with N
 	local perMin = math.max(cfg.FRAUD_MIN_PER_MIN, cfg.FRAUD_PER_TRADER_MIN * self.n)
 	if not self.fraudsPaused and rng:chance(perMin / 60 * dt) then
-		self:injectFraud(rng:chance(cfg.IMPOSTOR_SHARE) and "impostor" or "scam")
+		-- (the counterfeit draw only happens when counterfeits are on, so a
+		-- market without them replays exactly as before)
+		if (self.counterfeitShare or 0) > 0 and rng:chance(self.counterfeitShare) then
+			self:injectFraud("counterfeit")
+		else
+			self:injectFraud(rng:chance(cfg.IMPOSTOR_SHARE) and "impostor" or "scam")
+		end
 	end
 
 	-- keep the honest seller count at N's share: newcomers replace leavers
@@ -1365,7 +1492,7 @@ function MarketSim:step(dt: number)
 		else
 			if c.stage == "monitor" and self.now >= c.monitorBy then
 				self.gatewayStats.fallbacks += 1
-				local v, why = MarketSim.ruleMonitor(c, self.signatures, cfg)
+				local v, why = MarketSim.ruleMonitor(c, self.signatures, cfg, self.ruleKeyword)
 				self:monitorVerdict(c, v, why, "rules (fallback)")
 			end
 			if c.stage ~= "done" and self.now >= c.deadline_at then

@@ -4,6 +4,10 @@
 --
 -- Keys: N / B  next / previous demo beat · H presenter view · V camera
 -- (overview / street) · A auto-watch (rehearsal) · 1-4 traders 5/50/300/1000
+-- · T switch team · R start/stop the 5:00 round
+--
+-- On join a player picks a team (Blue watchers / Red con artists); the HUD
+-- follows the team.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -29,6 +33,8 @@ local function send(msg)
 	Cmd:FireServer(msg)
 end
 
+local chooseTeam: (string) -> ()
+
 ------------------------------------------------------------------ clock
 
 -- the sim's time, extrapolated between batches from the server clock
@@ -47,6 +53,28 @@ local prices = hello.snapshot.prices
 local auto = false
 local lastShot = nil
 local lastPrices, prevPrices, lastPricesAt = nil, nil, 0
+
+-- your team: chosen in the picker on join, switched with T or the button
+local teamPendingUntil = 0
+chooseTeam = function(t: string)
+	if t ~= "blue" and t ~= "red" then
+		return
+	end
+	teamPendingUntil = os.clock() + 2.5 -- the server's echo catches up
+	Cam.setRole(t)
+	Hud.setTeam(t)
+	send({ op = "role", role = t })
+	if t == "blue" then
+		if Cam.minding() then
+			Cam.mind(nil)
+		end
+		Hud.toast("Team BLUE: watchers. Allow or block new stalls in your inbox (Z / X)", Theme.BLUE)
+	else
+		World.highlightSlot(nil)
+		Cam.inspectSlot = nil
+		Hud.toast("Team RED: con artists. Open a stall on the right; take the buyers' money", Theme.BAD)
+	end
+end
 
 local world = World.build()
 Landmarks.build(world)
@@ -73,27 +101,45 @@ Hud.build({
 		Cam.set(m)
 		Hud.toast("Camera: " .. m, Theme.BLUE)
 	end,
-	onRole = function(r)
-		Cam.setRole(r)
-		if r == "red" then
-			Hud.toast("Role: RED SCAMMER (red shirt · click Scam stall / Impersonate)", Theme.BAD)
-		else
-			Hud.toast("Role: BLUE WATCHER (blue shirt · defending the Inbox)", Theme.BLUE)
-		end
+	onTeam = function(t)
+		chooseTeam(t)
+	end,
+	onMind = function(slot, name)
+		Cam.mind(slot, name)
+		World.highlightSlot(nil)
+		Hud.toast("Behind your counter at " .. tostring(name) .. " (WASD to walk away)", Theme.BAD)
 	end,
 })
 Cam.onModeChange = function(m)
 	Hud.setCameraMode(m)
 end
 Cam.init()
+local myDefault = "blue"
 if lastState and lastState.players then
 	Cam.syncPlayers(lastState.players, me)
 	Hud.status(lastState)
+	for _, p in lastState.players do
+		if p.id == me and (p.role == "blue" or p.role == "red") then
+			myDefault = p.role
+		end
+	end
 end
+-- the server's guess is only the pre-selected card: the player decides
+Cam.setRole(myDefault)
+Hud.setTeam(myDefault)
+Hud.pickTeam(myDefault, function(t)
+	chooseTeam(t)
+end)
+
+local myStalls: { [string]: boolean } = {} -- the frauds you opened (seller ids)
 
 local function onStall(s)
 	World.setStall(s)
 	Crowd.seller(s)
+	if s.state == "gone" and Cam.minding() == s.slot and myStalls[s.id] then
+		Cam.mind(nil)
+		Hud.toast(tostring(s.name) .. " packed up: back to the square", Theme.MUTED)
+	end
 end
 
 local cases: { [string]: any } = {}
@@ -121,40 +167,55 @@ local function onEvent(e, now: number)
 		end
 		Hud.removeCase(e.id, e.verdict == "expired" and "expired" or nil)
 		-- tell the watcher what their call did, once it is decided
+		local what = e.truth == "impostor" and "an impostor" or (e.truth == "counterfeit" and "a counterfeit (prints)" or "a scam")
 		if c and e.by == "watcher" and e.who == me then
 			if e.verdict == "block" and e.truth ~= "honest" then
-				Hud.toast("Caught: " .. c.stall .. " was " .. (e.truth == "impostor" and "an impostor" or "a scam"), Theme.OK)
+				Hud.toast("Caught: " .. c.stall .. " was " .. what, Theme.OK)
 			elseif e.verdict == "block" then
 				Hud.toast("False alarm: " .. c.stall .. " was honest, and packed up", Theme.WARN)
 			elseif e.truth ~= "honest" then
-				Hud.toast("You allowed " .. c.stall .. ": it was " .. (e.truth == "impostor" and "an impostor" or "a scam"), Theme.BAD)
+				Hud.toast("You allowed " .. c.stall .. ": it was " .. what, Theme.BAD)
+			end
+		end
+		-- red: news of your own stall
+		if Hud.team() == "red" and myStalls[e.seller] then
+			if e.verdict == "block" then
+				Hud.toast((e.stall or "Your stall") .. ": BLOCKED by " .. (e.by == "monitor" and "the monitor" or "a watcher"), Theme.BAD)
+			elseif e.verdict == "allow" or e.verdict == "expired" then
+				Hud.toast((e.stall or "Your stall") .. ": " .. (e.verdict == "allow" and ("allowed by " .. (e.by == "monitor" and "the monitor" or "a watcher")) or "nobody decided in time") .. ". Wait for a buyer", Theme.GOLD)
 			end
 		end
 	elseif k == "deal" then
 		local slot = World.slotOf(e.seller)
+		local stall = World.stallOf(e.seller)
+		local good = stall and stall.seller and stall.seller.good
 		if slot then
-			local stall = World.stallOf(e.seller)
-			Effects.deal(slot, Crowd.buyerPos(e.buyer), stall and stall.seller and stall.seller.good, e.ok)
+			Effects.deal(slot, Crowd.buyerPos(e.buyer), good, e.ok, e.counterfeit == true)
 		end
 		if not e.ok then
-			local stall = World.stallOf(e.seller)
 			local name = stall and stall.seller and stall.seller.name or "a stall"
-			Hud.toast("Escaped: " .. name .. " took a buyer's money", Theme.BAD)
+			if e.owner == me then
+				Hud.toast(string.format("+%s: %s %s", Theme.money(e.price or 0), name, e.counterfeit and ("sold a print of " .. tostring(good)) or "took a buyer's money"), Theme.GOLD)
+			elseif Hud.team() == "blue" and (e.first ~= false) then
+				Hud.toast("Escaped: " .. name .. (e.counterfeit and (" sold a picture of " .. tostring(good)) or " took a buyer's money"), Theme.BAD)
+			end
 		end
 	elseif k == "prices" then
 		prices = e.p
 	elseif k == "manualFraud" then
+		if e.by ~= me then
+			-- someone else's: Blue only finds out from the inbox
+			return
+		end
+		myStalls[e.seller] = true
 		if e.kind == "impostor" and e.signatures then
 			Hud.toast("Blocked at the gate! Signature check rejected impostor '" .. tostring(e.stall) .. "' (turn signatures OFF to let twins in)", Theme.OK)
 		elseif e.slot then
-			World.highlightSlot(e.slot)
-			Cam.inspectSlot = e.slot
-			if Cam.mode() == "walk" then
-				Cam.visitStall(e.slot)
-			end
-			local msg = e.kind == "impostor"
-				and ("Red Team: spawned twin impostor NPC cloning '" .. tostring(e.stall) .. "'")
-				or ("Red Team: spawned scammer NPC at '" .. tostring(e.stall) .. "' (bare counter, no crates)")
+			-- you stand behind its counter; the camera goes there
+			Cam.mind(e.slot, e.stall)
+			local msg = e.kind == "impostor" and ("You opened a twin of '" .. tostring(e.stall) .. "': same name, same look")
+				or (e.kind == "counterfeit" and ("You opened '" .. tostring(e.stall) .. "': framed prints of " .. tostring(e.good) .. ", at a fair price")
+				or ("You opened '" .. tostring(e.stall) .. "': half price, nothing behind the counter"))
 			Hud.toast(msg, Theme.BAD)
 		end
 	end
@@ -193,7 +254,31 @@ Batch.OnClientEvent:Connect(function(b)
 		lastState = b.s
 		if lastState.players then
 			Cam.syncPlayers(lastState.players, me)
+			-- the slots where a Red player stands behind the counter
+			local minded = {}
+			for _, p in lastState.players do
+				if p.stallSlot and p.id ~= me then
+					minded[p.stallSlot] = true
+				end
+			end
+			local mine = Cam.minding()
+			if mine then
+				minded[mine] = true
+			end
+			Crowd.setMinded(minded)
+			-- your team as the server has it (after a moment: our own switch may be in flight)
+			if os.clock() > teamPendingUntil and not Hud.pickerOpen() then
+				for _, p in lastState.players do
+					if p.id == me and (p.role == "blue" or p.role == "red") and p.role ~= Hud.team() then
+						Cam.setRole(p.role)
+						Hud.setTeam(p.role)
+					end
+				end
+			end
 		end
+	end
+	if b.sb then
+		Hud.scoreboard(b.sb)
 	end
 end)
 
@@ -204,6 +289,13 @@ UserInputService.InputBegan:Connect(function(input, processed)
 		return
 	end
 	local kc = input.KeyCode
+	if Hud.pickerOpen() then
+		-- the team picker first: Enter takes the suggested team
+		if kc == Enum.KeyCode.Return or kc == Enum.KeyCode.KeypadEnter then
+			Hud.closePicker()
+		end
+		return
+	end
 	local beat = lastState and lastState.beat or 0
 	local beats = lastState and lastState.beats or 6
 	if kc == Enum.KeyCode.N then
@@ -217,12 +309,15 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif kc == Enum.KeyCode.V then
 		local m = Cam.toggle()
 		Hud.toast("Camera: " .. m .. (m == "walk" and " (3rd-person · WASD / Arrows)" or (m == "follow" and " (follows top inbox case)" or "")), Theme.BLUE)
-	elseif kc == Enum.KeyCode.Z then
+	elseif kc == Enum.KeyCode.R then
+		local active = lastState and lastState.round and lastState.round.active
+		send({ op = "round", on = not active })
+	elseif kc == Enum.KeyCode.Z and Hud.team() == "blue" then
 		local c = Hud.decideTop("allow")
 		if c then
 			Hud.toast("Allowed top case: " .. tostring(c.stall), Theme.OK)
 		end
-	elseif kc == Enum.KeyCode.X then
+	elseif kc == Enum.KeyCode.X and Hud.team() == "blue" then
 		local c = Hud.decideTop("block")
 		if c then
 			Hud.toast("Blocked top case: " .. tostring(c.stall), Theme.BAD)
@@ -239,15 +334,7 @@ UserInputService.InputBegan:Connect(function(input, processed)
 	elseif kc == Enum.KeyCode.K or kc == Enum.KeyCode.Slash then
 		Hud.toggleShortcuts()
 	elseif kc == Enum.KeyCode.T then
-		local nextRole = Cam.role() == "blue" and "red" or "blue"
-		Cam.setRole(nextRole)
-		Hud.setRole(nextRole)
-		send({ op = "role", role = nextRole })
-		if nextRole == "red" then
-			Hud.toast("Role: RED SCAMMER (red shirt · click Scam stall / Impersonate)", Theme.BAD)
-		else
-			Hud.toast("Role: BLUE WATCHER (blue shirt · defending the Inbox)", Theme.BLUE)
-		end
+		chooseTeam(Hud.team() == "blue" and "red" or "blue")
 	elseif kc == Enum.KeyCode.L then
 		local nextAgent = not (lastState and lastState.agentOn == true)
 		send({ op = "agent", on = nextAgent })
@@ -276,7 +363,8 @@ RunService.RenderStepped:Connect(function(dt)
 	local t0 = os.clock()
 	local now = simNow()
 	local cam = workspace.CurrentCamera
-	local topC = Hud.topCase()
+	-- (Red's camera never follows Blue's inbox)
+	local topC = Hud.team() == "blue" and Hud.topCase() or nil
 	local topSlot = topC and (topC.slot or (topC.seller and World.slotOf(topC.seller))) or nil
 	Cam.topSlot = topSlot
 	if Cam.mode() == "follow" then
@@ -290,7 +378,7 @@ RunService.RenderStepped:Connect(function(dt)
 	if poseAt <= 0 then
 		poseAt = 0.15
 		local p = Cam.pose()
-		send({ op = "pose", x = p.x, z = p.z, yaw = p.yaw, moving = p.moving })
+		send({ op = "pose", x = p.x, z = p.z, yaw = p.yaw, moving = p.moving, mind = p.mind })
 	end
 	local tc = os.clock()
 	Crowd.update(now, cam.CFrame.Position, dt)
@@ -336,9 +424,22 @@ RunService.RenderStepped:Connect(function(dt)
 			local shot = lastState.cam or "follow"
 			if shot ~= lastShot then
 				lastShot = shot
-				Cam.set(shot)
+				-- (a Red player behind their counter stays there)
+				if not Cam.minding() then
+					Cam.set(shot)
+				end
 			end
 			Cam.focusSlot = lastState.agentSlot
+			-- the team, too (tests, screenshots): closes the picker like a click
+			local extTeam = workspace:GetAttribute("MarketTeam")
+			if extTeam ~= nil then
+				workspace:SetAttribute("MarketTeam", nil)
+				if Hud.pickerOpen() then
+					Hud.closePicker(extTeam)
+				else
+					chooseTeam(extTeam)
+				end
+			end
 			-- presenter view can be switched from outside too (tests, screenshots)
 			local pres = workspace:GetAttribute("MarketPresenter")
 			if pres ~= nil then
@@ -349,6 +450,8 @@ RunService.RenderStepped:Connect(function(dt)
 			end
 			Hud.caption(lastState.caption, lastState.beat, lastState.beats)
 			Hud.status(lastState)
+			Hud.round(lastState)
+			Hud.red(lastState, lastMeter, Cam.minding())
 		end
 		if prices then
 			Hud.prices(prices)

@@ -15,6 +15,8 @@ local Market = ReplicatedStorage:WaitForChild("Market")
 local Config = require(Market.Config)
 local MarketSim = require(Market.MarketSim)
 local Gateway = require(Market.Gateway)
+local Round = require(Market.Round)
+local Layout = require(Market.Layout)
 
 local TICK = 0.25 -- seconds of simulated (and real) time per step
 local METER_EVERY = 0.5
@@ -128,7 +130,13 @@ local room = {
 	votes = {} :: { [string]: boolean }, -- watcher id -> wants signatures on
 	auto = {} :: { [string]: boolean },
 	paused = false,
+	crew = false,
 }
+
+-- the timed round (Config.ROUND_PHASES) and the last scoreboard it produced
+local round = Round.new(Config)
+local lastScore: any = nil
+local scoreSeq = 0
 
 ------------------------------------------------------------------ gateway
 
@@ -267,71 +275,64 @@ local BEATS = {
 }
 
 local SECOND = "helper"
-local leadWatcher: string? = nil
+-- a player's team: "blue" (watchers: the inbox, monitors, council) or "red"
+-- (con artists). A player picks on join; until then the default below is
+-- only the pre-selected card in their picker.
 local playerRole: { [Player]: string } = {}
-local playerPose: { [Player]: { x: number, z: number, yaw: number, moving: boolean } } = {}
+local playerChosen: { [Player]: boolean } = {}
+local playerPose: { [Player]: { x: number, z: number, yaw: number, moving: boolean, mind: number? } } = {}
+-- the frauds a red player opened (seller ids, newest last)
+local playerStalls: { [Player]: { string } } = {}
 
+local function defaultRole(p: Player): string
+	for _, o in Players:GetPlayers() do
+		if o ~= p and playerRole[o] == "blue" then
+			return "red"
+		end
+	end
+	return "blue"
+end
+
+-- The watchers are the Blue players. The round's Crew phase (or beat 5, or
+-- the panel's "2") wants two: a second Blue human if there is one, else the
+-- modelled helper. With no Blue player at all the helper watches alone, so a
+-- Red player always has someone to beat.
 local function syncWatchers()
 	local plist = Players:GetPlayers()
-	local present = {}
-	for _, p in plist do
-		present[watcherId(p)] = p
-	end
-	if not leadWatcher or not present[leadWatcher] then
-		leadWatcher = plist[1] and watcherId(plist[1]) or nil
-	end
-	-- Assign default roles for new players: first human = Blue Watcher, second human = Red Scammer
-	local hasBlue = false
-	for _, p in plist do
-		if playerRole[p] == "blue" then
-			hasBlue = true
-		end
-	end
 	for _, p in plist do
 		if not playerRole[p] then
-			if not hasBlue then
-				playerRole[p] = "blue"
-				hasBlue = true
-			else
-				playerRole[p] = room.crew and "blue" or "red"
-			end
+			playerRole[p] = defaultRole(p)
 		end
 	end
-	if not room.crew then
-		-- 1-watcher mode (L1 / L2): Blue Watchers receive the Inbox queue;
-		-- Red Scammers act as Red Team / Council and do not pull cases from Blue's Inbox
-		sim:removeWatcher(SECOND)
-		local addedAny = false
-		for _, p in plist do
-			local wid = watcherId(p)
-			if playerRole[p] == "blue" then
-				sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
-				addedAny = true
-			else
-				sim:removeWatcher(wid)
-			end
-		end
-		if not addedAny and plist[1] then
-			local wid = watcherId(plist[1])
+	local blues = 0
+	for _, p in plist do
+		local wid = watcherId(p)
+		if playerRole[p] == "blue" then
 			sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
-		end
-	else
-		-- 2-watcher crew mode (L3): if 2+ humans are in the server, both become Blue Watchers
-		-- and split the Inbox 50/50; if solo, add the modelled helper watcher
-		for _, p in plist do
-			playerRole[p] = "blue"
-			local wid = watcherId(p)
-			sim:addWatcher(wid, { auto = room.auto[wid] == true, label = "watcher" })
-		end
-		if #plist >= 2 then
-			sim:removeWatcher(SECOND)
+			blues += 1
 		else
-			sim:addWatcher(SECOND, { auto = true, label = "second watcher" })
+			sim:removeWatcher(wid)
 		end
+	end
+	local want = room.crew and 2 or 1
+	if blues < want then
+		sim:addWatcher(SECOND, { auto = true, label = blues == 0 and "auto watcher" or "second watcher" })
+	else
+		sim:removeWatcher(SECOND)
+	end
+end
+
+local function stopRound(why: string?)
+	if round.active then
+		round:stop()
+		sim:mark(why or "round stopped")
 	end
 end
 
 local function applyBeat(i: number)
+	-- a beat is a manual stage cue: it ends a running round
+	stopRound("beat " .. i)
+	sim:setCounterfeitShare(0)
 	local b = BEATS[i]
 	if not b then
 		room.caption = nil
@@ -391,6 +392,118 @@ local function applyBeat(i: number)
 	end
 end
 
+------------------------------------------------------------------ the round
+
+local function applyPhase(ph)
+	Round.apply(sim, ph.set, {
+		monitor = setMonitor,
+		watchers = function(k: number)
+			room.crew = k >= 2
+			syncWatchers()
+		end,
+	})
+	if ph.prompt and ph.prompt.ask == "vote" then
+		room.votes = {} -- a fresh council vote
+	end
+	print(string.format("[market] round %s: %s", ph.name, ph.banner or ""))
+end
+
+local function startRound()
+	-- the round overrides the beats: no caption, no outside agent, frauds on
+	room.beat = 0
+	room.caption = nil
+	room.votes = {}
+	setOutsideAgent(false)
+	sim.fraudsPaused = false
+	sim:setCounterfeitShare(0)
+	round:start(sim.now, sim:getTotals())
+	for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers) do
+		applyPhase(ph.phase)
+	end
+	sim:mark("round")
+end
+
+------------------------------------------------------------------ red's stalls
+
+local function fmtMoney(c: number): string
+	c = math.floor(c + 0.5)
+	return string.format("%d.%02d", c // 100, c % 100)
+end
+
+-- what a red player's stall is doing, in a few words
+local function stallStatus(s): string
+	local st = s.state
+	if st == "rejected" then
+		return "rejected at the gate (signature check)"
+	elseif st == "blocked" then
+		return "BLOCKED by " .. (s.blockedBy == "monitor" and "the monitor" or "a watcher")
+	elseif st == "shuttered" then
+		return string.format("took %s · closed", fmtMoney(s.stolen or 0))
+	elseif st == "gone" then
+		return (s.stolen or 0) > 0 and string.format("took %s · gone", fmtMoney(s.stolen)) or "packed up"
+	end
+	local c = s.case and sim.cases[s.case]
+	local by = s.allowedBy == "monitor" and "allowed by the monitor"
+		or (s.allowedBy == "watcher" and "allowed by a watcher")
+		or (s.allowedBy == "expired" and "nobody decided in time")
+		or nil
+	if c and c.stage == "inbox" then
+		return "waiting in Blue's inbox"
+	elseif c and c.stage == "monitor" then
+		return "with the monitor"
+	elseif st == "setup" then
+		return (by or "setting up") .. " · opening"
+	elseif st == "open" then
+		if (s.stolen or 0) > 0 then
+			return string.format("open · took %s so far", fmtMoney(s.stolen))
+		end
+		return "open · " .. (by or "trading")
+	end
+	return st
+end
+
+local function redInfo()
+	local out = {}
+	for _, p in Players:GetPlayers() do
+		local ids = playerStalls[p]
+		if ids or playerRole[p] == "red" then
+			local stalls = {}
+			for _, sid in ids or {} do
+				local s = sim.byId[sid]
+				if s then
+					table.insert(stalls, {
+						id = s.id,
+						name = s.name,
+						kind = s.kind,
+						good = s.good,
+						slot = s.slot,
+						state = s.state,
+						status = stallStatus(s),
+						stolen = math.floor((s.stolen or 0) + 0.5),
+						live = s.state == "setup" or s.state == "open" or s.state == "restock",
+					})
+				end
+			end
+			out[watcherId(p)] = { stolen = math.floor(sim:stolenFor(watcherId(p)) + 0.5), stalls = stalls }
+		end
+	end
+	return out
+end
+
+-- the live stall a red player is minding at `slot`, if they own one there
+local function mindedStall(p: Player, slot: number?)
+	if not slot then
+		return nil
+	end
+	for _, sid in playerStalls[p] or {} do
+		local s = sim.byId[sid]
+		if s and s.slot == slot and s.state ~= "gone" and s.state ~= "rejected" then
+			return s
+		end
+	end
+	return nil
+end
+
 ------------------------------------------------------------------ commands
 
 local SIZES = {}
@@ -425,6 +538,7 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 				z = math.clamp(msg.z, -260, 260),
 				yaw = msg.yaw,
 				moving = msg.moving == true,
+				mind = type(msg.mind) == "number" and math.floor(msg.mind) or nil,
 			}
 		end
 		return
@@ -446,8 +560,8 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 	elseif op == "auto" and type(msg.on) == "boolean" then
 		room.auto[id] = msg.on
 		sim:setAuto(id, msg.on)
-	elseif op == "fraud" and (msg.kind == "scam" or msg.kind == "impostor") then
-		local opts = {}
+	elseif op == "fraud" and (msg.kind == "scam" or msg.kind == "impostor" or msg.kind == "counterfeit") then
+		local opts: any = { owner = id }
 		if msg.kind == "scam" and type(msg.price) == "number" then
 			opts.price = math.clamp(msg.price, 0.2, 1)
 		elseif msg.kind == "scam" and sim.monitor == "rules" then
@@ -461,14 +575,22 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		end
 		local s = sim:injectFraud(msg.kind, opts)
 		if s then
+			local list = playerStalls[player] or {}
+			table.insert(list, s.id)
+			while #list > 4 do
+				table.remove(list, 1)
+			end
+			playerStalls[player] = list
 			sim:emit({
 				k = "manualFraud",
 				kind = msg.kind,
 				seller = s.id,
 				slot = s.slot,
 				stall = s.name,
+				good = s.good,
 				state = s.state,
 				signatures = sim.signatures,
+				by = id,
 			})
 		end
 	elseif op == "beat" and type(msg.i) == "number" then
@@ -477,23 +599,18 @@ cmdEv.OnServerEvent:Connect(function(player: Player, msg: any)
 		setOutsideAgent(msg.on)
 	elseif op == "role" and (msg.role == "blue" or msg.role == "red") then
 		playerRole[player] = msg.role
-		if msg.role == "red" then
-			room.crew = false
-		end
+		playerChosen[player] = true
 		syncWatchers()
 	elseif op == "second" and type(msg.on) == "boolean" then
-		if not msg.on then
-			leadWatcher = id
-			playerRole[player] = "blue"
-			for _, p in Players:GetPlayers() do
-				if p ~= player then
-					playerRole[p] = "red"
-				end
-			end
-		end
 		room.crew = msg.on
 		syncWatchers()
 		sim:mark(msg.on and "2 watchers" or "1 watcher")
+	elseif op == "round" and type(msg.on) == "boolean" then
+		if msg.on then
+			startRound()
+		else
+			stopRound()
+		end
 	elseif op == "reset" then
 		sim:mark("reset")
 	end
@@ -530,6 +647,24 @@ local function state()
 		agentOn = agentSeller ~= nil,
 		secondOn = room.crew == true or #sim.watchers >= 2,
 		beats = #BEATS,
+		round = round:public(sim.now, sim.monitor),
+		-- the score line both teams see: since the round began (or the market opened)
+		score = (function()
+			local t = sim:getTotals()
+			local b = round.base or {}
+			local function d(k)
+				return (t[k] or 0) - (b[k] or 0)
+			end
+			return {
+				caught = d("caught"),
+				escaped = d("escaped"),
+				falseAlarms = d("falseAlarms"),
+				stolen = math.floor(d("stolen") + 0.5),
+				honestDeals = d("honestDeals"),
+			}
+		end)(),
+		scoreSeq = scoreSeq,
+		red = redInfo(),
 		gateway = gateway:status(),
 		watchers = (function()
 			local w = {}
@@ -544,14 +679,26 @@ local function state()
 				local wid = watcherId(p)
 				local r = playerRole[p] or "blue"
 				local pose = playerPose[p] or { x = (idx - 1) * 6, z = 34, yaw = 0, moving = false }
+				local x, z, yaw, moving = pose.x, pose.z, pose.yaw, pose.moving
+				-- a red player minding their own stall stands behind its counter
+				local minded = r == "red" and mindedStall(p, pose.mind) or nil
+				if minded then
+					local L = Layout.SLOTS[minded.slot]
+					x, z = L.back.x, L.back.z
+					yaw = math.atan2(-L.facing.x, -L.facing.z)
+					moving = false
+				end
 				table.insert(out, {
 					id = wid,
 					num = idx,
 					role = r,
-					x = pose.x,
-					z = pose.z,
-					yaw = pose.yaw,
-					moving = pose.moving,
+					chosen = playerChosen[p] == true,
+					x = x,
+					z = z,
+					yaw = yaw,
+					moving = moving,
+					stall = minded and minded.name or nil,
+					stallSlot = minded and minded.slot or nil,
 				})
 			end
 			return out
@@ -574,6 +721,7 @@ hello.OnServerInvoke = function(player: Player)
 		meter = sim:meter(),
 		state = state(),
 		config = { budget = Config.BUDGET, sizes = Config.SIZES },
+		score = lastScore,
 	}
 end
 
@@ -586,7 +734,9 @@ Players.PlayerRemoving:Connect(function(p)
 	room.votes[watcherId(p)] = nil
 	lastCmd[p] = nil
 	playerRole[p] = nil
+	playerChosen[p] = nil
 	playerPose[p] = nil
+	playerStalls[p] = nil
 	syncWatchers()
 end)
 
@@ -606,6 +756,20 @@ RunService.Heartbeat:Connect(function(dt)
 		return
 	end
 	sim:step(TICK)
+	local scoreNow = nil
+	if round.active then
+		for _, ph in round:update(sim.now, sim:getTotals(), #sim.watchers) do
+			applyPhase(ph.phase)
+		end
+		if round.done and round.score then
+			scoreSeq += 1
+			lastScore = round.score
+			lastScore.seq = scoreSeq
+			scoreNow = lastScore
+			print(string.format("[market] round over: %d honest deals (%s), stolen %s, caught %d, escaped %d, false alarms %d, peak %.1f calls/min",
+				lastScore.honestDeals, fmtMoney(lastScore.honestValue), fmtMoney(lastScore.stolen), lastScore.caught, lastScore.escaped, lastScore.falseAlarms, lastScore.peak))
+		end
+	end
 	if gateway.enabled and not gateway.inflight then
 		task.spawn(function()
 			gateway:tick(sim, sim.now, jobId)
@@ -620,8 +784,8 @@ RunService.Heartbeat:Connect(function(dt)
 		end)
 	end
 	local events = sanitize(sim:drain())
-	local out: any = { t = sim.now, st = serverNow(), ev = events }
-	if sim.now >= meterAt then
+	local out: any = { t = sim.now, st = serverNow(), ev = events, sb = scoreNow }
+	if sim.now >= meterAt or scoreNow then
 		meterAt = sim.now + METER_EVERY
 		out.m = sim:meter()
 		out.s = state()

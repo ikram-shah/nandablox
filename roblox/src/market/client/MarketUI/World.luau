@@ -378,6 +378,40 @@ local function goodsOn(folder, good: string, cf: CFrame, look: number)
 	end
 end
 
+-- a counterfeit stall's wares: small framed pictures of the good (a thin
+-- frame and a square of the good's colour), propped up facing the aisle
+local function prints(folder, good: string, cf: CFrame, look: number, n: number?, size: number?)
+	local g = Theme.GOODS[good]
+	local col = g and g.color or Theme.PAPER
+	local rng = Random.new(look)
+	n = n or 4
+	size = size or 1
+	local frameCol = Color3.fromRGB(196, 160, 72)
+	for i = 0, n - 1 do
+		local x = (i - (n - 1) / 2) * 1.9
+		local w, h = 1.5 * size, 1.15 * size
+		local base = cf * CFrame.new(x, h / 2 + 0.05, rng:NextNumber(-0.15, 0.15)) * CFrame.Angles(math.rad(-14), rng:NextNumber(-0.2, 0.2), 0)
+		part({ Size = Vector3.new(w, h, 0.12), CFrame = base, Color = frameCol, Material = Enum.Material.Wood, Parent = folder })
+		-- the picture: the good's colour, with a lighter band (a sack's shape, in paint)
+		part({
+			Size = Vector3.new(w * 0.74, h * 0.66, 0.05),
+			CFrame = base * CFrame.new(0, 0, -0.07),
+			Color = col,
+			Material = Enum.Material.SmoothPlastic,
+			Parent = folder,
+			CastShadow = false,
+		})
+		part({
+			Size = Vector3.new(w * 0.5, h * 0.18, 0.05),
+			CFrame = base * CFrame.new(0, -h * 0.12, -0.1),
+			Color = col:Lerp(Color3.new(1, 1, 1), 0.45),
+			Material = Enum.Material.SmoothPlastic,
+			Parent = folder,
+			CastShadow = false,
+		})
+	end
+end
+
 local function crate(folder, cf: CFrame, s: number?)
 	s = s or 1.4
 	part({
@@ -567,7 +601,7 @@ function World.setStall(s)
 		d.badge.Enabled = external
 		d.badgeLabel.Text = "run by " .. tostring(s.label or "an outside agent")
 	end
-	local key = s.id .. ":" .. s.state .. ":" .. (s.good or "") .. ":" .. tostring(s.hasStock ~= false)
+	local key = s.id .. ":" .. s.state .. ":" .. (s.good or "") .. ":" .. tostring(s.hasStock ~= false) .. ":" .. tostring(s.display)
 	d.nameLabel.Text = s.name
 	local price = Theme.money(s.price)
 	d.priceLabel.Text = price
@@ -594,7 +628,17 @@ function World.setStall(s)
 		d.nameLabel.TextColor3 = Theme.INK
 	end
 	local stocked = s.hasStock ~= false
-	if st == "open" then
+	local framed = s.display == "prints"
+	if framed and (st == "open" or st == "setup") then
+		-- framed prints on the counter and on the shelf, no crates
+		if st == "open" then
+			awning(d.dyn, cf, s.good)
+		else
+			part({ Size = Vector3.new(Layout.STALL_WIDTH, 0.8, 0.8), CFrame = cf * CFrame.new(0, 8.4, D / 2 - 0.6), Color = Theme.GOODS[s.good].awning[1], Material = Enum.Material.Fabric, Parent = d.dyn })
+		end
+		prints(d.dyn, s.good, onCounter, s.look or 1, 4, 1)
+		prints(d.dyn, s.good, cf * CFrame.new(0, 4.3, D / 2 - 0.9), (s.look or 1) + 7, 3, 1.25)
+	elseif st == "open" then
 		awning(d.dyn, cf, s.good)
 		if stocked then
 			goodsOn(d.dyn, s.good, onCounter, s.look or 1)

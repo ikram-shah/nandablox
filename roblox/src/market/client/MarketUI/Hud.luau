@@ -43,6 +43,16 @@ local showControlsBtn: TextButton? = nil
 local shortcutsBox: Frame? = nil
 local topCard: any = nil
 
+-- teams: Blue (watchers) sees the inbox, the meter and the watcher
+-- controls; Red (con artists) sees the red panel instead
+local team = "blue"
+local blueOnly: { GuiObject } = {}
+local teamChip: TextLabel
+local onTeam: ((string) -> ())?
+local red: any = {} -- the red panel's parts
+local rnd: any = {} -- the round bar, the prompt, the banner, the scoreboard
+local picker: Frame? = nil
+
 ------------------------------------------------------------------ helpers
 
 local function pct(price: number, market: number): string
@@ -105,8 +115,19 @@ local function cardFor(c, now: number)
 		TextTruncate = Enum.TextTruncate.AtEnd,
 		Parent = f,
 	})
+	-- what the listing says it sells: the good, and anything after it in small
+	-- type (a counterfeit's "(print)")
+	local goodText = c.good
+	if type(c.listing) == "string" and c.listing ~= c.good then
+		local rest = string.sub(c.listing, #c.good + 1)
+		if string.sub(c.listing, 1, #c.good) == c.good and rest ~= "" then
+			goodText = c.good .. "<font size=\"12\">" .. rest .. "</font>"
+		else
+			goodText = "<font size=\"12\">" .. c.listing .. "</font>"
+		end
+	end
 	label({
-		Text = string.format("%s %s · <b>%s</b>", Theme.money(c.price), c.good, pct(c.price, c.market)),
+		Text = string.format("%s %s · <b>%s</b>", Theme.money(c.price), goodText, pct(c.price, c.market)),
 		RichText = true,
 		TextSize = 16,
 		TextColor3 = below and (mine and Color3.fromRGB(190, 60, 40) or Theme.WARN) or ink,
@@ -122,7 +143,9 @@ local function cardFor(c, now: number)
 	else
 		table.insert(facts, string.format("%d ratings ★%.1f", c.ratings, c.rating_avg or 0))
 	end
-	if c.hasStock == false then
+	if c.display == "prints" then
+		table.insert(facts, "framed prints on the counter")
+	elseif c.hasStock == false then
 		table.insert(facts, "no crates")
 	else
 		table.insert(facts, "stocked")
@@ -131,7 +154,7 @@ local function cardFor(c, now: number)
 		table.insert(facts, "unsigned")
 	end
 	local clueColor = muted
-	if c.hasStock == false then
+	if c.hasStock == false or c.display == "prints" then
 		clueColor = mine and Color3.fromRGB(185, 52, 36) or Theme.WARN
 	elseif c.vouchedBy then
 		clueColor = mine and Color3.fromRGB(36, 118, 68) or Theme.OK
@@ -502,7 +525,7 @@ function Hud.setCameraMode(m: string)
 end
 
 function Hud.setRole(r: string)
-	pick("role", r)
+	Hud.setTeam(r)
 end
 
 function Hud.toggleShortcuts(on: boolean?)
@@ -527,16 +550,30 @@ local function buildControls(parent, sizes)
 	Theme.pad(12, 14).Parent = controls
 	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = controls })
 	label({ Text = "NANDA MARKET", Font = Theme.HEAVY, TextSize = 20, Size = UDim2.new(1, 0, 0, 22), Parent = controls })
-	segmented(controls, "MY ROLE (T)", "role", {
-		{ text = "Blue Watcher", value = "blue" },
-		{ text = "Red Scammer", value = "red" },
-	}, function(v)
-		send({ op = "role", role = v })
-		if onRole then
-			onRole(v)
+	-- your team, and a small button to switch (T does the same)
+	local teamRow = new("Frame", { Size = UDim2.new(1, 0, 0, 34), BackgroundTransparency = 1, Parent = controls })
+	teamChip = label({
+		Text = "TEAM BLUE · watcher",
+		Font = Theme.HEAVY,
+		TextSize = 15,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.fromRGB(28, 92, 196),
+		Size = UDim2.new(0.64, -4, 1, 0),
+		Parent = teamRow,
+	})
+	Theme.corner(8).Parent = teamChip
+	button({
+		Text = "switch team (T)",
+		TextSize = 13,
+		Size = UDim2.new(0.36, -2, 1, 0),
+		Position = UDim2.new(0.64, 2, 0, 0),
+		Parent = teamRow,
+	}, function()
+		if onTeam then
+			onTeam(team == "blue" and "red" or "blue")
 		end
 	end)
-	pick("role", "blue")
 	local opts = {}
 	for _, n in sizes do
 		table.insert(opts, { text = tostring(n), value = n })
@@ -544,31 +581,31 @@ local function buildControls(parent, sizes)
 	segmented(controls, "TRADERS", "n", opts, function(v)
 		send({ op = "size", n = v })
 	end)
-	segmented(controls, "MONITOR", "monitor", {
+	table.insert(blueOnly, segmented(controls, "MONITOR", "monitor", {
 		{ text = "off", value = "off" },
 		{ text = "rules", value = "rules" },
 		{ text = "yours", value = "external" },
 	}, function(v)
 		send({ op = "monitor", mode = v })
-	end)
-	segmented(controls, "SIGNATURE CHECKS (your vote)", "sig", {
+	end))
+	table.insert(blueOnly, segmented(controls, "SIGNATURE CHECKS (your vote)", "sig", {
 		{ text = "on", value = true },
 		{ text = "off", value = false },
 	}, function(v)
 		send({ op = "vote", on = v })
-	end)
-	segmented(controls, "OUTSIDE AGENT (L)", "agent", {
+	end))
+	table.insert(blueOnly, segmented(controls, "OUTSIDE AGENT (L)", "agent", {
 		{ text = "scripted", value = false },
 		{ text = "Gemini", value = true },
 	}, function(v)
 		send({ op = "agent", on = v })
-	end)
-	segmented(controls, "WATCHERS / CREW", "second", {
+	end))
+	table.insert(blueOnly, segmented(controls, "WATCHERS / CREW", "second", {
 		{ text = "1 (you)", value = false },
 		{ text = "2 (+helper)", value = true },
 	}, function(v)
 		send({ op = "second", on = v })
-	end)
+	end))
 	segmented(controls, "CAMERA (V)", "cam", {
 		{ text = "follow", value = "follow" },
 		{ text = "walk 3P", value = "walk" },
@@ -580,17 +617,6 @@ local function buildControls(parent, sizes)
 		end
 	end)
 	pick("cam", "follow")
-	-- red
-	local red = new("Frame", { Size = UDim2.new(1, 0, 0, 52), BackgroundTransparency = 1, Parent = controls })
-	label({ Text = "FRAUD (red)", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), Parent = red })
-	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 30), Position = UDim2.new(0, 0, 0, 20), BackgroundTransparency = 1, Parent = red })
-	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), Parent = row })
-	button({ Text = "Scam stall", Size = UDim2.new(0.5, -3, 1, 0), BackgroundColor3 = Color3.fromRGB(110, 40, 40), TextSize = 15, Parent = row }, function()
-		send({ op = "fraud", kind = "scam", price = 0.6 })
-	end)
-	button({ Text = "Impersonate", Size = UDim2.new(0.5, -3, 1, 0), BackgroundColor3 = Color3.fromRGB(110, 40, 40), TextSize = 15, Parent = row }, function()
-		send({ op = "fraud", kind = "impostor" })
-	end)
 	status = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, TextWrapped = true, Parent = controls })
 	button({
 		Text = "? Keyboard Shortcuts (K)",
@@ -608,13 +634,6 @@ function Hud.status(s)
 	if s then
 		pick("agent", s.agentOn == true)
 		pick("second", s.secondOn == true)
-		if s.players then
-			for _, p in s.players do
-				if p.id == you and (p.role == "blue" or p.role == "red") then
-					pick("role", p.role)
-				end
-			end
-		end
 	end
 	if not status then
 		return
@@ -698,6 +717,525 @@ function Hud.isPresenter(): boolean
 	return presenter
 end
 
+------------------------------------------------------------------ teams
+
+local RED_DARK = Color3.fromRGB(150, 40, 40)
+local BLUE_DARK = Color3.fromRGB(28, 92, 196)
+
+local function fmtClock(sec: number): string
+	sec = math.max(0, math.floor(sec + 0.5))
+	return string.format("%d:%02d", sec // 60, sec % 60)
+end
+
+function Hud.team(): string
+	return team
+end
+
+-- show the screen for a team: Blue the inbox, meter and watcher controls;
+-- Red the red panel (tools, stolen tally, your stalls, Blue's inbox count)
+function Hud.setTeam(t: string)
+	if t ~= "blue" and t ~= "red" then
+		return
+	end
+	team = t
+	local blue = t == "blue"
+	for _, inst in blueOnly do
+		inst.Visible = blue
+	end
+	if inboxPanel then
+		inboxPanel.Visible = blue
+	end
+	if meter.frame then
+		meter.frame.Visible = blue
+	end
+	if red.panel then
+		red.panel.Visible = not blue
+	end
+	if teamChip then
+		teamChip.Text = blue and "TEAM BLUE · watcher" or "TEAM RED · con artist"
+		teamChip.BackgroundColor3 = blue and BLUE_DARK or RED_DARK
+	end
+	if rnd.prompts then
+		Hud.prompts(rnd.lastPrompts)
+	end
+end
+
+------------------------------------------------------------------ the red panel
+
+local TOOLS = {
+	{ kind = "scam", text = "Scam stall", desc = "too cheap to be true · no goods behind the counter" },
+	{ kind = "impostor", text = "Impersonate", desc = "copy a real stall's name (needs signatures off)" },
+	{ kind = "counterfeit", text = "Counterfeit", desc = "a fair price · sells framed prints of the good" },
+}
+
+local function buildRedPanel(parent)
+	local f = panel({
+		Name = "RedTeam",
+		Size = UDim2.new(0, 380, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		Position = UDim2.new(1, -396, 0, 16),
+		BackgroundTransparency = 0.12,
+		Visible = false,
+		Parent = parent,
+	})
+	Theme.stroke(Theme.BAD, 2, 0.35).Parent = f
+	Theme.pad(14, 16).Parent = f
+	new("UIListLayout", { Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder, Parent = f })
+	label({ Text = "RED TEAM · con artists", Font = Theme.HEAVY, TextSize = 20, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 24), LayoutOrder = 1, Parent = f })
+	-- the stolen tally
+	local tally = new("Frame", { Size = UDim2.new(1, 0, 0, 58), BackgroundTransparency = 1, LayoutOrder = 2, Parent = f })
+	label({ Text = "STOLEN BY YOUR STALLS", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), Parent = tally })
+	red.stolen = label({ Text = "0.00", Font = Theme.HEAVY, TextSize = 40, TextColor3 = Theme.GOLD, Size = UDim2.new(0.55, 0, 0, 42), Position = UDim2.new(0, 0, 0, 16), Parent = tally })
+	red.stolenSub = label({ Text = "", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(0.45, 0, 0, 40), Position = UDim2.new(0.55, 0, 0, 18), TextWrapped = true, TextXAlignment = Enum.TextXAlignment.Right, Parent = tally })
+	-- the tools
+	label({ Text = "OPEN A STALL", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 3, Parent = f })
+	for i, tool in TOOLS do
+		local b = button({
+			Text = "",
+			BackgroundColor3 = Color3.fromRGB(110, 36, 36),
+			Size = UDim2.new(1, 0, 0, 46),
+			LayoutOrder = 3 + i,
+			Parent = f,
+		}, function()
+			local msg: any = { op = "fraud", kind = tool.kind }
+			if tool.kind == "scam" then
+				msg.price = 0.6
+			end
+			send(msg)
+		end)
+		label({ Text = tool.text, Font = Theme.HEAVY, TextSize = 18, Size = UDim2.new(1, -20, 0, 22), Position = UDim2.new(0, 12, 0, 3), Parent = b })
+		label({ Text = tool.desc, TextSize = 13, TextColor3 = Color3.fromRGB(240, 200, 196), Size = UDim2.new(1, -20, 0, 16), Position = UDim2.new(0, 12, 0, 25), TextTruncate = Enum.TextTruncate.AtEnd, Parent = b })
+	end
+	-- your stalls
+	label({ Text = "YOUR STALLS", Font = Theme.BOLD, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 16), LayoutOrder = 10, Parent = f })
+	red.rows = {}
+	for i = 1, 4 do
+		local row = new("Frame", { Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = Theme.PANEL2, BorderSizePixel = 0, LayoutOrder = 10 + i, Visible = false, Parent = f }, { Theme.corner(8) })
+		local name = label({ Text = "", Font = Theme.HEAVY, TextSize = 15, Size = UDim2.new(1, -96, 0, 18), Position = UDim2.new(0, 10, 0, 3), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
+		local st = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -96, 0, 16), Position = UDim2.new(0, 10, 0, 21), TextTruncate = Enum.TextTruncate.AtEnd, Parent = row })
+		local go = button({ Text = "stand here", TextSize = 13, Size = UDim2.new(0, 80, 0, 28), Position = UDim2.new(1, -86, 0, 6), BackgroundColor3 = RED_DARK, Parent = row }, function()
+			local s = red.rowStall and red.rowStall[i]
+			if s and red.onMind then
+				red.onMind(s.slot, s.name)
+			end
+		end)
+		red.rows[i] = { frame = row, name = name, status = st, go = go }
+	end
+	red.none = label({ Text = "none yet: open one above", TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 15, Parent = f })
+	-- what Blue is facing, without the cards
+	red.inbox = label({ Text = "Blue's inbox: 0 waiting", Font = Theme.BOLD, TextSize = 16, TextColor3 = Theme.BLUE, Size = UDim2.new(1, 0, 0, 22), LayoutOrder = 20, Parent = f })
+	red.panel = f
+end
+
+-- refresh the red panel from the room's state and the meter
+function Hud.red(s, m, minding: number?)
+	if not red.panel then
+		return
+	end
+	local info = s and s.red and s.red[you]
+	local stolen = info and info.stolen or 0
+	red.stolen.Text = Theme.money(stolen)
+	local stalls = info and info.stalls or {}
+	local sales, live = 0, 0
+	red.rowStall = {}
+	for i = 1, 4 do
+		local row = red.rows[i]
+		-- newest first
+		local st = stalls[#stalls - i + 1]
+		red.rowStall[i] = st
+		row.frame.Visible = st ~= nil
+		if st then
+			local kind = st.kind == "counterfeit" and "counterfeit" or (st.kind == "impostor" and "impostor" or "scam")
+			row.name.Text = string.format("%s %s  <font size=\"12\" color=\"#A09A96\">%s · %s</font>", Theme.GOODS[st.good] and Theme.GOODS[st.good].icon or "", st.name, kind, st.good)
+			row.name.RichText = true
+			row.status.Text = st.status
+			local bad = st.state == "blocked" or st.state == "rejected"
+			row.status.TextColor3 = bad and Theme.BAD or ((st.stolen or 0) > 0 and Theme.GOLD or Theme.MUTED)
+			row.go.Visible = st.live == true
+			row.go.Text = minding == st.slot and "here ✓" or "stand here"
+			if st.live then
+				live += 1
+			end
+			if (st.stolen or 0) > 0 then
+				sales += 1
+			end
+		end
+	end
+	red.none.Visible = #stalls == 0
+	red.stolenSub.Text = live > 0 and string.format("%d stall%s open", live, live == 1 and "" or "s") or "open a stall to start"
+	local n = m and m.inbox or 0
+	red.inbox.Text = string.format("Blue's inbox: %d waiting", n)
+	red.inbox.TextColor3 = n > 6 and Theme.WARN or Theme.BLUE
+end
+
+------------------------------------------------------------------ the round
+
+local function buildRound(parent)
+	-- the bar, top centre under the prices: timer, phase, progress, score, start/stop
+	local f = panel({
+		Name = "Round",
+		Size = UDim2.new(0, 560, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, -110, 0, 64),
+		BackgroundTransparency = 0.12,
+		Parent = parent,
+	})
+	Theme.pad(8, 14).Parent = f
+	new("UIListLayout", { Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder, Parent = f })
+	local top = new("Frame", { Size = UDim2.new(1, 0, 0, 30), BackgroundTransparency = 1, LayoutOrder = 1, Parent = f })
+	rnd.clock = label({ Text = "FREE PLAY", Font = Theme.HEAVY, TextSize = 24, Size = UDim2.new(0, 120, 1, 0), Parent = top })
+	rnd.phase = label({ Text = "", RichText = true, Font = Theme.BOLD, TextSize = 16, Size = UDim2.new(1, -290, 1, 0), Position = UDim2.new(0, 124, 0, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = top })
+	rnd.btn = button({
+		Text = "▶ Start 5:00 round",
+		Font = Theme.HEAVY,
+		TextSize = 15,
+		TextColor3 = Theme.INK,
+		BackgroundColor3 = Theme.GOLD,
+		Size = UDim2.new(0, 160, 0, 28),
+		Position = UDim2.new(1, -160, 0, 1),
+		Parent = top,
+	}, function()
+		send({ op = "round", on = not rnd.active })
+	end)
+	-- progress, with the phase boundaries
+	rnd.track = new("Frame", { Size = UDim2.new(1, 0, 0, 8), BackgroundColor3 = Theme.PANEL2, BorderSizePixel = 0, LayoutOrder = 2, Visible = false, Parent = f }, { Theme.corner(4) })
+	rnd.fill = new("Frame", { Size = UDim2.new(0, 0, 1, 0), BackgroundColor3 = Theme.GOLD, BorderSizePixel = 0, Parent = rnd.track }, { Theme.corner(4) })
+	rnd.ticks = {}
+	rnd.score = label({ Text = "", RichText = true, TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), LayoutOrder = 3, Parent = f })
+	rnd.bar = f
+	-- the prompt (a question for one team), under the bar
+	rnd.prompts = new("Frame", {
+		Name = "Prompts",
+		Size = UDim2.new(0, 560, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.Y,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, -110, 0, 150),
+		BackgroundTransparency = 1,
+		Parent = parent,
+	})
+	new("UIListLayout", { Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder, Parent = rnd.prompts })
+	rnd.promptCards = {}
+	rnd.dismissed = {}
+	-- the phase banner: big, centre, for a few seconds when a phase begins
+	rnd.banner = panel({
+		Name = "PhaseBanner",
+		Size = UDim2.new(0, 0, 0, 0),
+		AutomaticSize = Enum.AutomaticSize.XY,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, -60, 0.4, 0),
+		BackgroundTransparency = 0.1,
+		Visible = false,
+		Parent = parent,
+	})
+	Theme.pad(14, 28).Parent = rnd.banner
+	new("UIListLayout", { Padding = UDim.new(0, 2), HorizontalAlignment = Enum.HorizontalAlignment.Center, SortOrder = Enum.SortOrder.LayoutOrder, Parent = rnd.banner })
+	rnd.bannerTitle = label({ Text = "", Font = Theme.HEAVY, TextSize = 44, TextColor3 = Theme.GOLD, Size = UDim2.new(0, 0, 0, 48), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 1, Parent = rnd.banner })
+	rnd.bannerText = label({ Text = "", Font = Theme.BOLD, TextSize = 22, Size = UDim2.new(0, 0, 0, 28), AutomaticSize = Enum.AutomaticSize.X, TextXAlignment = Enum.TextXAlignment.Center, LayoutOrder = 2, Parent = rnd.banner })
+end
+
+local function setTicks(marks, length: number)
+	if rnd.tickKey == #marks .. ":" .. length then
+		return
+	end
+	rnd.tickKey = #marks .. ":" .. length
+	for _, t in rnd.ticks do
+		t:Destroy()
+	end
+	rnd.ticks = {}
+	for _, m in marks do
+		if m.at > 0 and m.at < length then
+			local t = new("Frame", { Size = UDim2.new(0, 2, 1, 4), Position = UDim2.new(m.at / length, -1, 0, -2), BackgroundColor3 = Theme.WHITE, BackgroundTransparency = 0.3, BorderSizePixel = 0, ZIndex = 3, Parent = rnd.track })
+			table.insert(rnd.ticks, t)
+		end
+	end
+end
+
+function Hud.banner(title: string, text: string?)
+	rnd.bannerTitle.Text = title
+	rnd.bannerText.Text = text or ""
+	rnd.bannerText.Visible = text ~= nil and text ~= ""
+	rnd.banner.Visible = true
+	local mine = {}
+	rnd.bannerTok = mine
+	task.delay(4, function()
+		if rnd.bannerTok == mine then
+			rnd.banner.Visible = false
+		end
+	end)
+end
+
+-- the round bar, from the room's state (s.round, s.score)
+function Hud.round(s)
+	local r = s and s.round
+	if not r or not rnd.bar then
+		return
+	end
+	rnd.active = r.active == true
+	rnd.btn.Text = rnd.active and "■ Stop round" or (r.done and "▶ New 5:00 round" or "▶ Start 5:00 round")
+	rnd.btn.BackgroundColor3 = rnd.active and Theme.PANEL2 or Theme.GOLD
+	rnd.btn.TextColor3 = rnd.active and Theme.WHITE or Theme.INK
+	rnd.track.Visible = rnd.active
+	if rnd.active then
+		local left = (r.length or 300) - (r.t or 0)
+		rnd.clock.Text = fmtClock(left)
+		rnd.clock.TextColor3 = left <= 30 and Theme.WARN or Theme.WHITE
+		local nextBit = r.nextName and r.nextName ~= "Scoreboard" and string.format("  <font color=\"#A09A96\">next: %s at %s</font>", r.nextName, fmtClock(r.nextAt or 0)) or ""
+		rnd.phase.Text = string.format("<b>%s</b> · %s%s", string.upper(r.name or ""), r.banner or "", nextBit)
+		rnd.fill.Size = UDim2.new(math.clamp((r.t or 0) / math.max(1, r.length or 300), 0, 1), 0, 1, 0)
+		setTicks(r.marks or {}, r.length or 300)
+		-- a new phase: the big banner
+		local key = tostring(r.phase)
+		if rnd.phaseKey ~= key then
+			rnd.phaseKey = key
+			if r.name then
+				Hud.banner(fmtClock((r.marks and r.marks[r.phase] and r.marks[r.phase].at) or 0) .. "  " .. string.upper(r.name), r.banner)
+			end
+		end
+	else
+		rnd.phaseKey = nil
+		rnd.clock.Text = "FREE PLAY"
+		rnd.clock.TextColor3 = Theme.WHITE
+		rnd.phase.Text = r.done and "<font color=\"#A09A96\">round over · free play</font>" or "<font color=\"#A09A96\">5 phases, then a scoreboard</font>"
+	end
+	local sc = s.score
+	if sc then
+		rnd.score.Text = string.format(
+			"%s  <font color=\"#56C478\">caught %d</font> · <font color=\"#E85448\">escaped %d</font> · <font color=\"#F0B43C\">false alarms %d</font> · stolen %s · honest deals %d",
+			(rnd.active or r.done) and "this round:" or "so far:",
+			sc.caught or 0, sc.escaped or 0, sc.falseAlarms or 0, Theme.money(sc.stolen or 0), sc.honestDeals or 0
+		)
+	end
+	Hud.prompts(r.prompts)
+end
+
+-- the round's questions: shown to their team until answered here
+function Hud.prompts(list)
+	rnd.lastPrompts = list
+	local want = {}
+	for _, p in list or {} do
+		if (p.team == "all" or p.team == team) and not rnd.dismissed[p.id] then
+			want[p.id] = p
+		end
+	end
+	for id, card in rnd.promptCards do
+		if not want[id] then
+			card:Destroy()
+			rnd.promptCards[id] = nil
+		end
+	end
+	for id, p in want do
+		if not rnd.promptCards[id] then
+			local c = panel({ Size = UDim2.new(1, 0, 0, 84), BackgroundColor3 = Color3.fromRGB(46, 38, 20), BackgroundTransparency = 0.05, LayoutOrder = id, Parent = rnd.prompts })
+			Theme.stroke(Theme.GOLD, 2, 0.1).Parent = c
+			label({ Text = "❗ " .. p.text, Font = Theme.HEAVY, TextSize = 18, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -24, 0, 26), Position = UDim2.new(0, 12, 0, 8), TextTruncate = Enum.TextTruncate.AtEnd, Parent = c })
+			local row = new("Frame", { Size = UDim2.new(1, -24, 0, 34), Position = UDim2.new(0, 12, 0, 40), BackgroundTransparency = 1, Parent = c })
+			new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), Parent = row })
+			local opts
+			if p.ask == "monitor" then
+				opts = {
+					{ "rule monitor (4 lines)", { op = "monitor", mode = "rules" } },
+					{ "your monitor", { op = "monitor", mode = "external" } },
+					{ "not now", nil },
+				}
+			else
+				opts = {
+					{ "keep signatures ON", { op = "vote", on = true } },
+					{ "turn them OFF", { op = "vote", on = false } },
+				}
+			end
+			for _, o in opts do
+				button({ Text = o[1], TextSize = 15, Size = UDim2.new(1 / #opts, -8, 1, 0), BackgroundColor3 = o[2] and Theme.PANEL2 or Theme.PANEL, Parent = row }, function()
+					if o[2] then
+						send(o[2])
+					end
+					rnd.dismissed[id] = true
+					Hud.prompts(rnd.lastPrompts)
+				end)
+			end
+			rnd.promptCards[id] = c
+		end
+	end
+end
+
+-- the scoreboard: the round's numbers and a chart of calls/min with the phases marked
+local function chartLine(parent, x0: number, y0: number, x1: number, y1: number, color: Color3, w: number)
+	local dx, dy = x1 - x0, y1 - y0
+	local len = math.sqrt(dx * dx + dy * dy)
+	new("Frame", {
+		Size = UDim2.new(0, len + 1, 0, w),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0, (x0 + x1) / 2, 0, (y0 + y1) / 2),
+		Rotation = math.deg(math.atan2(dy, dx)),
+		BackgroundColor3 = color,
+		BorderSizePixel = 0,
+		Parent = parent,
+	})
+end
+
+function Hud.scoreboard(sb)
+	if rnd.sbOverlay then
+		rnd.sbOverlay:Destroy()
+		rnd.sbOverlay = nil
+	end
+	if not sb then
+		return
+	end
+	local dim = new("Frame", { Name = "Scoreboard", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.45, ZIndex = 50, Parent = gui })
+	rnd.sbOverlay = dim
+	local W, H = 780, 560
+	local f = panel({ Size = UDim2.new(0, W, 0, H), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 0.02, Parent = dim })
+	label({ Text = "ROUND OVER", Font = Theme.HEAVY, TextSize = 30, TextColor3 = Theme.GOLD, Size = UDim2.new(1, -48, 0, 34), Position = UDim2.new(0, 24, 0, 18), Parent = f })
+	label({ Text = string.format("%s of market · budget %d calls/min per watcher", fmtClock(sb.length or 300), sb.budget or 12), TextSize = 15, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 18), Position = UDim2.new(0, 24, 0, 52), Parent = f })
+	-- the numbers: two rows of four
+	local stats = {
+		{ "honest deals", tostring(sb.honestDeals or 0), Theme.WHITE },
+		{ "honest value", Theme.money(sb.honestValue or 0), Theme.OK },
+		{ "stolen", Theme.money(sb.stolen or 0), Theme.BAD },
+		{ "peak calls/min", string.format("%.0f", sb.peak or 0), (sb.peak or 0) > (sb.budget or 12) and Theme.WARN or Theme.OK },
+		{ "caught", tostring(sb.caught or 0), Theme.OK },
+		{ "escaped", tostring(sb.escaped or 0), Theme.BAD },
+		{ "false alarms", tostring(sb.falseAlarms or 0), Theme.WARN },
+		{ "judgment calls", tostring(sb.asked or 0), Theme.WHITE },
+	}
+	for i, st in stats do
+		local col = (i - 1) % 4
+		local rowI = (i - 1) // 4
+		local cell = new("Frame", { Size = UDim2.new(0, (W - 48) / 4, 0, 58), Position = UDim2.new(0, 24 + col * (W - 48) / 4, 0, 82 + rowI * 64), BackgroundTransparency = 1, Parent = f })
+		label({ Text = st[2], Font = Theme.HEAVY, TextSize = 30, TextColor3 = st[3], Size = UDim2.new(1, 0, 0, 34), Parent = cell })
+		label({ Text = st[1], TextSize = 14, TextColor3 = Theme.MUTED, Size = UDim2.new(1, 0, 0, 18), Position = UDim2.new(0, 0, 0, 34), Parent = cell })
+	end
+	-- the chart
+	label({ Text = "JUDGMENT CALLS PER MINUTE", Font = Theme.HEAVY, TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(1, -48, 0, 16), Position = UDim2.new(0, 24, 0, 218), Parent = f })
+	local cw, ch = W - 48 - 36, 230
+	local chart = new("Frame", { Size = UDim2.new(0, cw, 0, ch), Position = UDim2.new(0, 24 + 36, 0, 246), BackgroundColor3 = Theme.PANEL2, BackgroundTransparency = 0.3, BorderSizePixel = 0, ClipsDescendants = false, Parent = f })
+	local length = sb.length or 300
+	local top = math.max(24, (sb.peak or 0) * 1.15, (sb.budget or 12) * 3.2)
+	top = math.ceil(top / 12) * 12
+	local function X(t: number): number
+		return math.clamp(t / length, 0, 1) * cw
+	end
+	local function Y(v: number): number
+		return ch - math.clamp(v / top, 0, 1) * ch
+	end
+	-- y axis labels and the budget line
+	for _, v in { 0, top / 2, top } do
+		label({ Text = string.format("%d", v), TextSize = 12, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 30, 0, 14), Position = UDim2.new(0, -34, 0, Y(v) - 7), TextXAlignment = Enum.TextXAlignment.Right, Parent = chart })
+	end
+	local b = sb.budget or 12
+	for k = 0, cw, 12 do
+		new("Frame", { Size = UDim2.new(0, 6, 0, 2), Position = UDim2.new(0, k, 0, Y(b) - 1), BackgroundColor3 = Theme.OK, BorderSizePixel = 0, Parent = chart })
+	end
+	label({ Text = "budget " .. b, Font = Theme.BOLD, TextSize = 12, TextColor3 = Theme.OK, Size = UDim2.new(0, 70, 0, 14), Position = UDim2.new(1, -72, 0, Y(b) - 16), TextXAlignment = Enum.TextXAlignment.Right, Parent = chart })
+	-- phase boundaries
+	for _, m in sb.marks or {} do
+		local x = X(m.at)
+		if m.at > 0 and m.at < length then
+			new("Frame", { Size = UDim2.new(0, 1, 1, 0), Position = UDim2.new(0, x, 0, 0), BackgroundColor3 = Theme.WHITE, BackgroundTransparency = 0.6, BorderSizePixel = 0, Parent = chart })
+		end
+		if m.at < length then
+			label({ Text = m.name, Font = Theme.BOLD, TextSize = 12, TextColor3 = Theme.WHITE, Size = UDim2.new(0, 80, 0, 14), Position = UDim2.new(0, x + 4, 0, 3), Parent = chart })
+		end
+		label({ Text = fmtClock(m.at), TextSize = 12, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 40, 0, 14), Position = UDim2.new(0, x - 20, 1, 4), TextXAlignment = Enum.TextXAlignment.Center, Parent = chart })
+	end
+	-- the line
+	local pts = sb.chart or {}
+	for i = 2, #pts do
+		local a, c = pts[i - 1], pts[i]
+		chartLine(chart, X(a.t), Y(a.r), X(c.t), Y(c.r), Theme.GOLD, 3)
+	end
+	button({ Text = "Back to free play", Font = Theme.HEAVY, TextSize = 16, TextColor3 = Theme.INK, BackgroundColor3 = Theme.GOLD, Size = UDim2.new(0, 180, 0, 34), Position = UDim2.new(1, -204, 0, 18), Parent = f }, function()
+		Hud.scoreboard(nil)
+	end)
+	for _, d in dim:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex = 51
+		end
+	end
+end
+
+function Hud.scoreboardShown(): boolean
+	return rnd.sbOverlay ~= nil
+end
+
+------------------------------------------------------------------ the team picker
+
+-- "Choose your team": two big cards, the default pre-selected (Enter takes it)
+function Hud.pickTeam(default: string, onPick: (string) -> ())
+	if picker then
+		picker:Destroy()
+	end
+	local dim = new("Frame", { Name = "TeamPicker", Size = UDim2.fromScale(1, 1), BackgroundColor3 = Color3.fromRGB(10, 10, 14), BackgroundTransparency = 0.25, ZIndex = 60, Parent = gui })
+	picker = dim
+	rnd.pickDefault = default
+	rnd.pickFn = onPick
+	local box = new("Frame", { Size = UDim2.new(0, 760, 0, 420), AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5), BackgroundTransparency = 1, Parent = dim })
+	label({ Text = "Choose your team", Font = Theme.HEAVY, TextSize = 40, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(1, 0, 0, 48), Parent = box })
+	label({ Text = "NANDA Market · one square, two teams", TextSize = 17, TextColor3 = Theme.MUTED, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(1, 0, 0, 22), Position = UDim2.new(0, 0, 0, 50), Parent = box })
+	local cards = {
+		{
+			team = "blue",
+			title = "BLUE",
+			sub = "watchers",
+			body = "Work the inbox: allow or block every new stall before its first buyer. Pick the monitors, vote in the council on signature checks.",
+			col = BLUE_DARK,
+		},
+		{
+			team = "red",
+			title = "RED",
+			sub = "con artists",
+			body = "Open a scam stall or a counterfeit stall and stand behind the counter. Get past Blue's watchers and take the buyers' money.",
+			col = RED_DARK,
+		},
+	}
+	for i, c in cards do
+		local card = new("TextButton", {
+			Text = "",
+			AutoButtonColor = true,
+			BackgroundColor3 = c.col,
+			Size = UDim2.new(0, 360, 0, 280),
+			Position = UDim2.new(0, (i - 1) * 400, 0, 96),
+			Parent = box,
+		}, { Theme.corner(18) })
+		local chosen = c.team == default
+		Theme.stroke(Theme.WHITE, chosen and 4 or 1, chosen and 0 or 0.7).Parent = card
+		Theme.pad(20, 22).Parent = card
+		label({ Text = c.title, Font = Theme.HEAVY, TextSize = 56, Size = UDim2.new(1, 0, 0, 60), Parent = card })
+		label({ Text = c.sub, Font = Theme.BOLD, TextSize = 24, TextColor3 = Color3.fromRGB(235, 235, 240), Size = UDim2.new(1, 0, 0, 28), Position = UDim2.new(0, 0, 0, 60), Parent = card })
+		label({ Text = c.body, TextSize = 18, TextWrapped = true, TextYAlignment = Enum.TextYAlignment.Top, Size = UDim2.new(1, 0, 0, 110), Position = UDim2.new(0, 0, 0, 100), Parent = card })
+		if chosen then
+			label({ Text = "suggested · Enter", Font = Theme.BOLD, TextSize = 14, TextColor3 = Theme.WHITE, BackgroundTransparency = 0.6, BackgroundColor3 = Color3.new(0, 0, 0), TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(0, 150, 0, 24), Position = UDim2.new(1, -150, 0, 0), Parent = card }, nil)
+		end
+		card.Activated:Connect(function()
+			Hud.closePicker(c.team)
+		end)
+	end
+	label({ Text = "You can switch later: press T, or \"switch team\" on the left panel.", TextSize = 15, TextColor3 = Theme.MUTED, TextXAlignment = Enum.TextXAlignment.Center, Size = UDim2.new(1, 0, 0, 20), Position = UDim2.new(0, 0, 0, 392), Parent = box })
+	for _, d in dim:GetDescendants() do
+		if d:IsA("GuiObject") then
+			d.ZIndex = 61
+		end
+	end
+end
+
+function Hud.pickerOpen(): boolean
+	return picker ~= nil
+end
+
+-- take a team from the picker (nil: the pre-selected one)
+function Hud.closePicker(t: string?)
+	if not picker then
+		return
+	end
+	picker:Destroy()
+	picker = nil
+	local fn = rnd.pickFn
+	rnd.pickFn = nil
+	if fn then
+		fn(t or rnd.pickDefault or "blue")
+	end
+end
+
 ------------------------------------------------------------------ build
 
 function Hud.build(opts)
@@ -707,6 +1245,8 @@ function Hud.build(opts)
 	onVisit = opts.onVisit
 	onCamera = opts.onCamera
 	onRole = opts.onRole
+	onTeam = opts.onTeam
+	red.onMind = opts.onMind
 	gui = new("ScreenGui", {
 		Name = "MarketHud",
 		ResetOnSpawn = false,
@@ -731,6 +1271,8 @@ function Hud.build(opts)
 	inboxMore = label({ Text = "", Font = Theme.HEAVY, TextSize = 18, TextColor3 = Theme.BAD, Size = UDim2.new(1, 0, 0, 24), Position = UDim2.new(0, 0, 1, -26), TextXAlignment = Enum.TextXAlignment.Center, Parent = inbox })
 	buildMeter(gui)
 	buildControls(gui, opts.sizes or { 5, 50, 300, 1000 })
+	buildRedPanel(gui)
+	buildRound(gui)
 	showControlsBtn = button({
 		Text = "Controls (H)",
 		Size = UDim2.new(0, 128, 0, 34),
@@ -791,8 +1333,9 @@ function Hud.build(opts)
 		TextTransparency = 1,
 		Size = UDim2.new(0, 0, 0, 36),
 		AutomaticSize = Enum.AutomaticSize.X,
-		AnchorPoint = Vector2.new(0.5, 0),
-		Position = UDim2.new(0.5, -210, 0, 66),
+		AnchorPoint = Vector2.new(0.5, 1),
+		-- above the caption, clear of the round bar and its prompts
+		Position = UDim2.new(0.5, -110, 1, -110),
 		TextXAlignment = Enum.TextXAlignment.Center,
 		Parent = gui,
 	})
@@ -819,8 +1362,9 @@ function Hud.build(opts)
 		Parent = shortcutsBox,
 	})
 	local rows = {
-		{ "T", "Switch your role: Blue Watcher (blue shirt) / Red Scammer (red shirt)" },
-		{ "Z  /  X", "Allow / Block the top case in your Inbox" },
+		{ "T", "Switch team: Blue watchers (inbox) / Red con artists (stalls)" },
+		{ "Z  /  X", "Blue: Allow / Block the top case in your Inbox" },
+		{ "R", "Start (or stop) the timed 5:00 round" },
 		{ "Click a case card", "Teleport 3rd-person avatar to inspect that stall" },
 		{ "V", "Cycle camera: follow top case → walk 3P → overview → balcony" },
 		{ "WASD / Arrows", "Walk the street in 3rd-person (Right-drag or Q/E turns)" },
@@ -836,6 +1380,7 @@ function Hud.build(opts)
 		label({ Text = r[2], TextSize = 14, TextColor3 = Theme.WHITE, Size = UDim2.new(1, -150, 1, 0), Position = UDim2.new(0, 150, 0, 0), Parent = line })
 	end
 	Hud.layout()
+	Hud.setTeam(team)
 	return gui
 end
 
