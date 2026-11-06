@@ -56,12 +56,15 @@ local function panel(props)
 	return f
 end
 
+-- Nandabux (internally cents: 1 NB = 100)
 local function money(c: number?): string
-	c = math.floor((c or 0) + 0.5)
-	local neg = c < 0
-	local s = Theme.money(math.abs(c))
-	return (neg and "−$" or "$") .. s
+	local nb = (c or 0) / 100
+	local neg = nb < 0
+	nb = math.abs(nb)
+	local s = nb < 10 and string.format("%.1f", nb) or string.format("%d", math.floor(nb + 0.5))
+	return (neg and "−" or "") .. s .. " NB"
 end
+GamePanel.nb = money
 
 local function checkInfo(id: string)
 	for _, c in cfg and cfg.checks or {} do
@@ -273,8 +276,8 @@ local function buildShop()
 	Theme.pad(10, 14).Parent = f
 	local head = new("Frame", { Size = UDim2.new(1, 0, 0, 26), BackgroundTransparency = 1, Parent = f })
 	label({ Text = "ATTACK SHOP", Font = Theme.HEAVY, TextSize = 18, TextColor3 = Theme.BAD, Size = UDim2.new(0, 130, 1, 0), Parent = head })
-	red.rent = label({ Text = "", TextSize = 13, TextColor3 = Theme.MUTED, Size = UDim2.new(0, 230, 1, 0), Position = UDim2.new(0, 130, 0, 0), Parent = head })
-	red.speed = label({ Text = "", RichText = true, Font = Theme.BOLD, TextSize = 14, Size = UDim2.new(1, -360, 1, 0), Position = UDim2.new(0, 360, 0, 0), TextXAlignment = Enum.TextXAlignment.Right, Parent = head })
+	red.rent = label({ Text = "", Font = Theme.BOLD, TextSize = 14, TextColor3 = Theme.GOLD, Size = UDim2.new(0, 290, 1, 0), Position = UDim2.new(0, 130, 0, 0), TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
+	red.speed = label({ Text = "", RichText = true, Font = Theme.BOLD, TextSize = 14, Size = UDim2.new(1, -424, 1, 0), Position = UDim2.new(0, 424, 0, 0), TextXAlignment = Enum.TextXAlignment.Right, TextTruncate = Enum.TextTruncate.AtEnd, Parent = head })
 	-- the attacks
 	local row = new("Frame", { Size = UDim2.new(1, 0, 0, 66), Position = UDim2.new(0, 0, 0, 32), BackgroundTransparency = 1, Parent = f })
 	new("UIListLayout", { FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 6), Parent = row })
@@ -319,10 +322,11 @@ local function updateShop(g)
 	if not red.shop then
 		return
 	end
-	red.rent.Text = string.format("rent %s/stall/min · caught stall −%s", money(cfg.rent), money(cfg.stallLoss))
+	local purse = g.red and g.red.score and g.red.score.purse
+	red.rent.Text = string.format("purse %s · deposit %s · rent %s/min", purse and money(purse) or "150 NB", money(cfg.deposit), money(cfg.rent))
 	local h = g.health or 0
 	local col = h >= 0.7 and "56C478" or (h >= 0.4 and "F0B43C" or "E85448")
-	red.speed.Text = string.format("trade speed <font color=\"#%s\">%d%%</font> <font size=\"12\" color=\"#A09A96\">(a slow market = a heavy loadout)</font>", col, math.floor(h * 100 + 0.5))
+	red.speed.Text = string.format("trade speed <font color=\"#%s\">%d%%</font>", col, math.floor(h * 100 + 0.5))
 	local extra = 0
 	for id, on in red.mods do
 		if on then
@@ -336,7 +340,7 @@ local function updateShop(g)
 	for id, btn in red.buttons do
 		local open = has(g.unlocked, id)
 		local cost = (btn.a.cost or 0) + extra
-		btn.cost.Text = open and (cost > 0 and (money(cost) .. (btn.a.costLabel and (" (" .. btn.a.costLabel .. ")") or "") .. " + rent") or "rent only") or ("🔒 unlocks " .. (UNLOCK_AT[id] or "later"))
+		btn.cost.Text = open and (money(cost + (cfg.deposit or 0)) .. (btn.a.costLabel and (" incl. " .. btn.a.costLabel) or "") .. " + rent") or ("🔒 unlocks " .. (UNLOCK_AT[id] or "later"))
 		btn.b.BackgroundColor3 = open and Color3.fromRGB(110, 36, 36) or Color3.fromRGB(58, 46, 48)
 		btn.name.TextColor3 = open and Theme.WHITE or Theme.MUTED
 	end
@@ -356,7 +360,7 @@ local function updateShop(g)
 		table.insert(names, c and c.label or id)
 	end
 	red.signs.Text = #names > 0 and ("<font color=\"#A09A96\">BLUE'S SIGNS:</font> 🪧 " .. table.concat(names, " · 🪧 ")) or "<font color=\"#A09A96\">BLUE'S SIGNS: none posted</font>"
-	red.foot.Text = "You see only each fraud's outcome, never which check caught it. Probe."
+	red.foot.Text = "You see each fraud's outcome, never which check caught it. A slow market means a heavy loadout."
 end
 
 ------------------------------------------------------------------ Red: the outcome log (in Hud's red panel)
