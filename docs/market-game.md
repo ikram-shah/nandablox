@@ -108,12 +108,40 @@ it keeps a success rate per attack, tries the best one most of the time and
 something else sometimes, and so drifts toward the gaps in Blue's loadout.
 That drift is worth showing on its own.
 
-## Scoring
+## Money: Nandabux (NB)
 
-- **Blue:** value of honest trade − value stolen − friction cost.
-- **Red:** value stolen − rent − vouches, IDs and ads bought − stalls lost.
+One currency for everything, so one scoreboard.
 
-The scoreboard replays Blue's loadout over time against trade and fraud.
+**Blue is the market operator** (like eBay or Stripe). Its treasury:
+- earns a 5% fee on every honest deal;
+- refunds every buyer a fraud cheats (buyer protection);
+- collects a caught fraud's stall deposit as a fine;
+- pays for its checks per minute: inspector wages, compute for the pitch
+  reader, escrow overhead.
+
+Friction has no separate penalty. It costs Blue fees: a slow market trades
+less, and honest sellers leave.
+
+**Red is the con artist.** Its purse:
+- starts with a stake (150 NB);
+- pays a deposit and rent per stall, plus vouches, stolen IDs and ads;
+- keeps what its frauds take; forfeits the deposit when caught.
+
+**Winning.** At 5:00 the bigger profit wins: Blue's treasury against Red's
+purse (ending balance minus starting balance).
+
+**Balance is the test that it's a game.** Tuned so that, against the bot Red,
+a Blue with no checks loses (refunds eat the fees), a Blue with every check
+loses (the market seizes and fees dry up), and a sensible loadout wins. That
+is the paper's argument as a balance requirement: neither extreme works.
+
+The scoreboard replays Blue's loadout over time against trade and fraud, and
+marks where the two extreme Blues would have finished (same seed, the bot
+Red, run headless), so players see where they landed between them.
+
+Every seat has an objective in NB: buyers want goods for their money, honest
+sellers want profit, frauds want loot. LLM seats and hackathon endpoints are
+scored in NB too.
 
 ## The council
 
