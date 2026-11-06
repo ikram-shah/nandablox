@@ -768,14 +768,23 @@ function Hud.controlsBottom(): number
 	if not controls or not controls.Visible then
 		return 16
 	end
-	return controls.AbsolutePosition.Y + controls.AbsoluteSize.Y
+	-- (the panel's own size can lag its contents; the lowest visible child
+	-- counts. Absolute positions sit under the top bar's inset; Position
+	-- offsets in this IgnoreGuiInset gui do not: convert)
+	local bottom = controls.AbsolutePosition.Y + controls.AbsoluteSize.Y
+	for _, c in controls:GetChildren() do
+		if c:IsA("GuiObject") and c.Visible then
+			bottom = math.max(bottom, c.AbsolutePosition.Y + c.AbsoluteSize.Y + 12)
+		end
+	end
+	return bottom + (controls.Position.Y.Offset - controls.AbsolutePosition.Y)
 end
 
 function Hud.meterTop(): number
-	if not meter.frame then
+	if not meter.frame or not controls then
 		return 600
 	end
-	return meter.frame.AbsolutePosition.Y
+	return meter.frame.AbsolutePosition.Y + (controls.Position.Y.Offset - controls.AbsolutePosition.Y)
 end
 
 -- Blue's crew roles on the team chip
