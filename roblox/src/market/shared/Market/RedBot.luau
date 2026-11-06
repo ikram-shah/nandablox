@@ -80,7 +80,8 @@ end
 
 -- Pick an attack among the unlocked ones: explore with probability
 -- BOT.explore, otherwise the best success rate (ties: the earliest in ARMS,
--- which is also the cheapest).
+-- which is also the cheapest). nil: it sits this turn out (even its best
+-- attack is under BOT.quitBelow; it still probes BOT.probe of the time).
 function RedBot:choose(unlocked)
 	local avail = {}
 	for _, a in RedBot.ARMS do
@@ -89,6 +90,11 @@ function RedBot:choose(unlocked)
 		end
 	end
 	if #avail == 0 then
+		return nil
+	end
+	-- nothing has been working: mostly sit it out, now and then probe
+	if self:discouraged() and not self.rng:chance(self.cfg.BOT.probe or 0) then
+		self.waited = (self.waited or 0) + 1
 		return nil
 	end
 	local pick
@@ -109,11 +115,32 @@ function RedBot:choose(unlocked)
 	return pick
 end
 
+-- its last few attacks, all kinds together, mostly failed
+function RedBot:discouraged(): boolean
+	local w = self.cfg.BOT.quitWindow or 0
+	local recent = self.recent or {}
+	if w <= 0 or #recent < w then
+		return false
+	end
+	local wins = 0
+	for i = #recent - w + 1, #recent do
+		if recent[i] then
+			wins += 1
+		end
+	end
+	return wins / w < (self.cfg.BOT.quitBelow or 0)
+end
+
 -- What happened to one of its stalls: success = it was paid out.
 function RedBot:record(id: string, success: boolean)
 	local st = self.stats[id]
 	if not st then
 		return
+	end
+	self.recent = self.recent or {}
+	table.insert(self.recent, success)
+	if #self.recent > 20 then
+		table.remove(self.recent, 1)
 	end
 	local d = self.cfg.BOT.decay
 	st.s = st.s * d + (success and 1 or 0)

@@ -192,6 +192,7 @@ return function(t)
 		caughtBy(A, "counterfeit", nil, "pitchReader", "counterfeit (reader notices the small print)")
 		-- sometimes: the reader notices the small print about PITCH_SMALLPRINT of the time
 		local sim = market({ "pitchReader" }, { n = 300 })
+		MarketSim.ledgerFor(sim, "red").purse = 1e9 -- (forty stalls: more than a stake buys)
 		local hit, n = 0, 0
 		for i = 1, 40 do
 			local s = sim:redAttack("red", "counterfeit", {})
@@ -515,56 +516,115 @@ return function(t)
 		A.ok(l > e, "more than at the start")
 	end)
 
-	------------------------------------------------------------------ scoring
+	------------------------------------------------------------------ money (Nandabux)
 
-	t.case("scoring: Red pays rent per stall per minute, purchases, and the stall when caught", function(A)
+	t.case("Red's purse: a stake, a deposit and rent per stall, purchases; the deposit back if uncaught, forfeit (Blue's fine) if caught", function(A)
+		A.eq(Config.RED_STAKE, 15000, "150 NB")
 		local sim = market({}, { n = 300 })
-		-- a talker with a bought vouch, open a minute (nobody buys a lamp print that fast? measure what it paid)
 		local s = assert(sim:redAttack("red", "talker", { vouch = true, good = "lamp" }))
 		local l = sim.red.red
 		A.eq(l.bought, 400 + 600, "ads + vouch")
-		A.eq(l.stalls, 1)
+		A.eq(l.purse, Config.RED_STAKE - 1000 - Config.STALL_DEPOSIT, "paid out of the purse, deposit held")
 		local live = 0
-		while s.state ~= "gone" and s.state ~= "shuttered" and live < 60 do
+		while not s.outcome and live < 150 do
 			run(sim, 0.25)
 			live += 0.25
 		end
-		A.near(l.rent, Config.RENT_PER_MIN * live / 60, 2, "rent per minute while it trades")
-		-- caught: the stall is lost
+		A.eq(s.outcome, "paid", "nothing caught it")
+		A.near(l.rent, Config.RENT_PER_MIN * live / 60, 3, "rent per minute while it traded")
+		A.near(l.purse, Config.RED_STAKE - 1000 - l.rent + l.stolen, 1, "deposit back, loot kept")
+		A.eq(l.lost, 0)
+		-- caught: the deposit is forfeit, and it is Blue's fine
 		local sim2 = market({ "escrow" }, { n = 300 })
+		local f0 = sim2:getTotals().blueFines
 		local s2 = assert(sim2:redAttack("red", "scam", { stolenId = true }))
 		run(sim2, 60)
 		A.eq(s2.outcome, "refunded")
 		local l2 = sim2.red.red
-		A.eq(l2.lost, Config.STALL_LOSS)
+		A.eq(l2.lost, Config.STALL_DEPOSIT, "deposit forfeit")
+		A.eq(sim2:getTotals().blueFines - f0, Config.STALL_DEPOSIT, "Blue's fine")
 		A.eq(l2.bought, 1000, "the stolen ID was money wasted")
 		local sc = Score.ledger(l2)
-		A.eq(sc.score, math.floor(l2.stolen - l2.rent - l2.bought - l2.lost + 0.5))
+		A.near(sc.score, l2.stolen - l2.rent - l2.bought - l2.lost, 1)
 		A.ok(sc.score < 0, "a caught stall loses money")
-		local tot = sim2:getTotals()
-		A.eq(tot.redLost, Config.STALL_LOSS)
-		A.eq(tot.redPurchases, 1000)
+		-- a purse that can't pay doesn't open a stall
+		local sim3 = market({}, { n = 300 })
+		MarketSim.ledgerFor(sim3, "poor").purse = 500
+		local none, why = sim3:redAttack("poor", "scam", {})
+		A.eq(none, nil)
+		A.eq(why, "can't afford it")
 	end)
 
-	t.case("scoring: Blue = honest trade x share - stolen - friction cost (friction x traders x minutes, plus compute)", function(A)
-		local d = { honestValue = 100000, stolen = 1200, frictionCost = 500, compute = 40 }
-		local b = Score.blue(d)
-		A.eq(b.score, math.floor(100000 * Config.SCORE_TRADE_SHARE - 1200 - 540 + 0.5))
-		A.eq(b.friction, 540)
+	t.case("Blue's treasury: fees on honest deals - refunds + fines - check costs; no friction penalty of its own", function(A)
+		local b = Score.blue({ blueFees = 10000, blueRefunds = 1800, blueFines = 1000, blueCosts = 2500, compute = 300 })
+		A.eq(b.score, 10000 - 1800 + 1000 - 2500)
 		local r = Score.red({ redStolen = 5000, redRent = 300, redPurchases = 1000, redLost = 600 })
 		A.eq(r.score, 3100)
-		-- friction cost accrues with the loadout
-		local sim = market({ "idCheck", "escrow" }, { n = 300 })
+		A.eq(Score.winner(b.score, r.score), "blue")
+		-- in a market: fees are FEE_SHARE of honest value; refunds REFUND_FACTOR x stolen
+		local sim = market({ "idCheck" }, { n = 300 })
 		local a = sim:getTotals()
+		local sc = assert(sim:redAttack("red", "scam", { good = "cloth" }))
 		run(sim, 60)
 		local z = sim:getTotals()
-		A.near(z.frictionCost - a.frictionCost, 6 * Config.FRICTION_COST_PER_TRADER_MIN * 300, 1, "6 units x 300 traders x 1 min")
-		-- the pitch reader's compute
-		local sim2 = market({ "pitchReader" }, { n = 300 })
-		local c0 = sim2:getTotals().compute
-		run(sim2, 30)
-		A.ok(sim2:getTotals().compute > c0, "every listing it reads costs compute")
-		local g = sim2:gameState()
-		A.ok(g.compute > 0, "Blue sees its compute spend")
+		A.near(z.blueFees - a.blueFees, (z.honestValue - a.honestValue) * Config.FEE_SHARE, 1, "fees")
+		A.ok(sc.stolen and sc.stolen > 0, "the scam was paid")
+		A.near(z.blueRefunds - a.blueRefunds, (z.stolen - a.stolen) * Config.REFUND_FACTOR, 1, "buyer protection")
+		A.eq(z.blueCosts - a.blueCosts, 0, "an ID check costs friction, not money")
+		-- the checks that cost money, per minute
+		local sim2 = market({ "inspector", "escrow" }, { n = 300 })
+		local c0 = sim2:getTotals().blueCosts
+		run(sim2, 60)
+		A.near(sim2:getTotals().blueCosts - c0, Config.CHECK_COST_PER_MIN.inspector + Config.CHECK_COST_PER_MIN.escrow, 2, "wages + overhead, a minute")
+		local sim3 = market({ "pitchReader" }, { n = 300 })
+		local k0 = sim3:getTotals().blueCosts
+		run(sim3, 30)
+		A.ok(sim3:getTotals().blueCosts > k0, "every listing the reader reads costs compute")
+		A.ok(sim3:gameState().compute > 0, "Blue sees its compute spend")
+	end)
+
+	t.case("a false alarm costs Blue: the blocked honest seller packs up, and its fees go with it", function(A)
+		local function fees(blockHonest: boolean)
+			local sim = MarketSim.new({ seed = 21, n = 300 })
+			sim.fraudsPaused = true
+			sim:setMonitor("off") -- every listing reaches the watcher
+			sim:addWatcher("me")
+			run(sim, 20)
+			local f0 = sim:getTotals().blueFees
+			for _ = 1, 120 do
+				run(sim, 1)
+				for _, c in sim.caseList do
+					if c.stage == "inbox" then
+						sim:verdict("me", c.id, blockHonest and "block" or "allow")
+					end
+				end
+			end
+			return sim:getTotals().blueFees - f0, sim:meter().falseAlarms
+		end
+		local keep = fees(false)
+		local lose, alarms = fees(true)
+		print(string.format("      fees over 2 min at 300: allow every newcomer %.0f NB, block every one %.0f NB (%d false alarms)", keep / 100, lose / 100, alarms))
+		A.ok(alarms > 20, "false alarms: " .. alarms)
+		A.ok(lose < keep * 0.95, "blocking honest sellers costs fees")
+	end)
+
+	------------------------------------------------------------------ balance
+
+	local Ghost = (require :: any)("../../src/market/shared/Market/Ghost")
+	t.case("balance, seeded, a full round against the bot Red: no checks loses, every check loses, floor + voucher + inspector wins", function(A)
+		for seed = 1, 3 do
+			local none = Ghost.play(seed, Ghost.NONE)
+			local all = Ghost.play(seed, Ghost.ALL)
+			local ok = Ghost.play(seed, Ghost.SENSIBLE)
+			print(string.format(
+				"      seed %d (NB, Blue vs Red): no checks %.0f vs %.0f · every check %.0f vs %.0f · floor+voucher+inspector %.0f vs %.0f",
+				seed, none.blue / 100, none.red / 100, all.blue / 100, all.red / 100, ok.blue / 100, ok.red / 100
+			))
+			A.eq(none.winner, "red", "seed " .. seed .. ": no checks, refunds eat the fees")
+			A.eq(all.winner, "red", "seed " .. seed .. ": every check, the market seizes")
+			A.eq(ok.winner, "blue", "seed " .. seed .. ": a sensible loadout wins")
+			A.ok(all.honestDeals < ok.honestDeals * 0.5, "seized: fees dry up")
+			A.ok(none.refunds > none.fees * 0.5, "no checks: refunds eat the fees")
+		end
 	end)
 end

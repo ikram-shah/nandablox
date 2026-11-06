@@ -128,15 +128,19 @@ function MarketSim.new(opts)
 		-- running totals since the market opened: never reset by mark()
 		-- (a timed round diffs them)
 		totals = {
-			frictionCost = 0, -- cents: friction units x traders x minutes
-			compute = 0, -- cents: the pitch reader's reads
+			-- money (cents; docs/market-game.md "Money: Nandabux")
+			blueFees = 0, -- Blue's fee on every honest deal
+			blueRefunds = 0, -- Blue refunds every buyer a fraud cheats
+			blueFines = 0, -- caught frauds' deposits
+			blueCosts = 0, -- what Blue's checks cost (wages, overhead, compute)
+			compute = 0, -- cents: the pitch reader's reads (inside blueCosts)
 			refunded = 0, -- frauds escrow caught
 			inspected = 0, -- frauds an inspector shut
 			rejected = 0, -- frauds the ID check (or an outside monitor) turned away at listing
 			redStolen = 0, -- by stalls a Red player (or the bot) runs
 			redRent = 0,
 			redPurchases = 0,
-			redLost = 0,
+			redLost = 0, -- deposits forfeited when caught
 			asked = 0,
 			decided = 0,
 			honestDeals = 0,
@@ -510,10 +514,12 @@ local function ledgerFor(self, owner: string)
 	local l = self.red[owner]
 	if not l then
 		l = {
+			stake = self.cfg.RED_STAKE or 0,
+			purse = self.cfg.RED_STAKE or 0, -- what it can spend now
 			stolen = 0,
 			rent = 0,
 			bought = 0,
-			lost = 0,
+			lost = 0, -- deposits forfeited
 			stalls = 0,
 			outcomes = { rejected = 0, blocked = 0, inspected = 0, refunded = 0, paid = 0 },
 			log = {}, -- { t, stall, kind, good, outcome, stolen }, newest last
@@ -538,9 +544,15 @@ local function resolve(self, s, outcome: string)
 	if s.owner then
 		local l = ledgerFor(self, s.owner)
 		l.outcomes[outcome] += 1
+		local dep = s.deposit or 0
+		s.deposit = 0
 		if caught then
-			l.lost += self.cfg.STALL_LOSS
-			self.totals.redLost += self.cfg.STALL_LOSS
+			-- the deposit is forfeit: Blue's fine
+			l.lost += dep
+			self.totals.redLost += dep
+			self.totals.blueFines += dep
+		else
+			l.purse += dep -- closed uncaught: the deposit comes back
 		end
 		keepLast(l.log, {
 			t = self.now,
@@ -632,6 +644,7 @@ local function list(self, s)
 		local reads = s.pitch and 2 or 1
 		self.compute = (self.compute or 0) + reads * self.cfg.PITCH_COST
 		self.totals.compute += reads * self.cfg.PITCH_COST
+		self.totals.blueCosts += reads * self.cfg.PITCH_COST
 	end
 	s.openAt = self.now + (s.window or windowLength(self))
 	s.window = nil
@@ -797,14 +810,10 @@ function MarketSim:injectFraud(kind: string, opts)
 	if s.owner then
 		local l = ledgerFor(self, s.owner)
 		l.stalls += 1
-		local a = attackCfg(self, kind)
-		local cost = a and a.cost or 0
-		for _, m in cfg.MODS or {} do
-			if opts[m.id] then
-				cost += m.cost
-			end
-		end
+		local cost = MarketSim.attackCost(self, kind, opts)
 		l.bought += cost
+		l.purse -= cost + (cfg.STALL_DEPOSIT or 0)
+		s.deposit = cfg.STALL_DEPOSIT or 0
 		self.totals.redPurchases += cost
 	end
 	self.count.frauds += 1
@@ -1404,6 +1413,7 @@ local function dealDone(self, b, s)
 	if s.kind == "honest" then
 		self.totals.honestDeals += 1
 		self.totals.honestValue += price
+		self.totals.blueFees += price * (cfg.FEE_SHARE or 0)
 		table.insert(self.goods[s.good].sales, { t = self.now, p = price })
 		if self.rng:chance(0.6) then
 			s.ratings += 1
@@ -1428,10 +1438,13 @@ local function dealDone(self, b, s)
 		end
 		self.totals.stolen += price
 		self.totals.stolenSales += 1
+		self.totals.blueRefunds += price * (cfg.REFUND_FACTOR or 1) -- buyer protection: Blue pays the buyer back
 		s.stolen = (s.stolen or 0) + price
 		if s.owner then
 			self.stolenBy[s.owner] = (self.stolenBy[s.owner] or 0) + price
-			ledgerFor(self, s.owner).stolen += price
+			local l = ledgerFor(self, s.owner)
+			l.stolen += price
+			l.purse += price
 			self.totals.redStolen += price
 		end
 		b.carry = nil
@@ -1799,8 +1812,21 @@ function MarketSim:unlockedList(): { string }
 	return out
 end
 
--- A Red player (or the bot) opens an attack: a stall it pays rent on, plus
--- whatever it bought. Returns the stall, or nil and why not.
+-- what an attack costs beyond its deposit and rent: ads, vouches, IDs
+function MarketSim.attackCost(self, kind: string, opts): number
+	local a = attackCfg(self, kind)
+	local cost = a and a.cost or 0
+	for _, m in self.cfg.MODS or {} do
+		if opts and opts[m.id] then
+			cost += m.cost
+		end
+	end
+	return cost
+end
+
+-- A Red player (or the bot) opens an attack: a stall it pays a deposit and
+-- rent on, plus whatever it bought, out of its purse. Returns the stall, or
+-- nil and why not.
 function MarketSim:redAttack(owner: string, kind: string, opts)
 	opts = table.clone(opts or {})
 	if not attackCfg(self, kind) then
@@ -1814,6 +1840,10 @@ function MarketSim:redAttack(owner: string, kind: string, opts)
 	end
 	if opts.stolenId and not self:isUnlocked("stolenId") then
 		return nil, "stolen IDs are locked"
+	end
+	local need = MarketSim.attackCost(self, kind, opts) + (self.cfg.STALL_DEPOSIT or 0)
+	if ledgerFor(self, owner).purse < need then
+		return nil, "can't afford it"
 	end
 	opts.owner = owner
 	local s = self:injectFraud(kind, opts)
@@ -1994,7 +2024,9 @@ local function stepSeller(self, s, dt: number)
 	-- Red pays rent for every stall that trades
 	if s.owner and LIVE[st] then
 		local rent = cfg.RENT_PER_MIN / 60 * dt
-		ledgerFor(self, s.owner).rent += rent
+		local l = ledgerFor(self, s.owner)
+		l.rent += rent
+		l.purse -= rent
 		self.totals.redRent += rent
 	end
 	if st == "setup" then
@@ -2033,8 +2065,12 @@ function MarketSim:step(dt: number)
 			self:setCheck(chk.id, p.on)
 		end
 	end
-	local friction = self:friction()
-	self.totals.frictionCost += friction * (cfg.FRICTION_COST_PER_TRADER_MIN or 0) * self.n * dt / 60
+	-- what the checks cost Blue to run, per minute (wages, overhead)
+	for id, perMin in cfg.CHECK_COST_PER_MIN or {} do
+		if self.loadout[id] then
+			self.totals.blueCosts += perMin * dt / 60
+		end
+	end
 
 	-- the bot Red: an attack every so often, while it has room for one more stall
 	if self.bot and not self.botPaused and self.now >= self.botNext then
