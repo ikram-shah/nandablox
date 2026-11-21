@@ -2286,6 +2286,9 @@ function MarketSim:gatewayRequest(serverId: string?)
 				signature = p.signature,
 				twin = p.twin,
 				deadline_s = p.deadline_s,
+				-- what the human's card shows, now given to the monitor too
+				vouched = p.vouchedBy ~= nil,
+				stocked = p.hasStock == true,
 			})
 		end
 	end
