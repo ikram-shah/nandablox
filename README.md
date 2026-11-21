@@ -1,3 +1,11 @@
+> **HALHack pilot project: "A monitor that sees what the human sees"** by Ikram Shah.
+>
+> A monitor for NANDA Market that blocks clear scams and sends only the unclear cases to the human watcher. With 1,000 traders, scams getting through fell from 40% to 1.4%, and the human went from 17 decisions a minute to 3.
+>
+> **Read the write-up: [HALHACK.md](HALHACK.md)** · Code: [`harness/starter/my_monitor.py`](harness/starter/my_monitor.py) · Game change: [`MarketSim.luau`](roblox/src/market/shared/Market/MarketSim.luau) (+3 lines)
+>
+> The rest of this README is from the original [klutometis/nandablox](https://github.com/klutometis/nandablox) repository.
+
 # nandablox
 
 One real run of [NANDA Town](https://github.com/projnanda/nandatown), Project NANDA's
